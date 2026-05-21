@@ -1,0 +1,60 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build",
+            "type": "shell",
+            "command": "idf.py build",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "clear": true
+            }
+        },
+        {
+            "label": "Flash",
+            "type": "shell",
+            "command": "idf.py flash",
+            "problemMatcher": [
+                "$gcc"
+            ]
+        },
+        {
+            "label": "Monitor",
+            "type": "shell",
+            "command": "idf.py monitor",
+            "problemMatcher": [],
+            "presentation": {
+                "focus": true,
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Flash & Monitor",
+            "type": "shell",
+            "command": "idf.py flash monitor",
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "presentation": {
+                "focus": true,
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Clean",
+            "type": "shell",
+            "command": "idf.py fullclean",
+            "problemMatcher": []
+        }
+    ]
+}
