@@ -2,9 +2,7 @@ idf_component_register(
     SRCS
         "main.c"
         "wifi_manager.c"
-        "hardware.c"
         "pzem_sensor.c"
-        "firebase.c"
     INCLUDE_DIRS "."
     REQUIRES
         nvs_flash
@@ -12,5 +10,8 @@ idf_component_register(
         esp_event
         esp_netif
         esp_http_client
+        esp_http_server
+        json
         driver
+        lwip
 )

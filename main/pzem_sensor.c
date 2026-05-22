@@ -12,18 +12,18 @@
 #include "driver/gpio.h"
 #include "driver/uart.h"
 
-#define PZEM_UART_TX_PIN    GPIO_NUM_16
-#define PZEM_UART_RX_PIN    GPIO_NUM_17
+#define PZEM_UART_TX_PIN    GPIO_NUM_17
+#define PZEM_UART_RX_PIN    GPIO_NUM_16
 #define UART_PZEM_NUM       UART_NUM_1
 #define UART_PZEM_BAUD      9600
 
 #define MODBUS_TIMEOUT_MS   2000
 #define PZEM_MODBUS_ADDR    0xF8
-#define PZEM_REG_START      0x0000
-#define PZEM_REG_COUNT      10
+#define PZEM_REG_POWER      0x0002
+#define PZEM_REG_COUNT      1
 
 #define MODBUS_REQ_LEN      8
-#define MODBUS_RESP_MAX     64
+#define MODBUS_RESP_MAX     32
 
 static const char *TAG = "pzem";
 
@@ -63,22 +63,23 @@ esp_err_t pzem_sensor_init(void)
                                  UART_PIN_NO_CHANGE,
                                  UART_PIN_NO_CHANGE));
 
-    ESP_LOGI(TAG, "UART1 TX=%d RX=%d @ %d baud",
-             (int)PZEM_UART_TX_PIN, (int)PZEM_UART_RX_PIN, UART_PZEM_BAUD);
+    ESP_LOGI(TAG, "UART1 TX=%d RX=%d @ %d baud (PZEM_CMD_READ_POWER=0x%02X)",
+             (int)PZEM_UART_TX_PIN, (int)PZEM_UART_RX_PIN, UART_PZEM_BAUD,
+             PZEM_CMD_READ_POWER);
     return ESP_OK;
 }
 
-esp_err_t pzem_sensor_read(pzem_reading_t *reading)
+esp_err_t pzem_sensor_read_power(uint32_t *potencia_raw)
 {
-    if (reading == NULL) {
+    if (potencia_raw == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
 
     uint8_t req[MODBUS_REQ_LEN];
     req[0] = PZEM_MODBUS_ADDR;
-    req[1] = 0x04;
-    req[2] = (uint8_t)(PZEM_REG_START >> 8);
-    req[3] = (uint8_t)(PZEM_REG_START & 0xFF);
+    req[1] = PZEM_CMD_READ_POWER;
+    req[2] = (uint8_t)(PZEM_REG_POWER >> 8);
+    req[3] = (uint8_t)(PZEM_REG_POWER & 0xFF);
     req[4] = (uint8_t)(PZEM_REG_COUNT >> 8);
     req[5] = (uint8_t)(PZEM_REG_COUNT & 0xFF);
 
@@ -97,7 +98,7 @@ esp_err_t pzem_sensor_read(pzem_reading_t *reading)
     const int len = uart_read_bytes(UART_PZEM_NUM, resp, sizeof(resp),
                                     pdMS_TO_TICKS(MODBUS_TIMEOUT_MS));
     if (len < 7) {
-        ESP_LOGE(TAG, "timeout Modbus (%d bytes)", len);
+        ESP_LOGE(TAG, "timeout Modbus potência (%d bytes)", len);
         return ESP_ERR_TIMEOUT;
     }
 
@@ -107,18 +108,21 @@ esp_err_t pzem_sensor_read(pzem_reading_t *reading)
         return ESP_FAIL;
     }
 
-    if (resp[0] != PZEM_MODBUS_ADDR || resp[1] != 0x04) {
+    if (resp[0] != PZEM_MODBUS_ADDR || resp[1] != PZEM_CMD_READ_POWER) {
         ESP_LOGE(TAG, "resposta inesperada addr=0x%02X fc=0x%02X", resp[0], resp[1]);
         return ESP_FAIL;
     }
 
-    const uint16_t raw_corrente = (uint16_t)(((uint16_t)resp[5] << 8) | resp[6]);
-    const uint16_t raw_potencia = (uint16_t)(((uint16_t)resp[13] << 8) | resp[14]);
+    if (resp[2] < 2) {
+        ESP_LOGE(TAG, "payload Modbus curto (%d bytes)", resp[2]);
+        return ESP_FAIL;
+    }
 
-    reading->corrente_raw = (uint32_t)raw_corrente;
-    reading->potencia_raw = (uint32_t)raw_potencia;
+    const uint16_t reg_potencia = (uint16_t)(((uint16_t)resp[3] << 8) | resp[4]);
+    /* Registrador PZEM: 0,1 W → centésimos de W para o ecossistema Diponto (×10). */
+    *potencia_raw = (uint32_t)reg_potencia * 10U;
 
-    ESP_LOGI(TAG, "raw corrente=%" PRIu32 " potencia=%" PRIu32,
-             reading->corrente_raw, reading->potencia_raw);
+    ESP_LOGD(TAG, "potência reg=%u → raw=%" PRIu32 " (%.2f W)",
+             reg_potencia, *potencia_raw, *potencia_raw / 100.0f);
     return ESP_OK;
 }
