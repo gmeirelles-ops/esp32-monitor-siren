@@ -33,7 +33,7 @@ O app SHALL persistir localmente cada resultado de teste recebido via MQTT.
 
 #### Scenario: Teste salvo localmente
 - **WHEN** o app recebe um resultado de teste (`tipo: "teste"`)
-- **THEN** o resultado é gravado no banco local com timestamp, device_id, veredito e potencia_media
+- **THEN** o resultado é gravado no banco local com timestamp, device_id, veredito, potencia_media e operador (quando autenticado)
 
 ### Requirement: Detecção de dispositivo stale por ausência de heartbeat
 O app SHALL marcar um dispositivo como offline quando não receber mensagem de `heartbeat` ou `presenca` por um intervalo configurável, mesmo que o LWT não tenha sido disparado.
@@ -56,3 +56,22 @@ O app SHALL remover o alerta de hardware exibido quando o dispositivo recuperar 
 #### Scenario: Mensagem de recuperação recebida
 - **WHEN** chega em `alerta` um JSON com `tipo: "hardware"` e `evento: "recuperado"`
 - **THEN** o app remove o alerta de falha de hardware do dispositivo correspondente
+
+### Requirement: Espelhamento de estado do dispositivo na nuvem
+Quando a sincronização Firestore estiver habilitada e o operador autenticado, o app SHALL enfileirar atualização da coleção `devices/{device_id}` a cada mudança relevante de presença ou heartbeat processada localmente.
+
+#### Scenario: Heartbeat atualiza dispositivo na nuvem
+- **WHEN** o app processa heartbeat de um dispositivo com sync habilitado
+- **THEN** o sync service recebe `device_id`, `estado`, `firmware_version`, `rssi`, `fila_offline`, `online: true` e `last_seen` para enfileiramento
+
+#### Scenario: LWT offline atualiza dispositivo na nuvem
+- **WHEN** o app recebe `presenca: offline` para um dispositivo com sync habilitado
+- **THEN** o sync service enfileira atualização imediata com `online: false` para o mesmo `device_id`
+
+### Requirement: Histórico local permanece primário
+A persistência local de resultados de teste SHALL permanecer obrigatória e independente do estado da sincronização em nuvem.
+
+#### Scenario: Sync desabilitado ou falha de rede
+- **WHEN** o app recebe resultado de teste via MQTT com sync desabilitado ou Firestore indisponível
+- **THEN** o resultado é gravado no SQLite local normalmente, sem bloquear o fluxo de etiquetas
+

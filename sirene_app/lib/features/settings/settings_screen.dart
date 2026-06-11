@@ -3,6 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/config/app_config.dart';
+import '../../shared/widgets/desktop_form_layout.dart';
+import '../../shared/widgets/form_section_card.dart';
+import '../../shared/widgets/responsive_field_row.dart';
 import '../cloud/auth/auth_providers.dart';
 import '../cloud/auth/login_screen.dart';
 import '../cloud/firebase_bootstrap.dart';
@@ -71,7 +74,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
 
     if (!isFirebaseAvailable) {
-      _showMessage('Firebase não configurado. Execute flutterfire configure.');
+      _showMessage(firebaseUnavailableMessage);
       return;
     }
 
@@ -84,6 +87,42 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
 
     await setSyncEnabled(ref, true);
+  }
+
+  Future<void> _syncCatalog() async {
+    if (!isFirebaseAvailable) {
+      _showMessage(firebaseUnavailableMessage);
+      return;
+    }
+    if (!ref.read(isAuthenticatedProvider) || !ref.read(syncEnabledProvider)) {
+      _showMessage('Habilite o sync e faça login antes de enviar o catálogo.');
+      return;
+    }
+    final count = await syncCatalogToCloud(ref);
+    if (!mounted) return;
+    _showMessage(
+      count > 0
+          ? '$count produto(s) enfileirado(s) para o Firestore'
+          : 'Nenhum produto no catálogo local',
+    );
+  }
+
+  Future<void> _pullCatalog() async {
+    if (!isFirebaseAvailable) {
+      _showMessage(firebaseUnavailableMessage);
+      return;
+    }
+    if (!ref.read(isAuthenticatedProvider) || !ref.read(syncEnabledProvider)) {
+      _showMessage('Habilite o sync e faça login antes de baixar o catálogo.');
+      return;
+    }
+    final count = await pullCatalogFromCloud(ref);
+    if (!mounted) return;
+    _showMessage(
+      count > 0
+          ? '$count produto(s) baixado(s) da nuvem'
+          : 'Nenhum produto na nuvem',
+    );
   }
 
   Future<void> _logout() async {
@@ -110,81 +149,133 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Configurações')),
       body: ListView(
-        padding: const EdgeInsets.all(16),
         children: [
-          const Text('Broker MQTT', style: TextStyle(fontWeight: FontWeight.bold)),
-          TextField(
-            controller: _mqttHost,
-            decoration: const InputDecoration(labelText: 'Host'),
-          ),
-          TextField(
-            controller: _mqttPort,
-            decoration: const InputDecoration(labelText: 'Porta'),
-            keyboardType: TextInputType.number,
-          ),
-          const SizedBox(height: 24),
-          const Text('Impressora Zebra', style: TextStyle(fontWeight: FontWeight.bold)),
-          TextField(
-            controller: _printerHost,
-            decoration: const InputDecoration(labelText: 'IP'),
-          ),
-          TextField(
-            controller: _printerPort,
-            decoration: const InputDecoration(labelText: 'Porta (padrão 9100)'),
-            keyboardType: TextInputType.number,
-          ),
-          const SizedBox(height: 24),
-          const Text('Nuvem (Firestore)', style: TextStyle(fontWeight: FontWeight.bold)),
-          if (!isFirebaseAvailable)
-            const Padding(
-              padding: EdgeInsets.only(bottom: 8),
-              child: Text(
-                'Firebase não configurado neste build. Operação local disponível.',
-                style: TextStyle(color: Colors.orangeAccent, fontSize: 13),
-              ),
-            ),
-          TextField(
-            controller: _stationId,
-            decoration: const InputDecoration(
-              labelText: 'ID do posto (station_id)',
-              helperText: 'Identifica este PC na nuvem',
-            ),
-          ),
-          SwitchListTile(
-            title: const Text('Sincronizar com Firestore'),
-            subtitle: Text(
-              authenticated
-                  ? 'Operador autenticado'
-                  : 'Login necessário para habilitar',
-            ),
-            value: syncEnabled,
-            onChanged: isFirebaseAvailable ? _onSyncToggle : null,
-          ),
-          syncStatus.when(
-            data: (status) => Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          DesktopFormLayout(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text('Pendentes: ${status.pending}'),
-                Text('Falhas permanentes: ${status.failed}'),
-                Text(
-                  status.lastSync != null
-                      ? 'Último sync: ${dateFmt.format(status.lastSync!.toLocal())}'
-                      : 'Último sync: —',
+                FormSectionCard(
+                  title: 'Broker MQTT',
+                  child: ResponsiveFieldRow(
+                    flexes: const [7, 3],
+                    children: [
+                      TextField(
+                        controller: _mqttHost,
+                        decoration: const InputDecoration(labelText: 'Host'),
+                      ),
+                      TextField(
+                        controller: _mqttPort,
+                        decoration: const InputDecoration(labelText: 'Porta'),
+                        keyboardType: TextInputType.number,
+                      ),
+                    ],
+                  ),
+                ),
+                FormSectionCard(
+                  title: 'Impressora Zebra',
+                  child: ResponsiveFieldRow(
+                    flexes: const [7, 3],
+                    children: [
+                      TextField(
+                        controller: _printerHost,
+                        decoration: const InputDecoration(labelText: 'IP'),
+                      ),
+                      TextField(
+                        controller: _printerPort,
+                        decoration: const InputDecoration(labelText: 'Porta (padrão 9100)'),
+                        keyboardType: TextInputType.number,
+                      ),
+                    ],
+                  ),
+                ),
+                FormSectionCard(
+                  title: 'Nuvem (Firestore)',
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (!isFirebaseAvailable)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Text(
+                            firebaseUnavailableMessage,
+                            style: const TextStyle(color: Colors.orangeAccent, fontSize: 13),
+                          ),
+                        ),
+                      TextField(
+                        controller: _stationId,
+                        decoration: const InputDecoration(
+                          labelText: 'ID do posto (station_id)',
+                          helperText: 'Identifica este PC na nuvem',
+                        ),
+                      ),
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Sincronizar com Firestore'),
+                        subtitle: Text(
+                          authenticated
+                              ? 'Operador autenticado'
+                              : 'Login necessário para habilitar',
+                        ),
+                        value: syncEnabled,
+                        onChanged: isFirebaseAvailable ? _onSyncToggle : null,
+                      ),
+                      syncStatus.when(
+                        data: (status) => Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Pendentes: ${status.pending}'),
+                            Text('Falhas permanentes: ${status.failed}'),
+                            Text(
+                              status.lastSync != null
+                                  ? 'Último sync: ${dateFmt.format(status.lastSync!.toLocal())}'
+                                  : 'Último sync: —',
+                            ),
+                          ],
+                        ),
+                        loading: () => const Text('Carregando status da fila...'),
+                        error: (e, _) => Text('Erro ao ler fila: $e'),
+                      ),
+                      if (isFirebaseAvailable && syncEnabled && authenticated) ...[
+                        const SizedBox(height: 8),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: OutlinedButton(
+                            onPressed: _syncCatalog,
+                            child: const Text('Enviar catálogo para Firestore'),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: OutlinedButton(
+                            onPressed: _pullCatalog,
+                            child: const Text('Baixar catálogo da nuvem'),
+                          ),
+                        ),
+                      ],
+                      if (authenticated) ...[
+                        const SizedBox(height: 8),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: OutlinedButton(
+                            onPressed: _logout,
+                            child: const Text('Sair da conta nuvem'),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: ElevatedButton(
+                    onPressed: _save,
+                    child: const Text('Salvar'),
+                  ),
                 ),
               ],
             ),
-            loading: () => const Text('Carregando status da fila...'),
-            error: (e, _) => Text('Erro ao ler fila: $e'),
           ),
-          if (authenticated) ...[
-            const SizedBox(height: 8),
-            OutlinedButton(
-              onPressed: _logout,
-              child: const Text('Sair da conta nuvem'),
-            ),
-          ],
-          const SizedBox(height: 24),
-          ElevatedButton(onPressed: _save, child: const Text('Salvar')),
         ],
       ),
     );

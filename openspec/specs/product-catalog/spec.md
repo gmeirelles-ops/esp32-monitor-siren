@@ -58,3 +58,25 @@ O app SHALL exibir lista de produtos cadastrados com nome, id, limites e data da
 - **WHEN** o operador altera apenas o nome ou a tolerância de um produto já calibrado
 - **THEN** o app recalcula min/max a partir da `potencia_ref` existente e salva as alterações
 
+### Requirement: Upload do catálogo para Firestore
+Quando a sincronização estiver habilitada, o app SHALL enfileirar upsert em `products/{id_produto}` após cada criação, edição ou recalibração de produto no SQLite local.
+
+#### Scenario: Novo produto sincronizado
+- **WHEN** o operador conclui cadastro de produto com autocalibração e sync está habilitado
+- **THEN** o sync service enfileira documento com `id_produto`, `nome`, limites de potência, tolerância, tempo de teste e metadados de calibração
+
+#### Scenario: Recalibração sincronizada
+- **WHEN** o operador recalibra produto existente com sync habilitado
+- **THEN** o sync service enfileira atualização com novos limites e `calibrado_em` / `calibrado_device_id` atualizados
+
+### Requirement: Catálogo local independente da nuvem na v1
+O app SHALL NOT exigir leitura do Firestore para operar o catálogo — SQLite permanece a fonte de verdade no posto. O app MAY, de forma opt-in, baixar o catálogo da nuvem para semear ou atualizar o SQLite local.
+
+#### Scenario: Primeiro uso sem internet
+- **WHEN** o operador cadastra produtos com sync desabilitado ou sem conectividade
+- **THEN** o catálogo funciona integralmente via SQLite e lotes podem ser configurados normalmente
+
+#### Scenario: Semear catálogo a partir da nuvem
+- **WHEN** o operador habilita o sync ou aciona o pull manual com Firebase disponível
+- **THEN** o app baixa o catálogo da nuvem e faz upsert no SQLite, sem passar a depender da nuvem para a operação subsequente
+

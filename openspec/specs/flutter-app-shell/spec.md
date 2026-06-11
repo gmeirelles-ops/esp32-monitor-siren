@@ -39,3 +39,61 @@ O app SHALL exibir o logo Diponto na AppBar e utilizar tipografia legível para 
 - **WHEN** o operador está em qualquer tela principal
 - **THEN** o logo Diponto é exibido na AppBar
 
+### Requirement: Seção de nuvem nas Configurações
+O app SHALL incluir nas Configurações uma seção "Nuvem" com: toggle de sincronização Firestore, campo `station_id`, status da fila de sync e botão de logout (quando autenticado).
+
+#### Scenario: Operador configura posto
+- **WHEN** o operador define `station_id` e salva nas Configurações
+- **THEN** o valor é persistido em SharedPreferences e usado em gravações Firestore subsequentes
+
+#### Scenario: Status da fila visível
+- **WHEN** existem itens pendentes ou com falha na fila de sync
+- **THEN** a seção Nuvem exibe contagem de pendências e falhas permanentes
+
+### Requirement: Fluxo de login integrado à navegação
+O app SHALL apresentar tela de login Firebase quando o operador tentar habilitar sincronização sem sessão ativa, mantendo acesso às demais seções sem autenticação.
+
+#### Scenario: Uso local sem login
+- **WHEN** o operador utiliza Dispositivos, Lote e Produtos sem estar autenticado
+- **THEN** todas as funcionalidades locais (MQTT, SQLite, etiquetas) permanecem acessíveis
+
+#### Scenario: Login solicitado para nuvem
+- **WHEN** o operador tenta habilitar sincronização sem sessão
+- **THEN** o app navega para a tela de login antes de ativar o toggle
+
+### Requirement: Toggle de sync desabilitado por padrão
+Em instalação nova, o toggle de sincronização Firestore SHALL iniciar desabilitado até que o operador autenticado o habilite explicitamente.
+
+#### Scenario: Primeira execução após instalação
+- **WHEN** o app é aberto pela primeira vez com Firebase configurado
+- **THEN** a sincronização em nuvem está desligada e nenhum dado é enviado ao Firestore
+
+### Requirement: Indicador visual destacado no NavigationRail
+Em layout desktop (≥ 900 px), o item selecionado no `NavigationRail` SHALL exibir fundo destacado com cor primária amber em aproximadamente 10–20% de opacidade, bordas arredondadas e ícone na cor primária.
+
+#### Scenario: Navegação entre seções
+- **WHEN** o operador seleciona "Lote" no menu lateral
+- **THEN** o destino Lote exibe fundo amber translúcido arredondado além da mudança de cor do ícone e do rótulo
+
+#### Scenario: Largura confortável do menu
+- **WHEN** o app é exibido em desktop
+- **THEN** o `NavigationRail` utiliza largura mínima maior que o padrão compacto (≥ 88 px) para rótulos e ícones sem aparência espremida
+
+### Requirement: Hierarquia de botões primário e secundário
+O tema SHALL reservar `ElevatedButton` / `FilledButton` com cor amber Diponto para ações primárias de fluxo (ex.: "Configurar lote", "Salvar", "Cadastrar"). Ações secundárias ou destrutivas (ex.: "Encerrar lote", "Cancelar") SHALL usar `OutlinedButton` com contorno vermelho ou cinza, sem preenchimento amber.
+
+#### Scenario: Configurar lote vs encerrar lote
+- **WHEN** o operador visualiza a tela de Lote com lote ativo
+- **THEN** "Configurar lote" aparece como botão preenchido amber e "Encerrar lote" como botão outlined vermelho ou cinza
+
+#### Scenario: Ação primária em Configurações
+- **WHEN** o operador salva configurações
+- **THEN** o botão Salvar utiliza estilo primário amber do tema
+
+### Requirement: Contraste melhorado de campos de texto
+O `InputDecorationTheme` SHALL definir borda visível no estado habilitado (não focado), com contraste adequado sobre fundo escuro, além da borda amber no estado focado.
+
+#### Scenario: Campo sem foco
+- **WHEN** um `TextField` está habilitado mas não focado em tema escuro
+- **THEN** o contorno do campo permanece visível contra o fundo do formulário
+

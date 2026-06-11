@@ -53,14 +53,14 @@ Configure em **Configurações**:
 
 Sincronização centralizada de testes, lotes, dispositivos e catálogo. **Não bloqueia** operação local.
 
-1. **Console:** criar projeto Firebase, ativar Firestore Standard (`southamerica-east1`) e Auth (e-mail/senha).
+1. **Console:** projeto `monitor-sirenv2-6d201` (Monitor-SirenV2), Firestore Standard (`southamerica-east1`) e Auth (e-mail/senha).
 2. **Contas:** criar usuários de operador no Console (sem auto-registro no app).
 3. **CLI (uma vez, na máquina de dev):**
    ```bash
    npm install -g firebase-tools   # ou npx firebase-tools@latest
    firebase login
-   firebase use <project-id>
-   firebase deploy --only firestore   # na raiz deste repositório
+   firebase use monitor-sirenv2-6d201
+   ./scripts/setup_firebase.sh        # na raiz deste repositório (após firebase login)
    ```
 4. **FlutterFire (uma vez por plataforma):**
    ```bash

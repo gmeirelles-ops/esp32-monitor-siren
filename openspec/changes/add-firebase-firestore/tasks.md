@@ -1,10 +1,10 @@
 ## 1. Infraestrutura Firebase
 
-- [ ] 1.1 Criar projeto Firebase `diponto-sirene` (ou nome acordado) e ativar Firestore Standard em `southamerica-east1`
+- [x] 1.1 Criar projeto Firebase `monitor-sirenv2-6d201` e ativar Firestore Standard em `southamerica-east1`
 - [x] 1.2 Adicionar `firebase.json`, `firebase/firestore.rules` e `firebase/firestore.indexes.json` na raiz do repositório
-- [ ] 1.3 Criar contas de operador no Firebase Console (e-mail/senha)
-- [ ] 1.4 Executar `flutterfire configure` em `sirene_app/` e commitar `lib/firebase_options.dart` (stub presente; substituir após configure)
-- [ ] 1.5 Deploy inicial: `firebase deploy --only firestore`
+- [x] 1.3 Criar contas de operador no Firebase Console (e-mail/senha)
+- [x] 1.4 Executar `flutterfire configure` em `sirene_app/` e commitar `lib/firebase_options.dart`
+- [x] 1.5 Deploy inicial: `firebase deploy --only firestore`
 
 ## 2. Dependências e bootstrap
 

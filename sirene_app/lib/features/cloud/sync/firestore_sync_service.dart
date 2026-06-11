@@ -32,12 +32,14 @@ class FirestoreSyncService {
     required String deviceId,
     required TestResultMessage test,
     String? serial,
+    String? operador,
   }) async {
     if (!isActive) return;
     final payload = mapTestResult(
       deviceId: deviceId,
       test: test,
       serial: serial,
+      operador: operador,
       stationId: _stationId(),
       timestamp: DateTime.now(),
     );
@@ -130,6 +132,20 @@ class FirestoreSyncService {
 
   Future<void> enqueueProduct(Product product) async {
     if (!isActive) return;
+    await _enqueueProductToQueue(product);
+  }
+
+  /// Reenvia todo o catálogo local (ex.: cadastro feito antes de habilitar sync).
+  Future<int> syncAllProducts() async {
+    if (!isActive) return 0;
+    final products = await _db.getProducts();
+    for (final product in products) {
+      await _enqueueProductToQueue(product);
+    }
+    return products.length;
+  }
+
+  Future<void> _enqueueProductToQueue(Product product) async {
     final payload = mapProduct(product: product, updatedAt: DateTime.now());
     await _db.enqueueSync(
       collection: 'products',
