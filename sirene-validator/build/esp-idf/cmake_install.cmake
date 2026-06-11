@@ -814,12 +814,12 @@ endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("/home/meirelles/diponto/Firmware/esp32-monitor-siren/sirene-validator/build/esp-idf/offline_queue/cmake_install.cmake")
+  include("/home/meirelles/diponto/Firmware/esp32-monitor-siren/sirene-validator/build/esp-idf/espressif__cjson/cmake_install.cmake")
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("/home/meirelles/diponto/Firmware/esp32-monitor-siren/sirene-validator/build/esp-idf/espressif__cjson/cmake_install.cmake")
+  include("/home/meirelles/diponto/Firmware/esp32-monitor-siren/sirene-validator/build/esp-idf/offline_queue/cmake_install.cmake")
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)

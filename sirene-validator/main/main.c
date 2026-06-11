@@ -65,7 +65,7 @@ static void publish_or_queue(const char *topic_suffix, const char *json)
     if (offline_queue_is_full()) {
         led_feedback_signal(FEEDBACK_QUEUE_FULL);
     }
-    offline_queue_push(json);
+    offline_queue_push(topic_suffix, json);
 }
 
 static void publish_test_result(bool approved, float potencia_media, uint32_t sequencial_usado)
@@ -83,6 +83,14 @@ static void publish_test_result(bool approved, float potencia_media, uint32_t se
 static void run_test_cycle(uint32_t duration_sec)
 {
     if (!state_machine_can_start_test() || pzem_is_fault() || ota_update_is_active()) {
+        return;
+    }
+
+    if (pure_batch_quota_reached(s_batch.aprovados, s_batch.quantidade_total)) {
+        led_feedback_signal(FEEDBACK_REJECTED);
+        if (mqtt_bridge_is_connected()) {
+            mqtt_bridge_publish_rejection("lote_cheio");
+        }
         return;
     }
 
@@ -270,10 +278,49 @@ static void process_mqtt_payload(const char *payload)
     cJSON_Delete(root);
 }
 
+static bool mqtt_cmd_blocked_during_test(const char *payload)
+{
+    if (state_machine_get() != STATE_TESTING && !s_calibrating) {
+        return false;
+    }
+
+    const char *key = strstr(payload, "\"cmd\"");
+    if (!key) {
+        return false;
+    }
+
+    const char *colon = strchr(key, ':');
+    if (!colon) {
+        return false;
+    }
+
+    const char *p = colon + 1;
+    while (*p == ' ' || *p == '\t') {
+        p++;
+    }
+    if (*p != '"') {
+        return false;
+    }
+    p++;
+
+    static const char *blocked[] = {"SET_BATCH", "END_BATCH", "START_CALIBRATION", "OTA_UPDATE", NULL};
+    for (int i = 0; blocked[i] != NULL; i++) {
+        size_t n = strlen(blocked[i]);
+        if (strncmp(p, blocked[i], n) == 0 && p[n] == '"') {
+            return true;
+        }
+    }
+    return false;
+}
+
 static void on_mqtt_command(const char *payload, int len)
 {
     if (len >= (int)sizeof(((work_item_t *)0)->payload)) {
         mqtt_bridge_publish_rejection("payload_grande");
+        return;
+    }
+    if (mqtt_cmd_blocked_during_test(payload)) {
+        mqtt_bridge_publish_rejection("cmd_durante_teste");
         return;
     }
     work_item_t item = {.type = WORK_MQTT_PAYLOAD};

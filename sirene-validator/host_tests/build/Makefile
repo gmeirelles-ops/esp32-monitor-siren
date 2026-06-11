@@ -176,6 +176,30 @@ home/meirelles/diponto/Firmware/esp32-monitor-siren/sirene-validator/components/
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/pure_logic.dir/build.make CMakeFiles/pure_logic.dir/home/meirelles/diponto/Firmware/esp32-monitor-siren/sirene-validator/components/pure_logic/pure_logic.c.s
 .PHONY : home/meirelles/diponto/Firmware/esp32-monitor-siren/sirene-validator/components/pure_logic/pure_logic.c.s
 
+test_batch_quota.o: test_batch_quota.c.o
+.PHONY : test_batch_quota.o
+
+# target to build an object file
+test_batch_quota.c.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/host_tests.dir/build.make CMakeFiles/host_tests.dir/test_batch_quota.c.o
+.PHONY : test_batch_quota.c.o
+
+test_batch_quota.i: test_batch_quota.c.i
+.PHONY : test_batch_quota.i
+
+# target to preprocess a source file
+test_batch_quota.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/host_tests.dir/build.make CMakeFiles/host_tests.dir/test_batch_quota.c.i
+.PHONY : test_batch_quota.c.i
+
+test_batch_quota.s: test_batch_quota.c.s
+.PHONY : test_batch_quota.s
+
+# target to generate assembly for a file
+test_batch_quota.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/host_tests.dir/build.make CMakeFiles/host_tests.dir/test_batch_quota.c.s
+.PHONY : test_batch_quota.c.s
+
 test_fifo.o: test_fifo.c.o
 .PHONY : test_fifo.o
 
@@ -334,6 +358,9 @@ help:
 	@echo "... home/meirelles/diponto/Firmware/esp32-monitor-siren/sirene-validator/components/pure_logic/pure_logic.o"
 	@echo "... home/meirelles/diponto/Firmware/esp32-monitor-siren/sirene-validator/components/pure_logic/pure_logic.i"
 	@echo "... home/meirelles/diponto/Firmware/esp32-monitor-siren/sirene-validator/components/pure_logic/pure_logic.s"
+	@echo "... test_batch_quota.o"
+	@echo "... test_batch_quota.i"
+	@echo "... test_batch_quota.s"
 	@echo "... test_fifo.o"
 	@echo "... test_fifo.i"
 	@echo "... test_fifo.s"

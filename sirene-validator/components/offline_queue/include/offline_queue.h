@@ -4,8 +4,8 @@
 #include <stddef.h>
 
 bool offline_queue_init(void);
-bool offline_queue_push(const char *json);
-bool offline_queue_peek(char *json, size_t json_len);
+bool offline_queue_push(const char *topic_suffix, const char *json);
+bool offline_queue_peek(const char *topic_suffix, size_t topic_len, char *json, size_t json_len);
 bool offline_queue_pop(void);
 bool offline_queue_is_full(void);
 size_t offline_queue_count(void);

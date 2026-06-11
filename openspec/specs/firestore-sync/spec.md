@@ -83,3 +83,18 @@ O app SHALL exibir nas Configurações: estado do sync (ativo/inativo), último 
 - **WHEN** o operador abre Configurações com sync habilitado
 - **THEN** o app mostra timestamp do último sync e número de itens pendentes na fila
 
+### Requirement: Recuperação manual de dead-letter da fila
+O app SHALL listar entradas da `SyncQueue` com falha permanente (`attempts >= 5`), exibir `last_error` e permitir ao operador reiniciar o processamento resetando tentativas e reenfileirando o envio.
+
+#### Scenario: Listagem de falhas permanentes
+- **WHEN** existem entradas com `attempts >= 5` e o operador abre Configurações com sync habilitado
+- **THEN** o app lista cada entrada com collection, document_id, instante e último erro
+
+#### Scenario: Retry manual de dead-letter
+- **WHEN** o operador aciona "Tentar novamente" em uma falha permanente ou em todas
+- **THEN** o app zera `attempts` e `last_error` das entradas selecionadas e dispara o processador da fila
+
+#### Scenario: Retry bem-sucedido
+- **WHEN** após retry manual a rede e autenticação estão OK
+- **THEN** a entrada é enviada ao Firestore e removida da fila local
+

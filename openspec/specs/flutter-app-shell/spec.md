@@ -40,7 +40,7 @@ O app SHALL exibir o logo Diponto na AppBar e utilizar tipografia legível para 
 - **THEN** o logo Diponto é exibido na AppBar
 
 ### Requirement: Seção de nuvem nas Configurações
-O app SHALL incluir nas Configurações uma seção "Nuvem" com: toggle de sincronização Firestore, campo `station_id`, status da fila de sync e botão de logout (quando autenticado).
+O app SHALL incluir nas Configurações uma seção "Nuvem" com: toggle de sincronização Firestore, campo `station_id`, status da fila de sync, listagem de dead-letter com retry e botão de logout (quando autenticado).
 
 #### Scenario: Operador configura posto
 - **WHEN** o operador define `station_id` e salva nas Configurações
@@ -49,6 +49,10 @@ O app SHALL incluir nas Configurações uma seção "Nuvem" com: toggle de sincr
 #### Scenario: Status da fila visível
 - **WHEN** existem itens pendentes ou com falha na fila de sync
 - **THEN** a seção Nuvem exibe contagem de pendências e falhas permanentes
+
+#### Scenario: Dead-letter listado
+- **WHEN** existem entradas com falha permanente na fila
+- **THEN** a seção Nuvem lista cada falha com erro e oferece ação de retry
 
 ### Requirement: Fluxo de login integrado à navegação
 O app SHALL apresentar tela de login Firebase quando o operador tentar habilitar sincronização sem sessão ativa, mantendo acesso às demais seções sem autenticação.
@@ -96,4 +100,26 @@ O `InputDecorationTheme` SHALL definir borda visível no estado habilitado (não
 #### Scenario: Campo sem foco
 - **WHEN** um `TextField` está habilitado mas não focado em tema escuro
 - **THEN** o contorno do campo permanece visível contra o fundo do formulário
+
+### Requirement: Pipeline MQTT ativo desde a inicialização
+O app SHALL inicializar a conexão MQTT e o registro de mensagens na inicialização do aplicativo, independentemente da tela exibida primeiro.
+
+#### Scenario: App aberto direto no Painel
+- **WHEN** o app é iniciado e o operador permanece em uma tela que não observa dispositivos (ex.: Painel, Produtos)
+- **THEN** heartbeats, presença e resultados de teste recebidos via MQTT são registrados normalmente
+
+#### Scenario: Resultado de teste com app recém-aberto
+- **WHEN** um dispositivo publica um resultado de teste logo após o app iniciar
+- **THEN** o resultado é persistido e a etiqueta gerada sem exigir visita prévia à tela de Dispositivos ou Lote
+
+### Requirement: Indicador de conexão MQTT global
+O app SHALL exibir o indicador de status da conexão MQTT (`ConnectionStatusBadge`) na AppBar de todas as telas principais, não apenas na tela de Dispositivos.
+
+#### Scenario: Badge visível fora de Dispositivos
+- **WHEN** o operador está na tela de Lote, Painel, Etiquetas ou Configurações
+- **THEN** o badge de conexão MQTT permanece visível na AppBar
+
+#### Scenario: Queda de conexão refletida globalmente
+- **WHEN** a conexão com o broker MQTT é perdida
+- **THEN** o badge reflete o estado desconectado em qualquer tela principal
 

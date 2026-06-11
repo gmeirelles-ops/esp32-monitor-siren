@@ -1,5 +1,7 @@
 file(REMOVE_RECURSE
   "CMakeFiles/host_tests.dir/link.d"
+  "CMakeFiles/host_tests.dir/test_batch_quota.c.o"
+  "CMakeFiles/host_tests.dir/test_batch_quota.c.o.d"
   "CMakeFiles/host_tests.dir/test_fifo.c.o"
   "CMakeFiles/host_tests.dir/test_fifo.c.o.d"
   "CMakeFiles/host_tests.dir/test_fsm.c.o"

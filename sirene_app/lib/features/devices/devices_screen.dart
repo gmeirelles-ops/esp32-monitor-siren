@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/diponto_theme.dart';
-import '../../shared/widgets/connection_status.dart';
 import '../../shared/widgets/empty_state_view.dart';
+import '../../shared/widgets/global_app_bar_actions.dart';
 import '../mqtt/models/mqtt_messages.dart';
 import '../mqtt/mqtt_providers.dart';
 import 'device_detail_screen.dart';
@@ -20,12 +20,7 @@ class DevicesScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Dispositivos'),
-        actions: const [
-          Padding(
-            padding: EdgeInsets.only(right: 12),
-            child: Center(child: ConnectionStatusBadge()),
-          ),
-        ],
+        actions: globalAppBarActions(),
       ),
       body: sorted.isEmpty
           ? const EmptyStateView(

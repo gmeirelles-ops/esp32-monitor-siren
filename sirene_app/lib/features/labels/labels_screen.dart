@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/database/database.dart';
 import '../../core/theme/diponto_theme.dart';
 import '../../shared/widgets/empty_state_view.dart';
+import '../../shared/widgets/global_app_bar_actions.dart';
+import 'label_print_logic.dart';
 import 'label_printer.dart';
 import 'zpl_generator.dart';
 import '../mqtt/mqtt_providers.dart';
@@ -14,23 +16,24 @@ class LabelsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final db = ref.watch(databaseProvider);
+    final printFailure = ref.watch(printFailureProvider);
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Etiquetas'),
-        actions: [
+        actions: globalAppBarActions([
           IconButton(
             tooltip: 'Buscar / reimprimir serial',
             icon: const Icon(Icons.search),
             onPressed: () => _showReprintDialog(context, ref),
           ),
-          FutureBuilder<int>(
-            future: db.labelBufferCount(),
+          StreamBuilder<int>(
+            stream: db.watchLabelBufferCount(),
             builder: (context, snapshot) {
               final count = snapshot.data ?? 0;
               if (count == 0) return const SizedBox.shrink();
               return Padding(
-                padding: const EdgeInsets.only(right: 16),
+                padding: const EdgeInsets.only(right: 8),
                 child: Center(
                   child: Badge(
                     label: Text('$count'),
@@ -40,10 +43,10 @@ class LabelsScreen extends ConsumerWidget {
               );
             },
           ),
-        ],
+        ]),
       ),
-      body: FutureBuilder(
-        future: db.getLabelBuffer(),
+      body: StreamBuilder<List<LabelBufferEntry>>(
+        stream: db.watchLabelBuffer(),
         builder: (context, snapshot) {
           if (!snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
@@ -59,6 +62,24 @@ class LabelsScreen extends ConsumerWidget {
 
           return Column(
             children: [
+              if (printFailure != null)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  color: DipontoColors.error.withValues(alpha: 0.15),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.print_disabled, color: DipontoColors.error),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          printFailure,
+                          style: const TextStyle(color: DipontoColors.error),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               if (entries.length % 3 != 0)
                 Container(
                   width: double.infinity,
@@ -88,7 +109,7 @@ class LabelsScreen extends ConsumerWidget {
                 child: ElevatedButton.icon(
                   onPressed: entries.isEmpty
                       ? null
-                      : () => _printPending(context, ref, entries.map((e) => e.serial).toList()),
+                      : () => _printPending(context, ref, entries),
                   icon: const Icon(Icons.print),
                   label: Text('Imprimir pendentes (${entries.length})'),
                 ),
@@ -201,31 +222,38 @@ class LabelsScreen extends ConsumerWidget {
   Future<void> _printPending(
     BuildContext context,
     WidgetRef ref,
-    List<String> serials,
+    List<LabelBufferEntry> entries,
   ) async {
     final config = ref.read(appConfigProvider);
     final db = ref.read(databaseProvider);
     final printer = LabelPrinter(host: config.printerHost, port: config.printerPort);
 
-    try {
-      while (serials.isNotEmpty) {
-        final batch = serials.take(3).toList();
-        await printer.sendZpl(generateZplLabelRow(batch));
-        serials = serials.sublist(batch.length);
-      }
-      final entries = await db.getLabelBuffer();
-      await db.removeLabelsFromBuffer(entries.map((e) => e.id).toList());
+    final printEntries = entries.map((e) => (id: e.id, serial: e.serial)).toList();
+    final result = await printLabelBatches(
+      entries: printEntries,
+      sendZpl: (serials) => printer.sendZpl(generateZplLabelRow(serials)),
+    );
+
+    if (result.printedIds.isNotEmpty) {
+      await db.removeLabelsFromBuffer(result.printedIds);
+    }
+
+    if (result.error != null) {
+      ref.read(printFailureProvider.notifier).state =
+          'Erro na impressão manual: ${result.error}';
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Etiquetas enviadas à impressora')),
+          SnackBar(content: Text('Erro na impressão: ${result.error}')),
         );
       }
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erro na impressão: $e')),
-        );
-      }
+      return;
+    }
+
+    ref.read(printFailureProvider.notifier).state = null;
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Etiquetas enviadas à impressora')),
+      );
     }
   }
 }

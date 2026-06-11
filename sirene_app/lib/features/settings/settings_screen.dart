@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../core/config/app_config.dart';
 import '../../shared/widgets/desktop_form_layout.dart';
 import '../../shared/widgets/form_section_card.dart';
+import '../../shared/widgets/global_app_bar_actions.dart';
 import '../../shared/widgets/responsive_field_row.dart';
 import '../cloud/auth/auth_providers.dart';
 import '../cloud/auth/login_screen.dart';
@@ -139,15 +140,27 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
+  Future<void> _retryFailedSync({int? itemId}) async {
+    await retryFailedSyncItems(ref, itemId: itemId);
+    if (!mounted) return;
+    _showMessage(
+      itemId != null ? 'Item reenfileirado para sync' : 'Falhas reenfileiradas para sync',
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final syncStatus = ref.watch(syncStatusProvider);
+    final failedItems = ref.watch(failedSyncItemsProvider);
     final authenticated = ref.watch(isAuthenticatedProvider);
     final syncEnabled = ref.watch(syncEnabledProvider);
     final dateFmt = DateFormat('dd/MM/yyyy HH:mm');
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Configurações')),
+      appBar: AppBar(
+        title: const Text('Configurações'),
+        actions: globalAppBarActions(),
+      ),
       body: ListView(
         children: [
           DesktopFormLayout(
@@ -234,6 +247,48 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         ),
                         loading: () => const Text('Carregando status da fila...'),
                         error: (e, _) => Text('Erro ao ler fila: $e'),
+                      ),
+                      failedItems.when(
+                        data: (items) {
+                          if (items.isEmpty) return const SizedBox.shrink();
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              const SizedBox(height: 12),
+                              Text(
+                                'Fila com falha',
+                                style: Theme.of(context).textTheme.titleSmall,
+                              ),
+                              const SizedBox(height: 8),
+                              for (final item in items)
+                                Card(
+                                  margin: const EdgeInsets.only(bottom: 8),
+                                  child: ListTile(
+                                    dense: true,
+                                    title: Text('${item.collection}/${item.documentId}'),
+                                    subtitle: Text(
+                                      item.lastError ?? 'Erro desconhecido',
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    trailing: TextButton(
+                                      onPressed: () => _retryFailedSync(itemId: item.id),
+                                      child: const Text('Tentar novamente'),
+                                    ),
+                                  ),
+                                ),
+                              Align(
+                                alignment: Alignment.centerLeft,
+                                child: OutlinedButton(
+                                  onPressed: () => _retryFailedSync(),
+                                  child: const Text('Reprocessar todas as falhas'),
+                                ),
+                              ),
+                            ],
+                          );
+                        },
+                        loading: () => const SizedBox.shrink(),
+                        error: (_, __) => const SizedBox.shrink(),
                       ),
                       if (isFirebaseAvailable && syncEnabled && authenticated) ...[
                         const SizedBox(height: 8),

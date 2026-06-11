@@ -216,9 +216,10 @@ $<TARGET_FILE:idf::espressif__mqtt>
 $<TARGET_FILE:idf::mqtt_bridge>
 $<TARGET_FILE:__idf_espressif__mqtt>
 $<TARGET_FILE:__idf_device_id>
+$<TARGET_FILE:idf::espressif__cjson>
 $<TARGET_FILE:idf::offline_queue>
 $<TARGET_FILE:__idf_spiffs>
-$<TARGET_FILE:idf::espressif__cjson>
+$<TARGET_FILE:__idf_espressif__cjson>
 $<TARGET_FILE:idf::ota_update>
 $<TARGET_FILE:__idf_relay>
 $<TARGET_FILE:idf::telemetry>
@@ -232,7 +233,6 @@ $<TARGET_FILE:__idf_batch_storage>
 $<TARGET_FILE:__idf_pzem>
 $<TARGET_FILE:__idf_wifi_prov>
 $<TARGET_FILE:__idf_offline_queue>
-$<TARGET_FILE:__idf_espressif__cjson>
 $<TARGET_FILE:__idf_ota_update>
 $<TARGET_FILE:__idf_telemetry>
 $<TARGET_FILE:__idf_pure_logic>

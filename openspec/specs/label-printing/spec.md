@@ -22,11 +22,19 @@ O App Flutter SHALL enviar comandos ZPL à impressora Zebra ZT230 somente em mú
 - **THEN** o App Flutter não envia comando ZPL e mantém os seriais no buffer
 
 ### Requirement: Gatilho manual para etiquetas órfãs
-O App Flutter SHALL oferecer um gatilho manual de fechamento de lote que force a impressão das etiquetas órfãs restantes (1 ou 2).
+O App Flutter SHALL oferecer um gatilho manual de fechamento de lote que force a impressão das etiquetas restantes, removendo do buffer somente as entradas efetivamente impressas.
 
 #### Scenario: Fechamento de lote com órfãs
 - **WHEN** o operador aciona o gatilho de fechamento e há 1 ou 2 seriais no buffer
-- **THEN** o App Flutter envia o comando ZPL para imprimir as etiquetas restantes e esvazia o buffer
+- **THEN** o App Flutter envia o comando ZPL para imprimir as etiquetas restantes e remove do buffer apenas as entradas impressas
+
+#### Scenario: Aprovação durante impressão manual não é perdida
+- **WHEN** um novo serial aprovado entra no buffer enquanto uma impressão manual está em andamento
+- **THEN** a nova entrada permanece no buffer após a conclusão da impressão
+
+#### Scenario: Falha parcial preserva não impressas
+- **WHEN** a impressora falha após imprimir parte dos blocos
+- **THEN** somente as etiquetas dos blocos enviados com sucesso são removidas do buffer
 
 ### Requirement: Busca e reimpressão de serial
 O app SHALL permitir buscar um serial já validado no histórico local e reimprimir sua etiqueta individual, sem alterar o buffer de impressão corrente.
@@ -42,4 +50,30 @@ O app SHALL permitir buscar um serial já validado no histórico local e reimpri
 #### Scenario: Busca parcial
 - **WHEN** o operador digita parte de um serial
 - **THEN** o app sugere seriais do histórico que contêm o trecho digitado
+
+### Requirement: Sinalização de falha de impressão
+O app SHALL sinalizar ao operador toda falha de comunicação com a impressora (automática ou manual), mantendo as etiquetas não impressas no buffer.
+
+#### Scenario: Falha no auto-print
+- **WHEN** a impressão automática de um bloco de 3 etiquetas falha
+- **THEN** o app exibe alerta visível ao operador e mantém os seriais no buffer
+
+#### Scenario: Falha visível na tela de Etiquetas
+- **WHEN** existe uma falha de impressão registrada e não resolvida
+- **THEN** a tela de Etiquetas exibe um aviso destacado com o erro
+
+#### Scenario: Impressão bem-sucedida limpa o aviso
+- **WHEN** uma impressão subsequente conclui com sucesso
+- **THEN** o aviso de falha é removido
+
+### Requirement: Buffer de etiquetas reativo na UI
+A tela de Etiquetas SHALL refletir automaticamente inserções e remoções no buffer local, incluindo o contador do badge, sem exigir navegação ou recarga manual.
+
+#### Scenario: Novo serial no buffer
+- **WHEN** um serial aprovado é adicionado ao buffer enquanto a tela de Etiquetas está aberta
+- **THEN** a lista e o contador do badge são atualizados imediatamente
+
+#### Scenario: Impressão remove entradas
+- **WHEN** um bloco de etiquetas é impresso com sucesso e removido do buffer
+- **THEN** a lista na tela de Etiquetas reflete a remoção sem recarregar a tela
 

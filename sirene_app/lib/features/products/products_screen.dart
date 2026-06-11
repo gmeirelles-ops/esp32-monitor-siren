@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/diponto_theme.dart';
 import '../../shared/widgets/empty_state_view.dart';
+import '../../shared/widgets/global_app_bar_actions.dart';
 import 'product_form_screen.dart';
 import 'products_provider.dart';
 
@@ -16,7 +17,7 @@ class ProductsScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Produtos'),
-        actions: [
+        actions: globalAppBarActions([
           IconButton(
             tooltip: 'Novo produto',
             onPressed: () => Navigator.of(context).push(
@@ -24,7 +25,7 @@ class ProductsScreen extends ConsumerWidget {
             ),
             icon: const Icon(Icons.add),
           ),
-        ],
+        ]),
       ),
       body: productsAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),

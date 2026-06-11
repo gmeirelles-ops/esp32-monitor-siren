@@ -65,5 +65,26 @@ void main() {
       expect(written, ['test_results/2026001_2/set']);
       expect(await db.countPending(), 0);
     });
+
+    test('resetSyncAttempts move item de dead-letter para pending', () async {
+      final id = await db.enqueueSync(
+        collection: 'test_results',
+        documentId: 'op_1',
+        payload: '{}',
+        operation: 'set',
+      );
+      await db.markFailed(id, 'network error', attempts: 5);
+      expect(await db.countFailed(), 1);
+      expect(await db.countPending(), 0);
+
+      await db.resetSyncAttempts(id);
+      expect(await db.countFailed(), 0);
+      expect(await db.countPending(), 1);
+
+      final pending = await db.getPendingItems();
+      expect(pending.single.id, id);
+      expect(pending.single.attempts, 0);
+      expect(pending.single.lastError, isNull);
+    });
   });
 }

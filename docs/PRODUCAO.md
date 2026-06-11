@@ -108,6 +108,13 @@ Para cada modelo de sirene:
 - [ ] Offline → fila MQTT do ESP32 sincroniza ao reconectar
 - [ ] (Opcional) Firestore sync → documento em `test_results` após teste com sync habilitado
 
+### Smoke app (reatividade e sync)
+
+- [ ] Badge MQTT visível em Etiquetas/Painel (não só Dispositivos)
+- [ ] Painel atualiza métricas após novo teste sem trocar de aba
+- [ ] Buffer de etiquetas atualiza ao aprovar sirene
+- [ ] Configurações → falha permanente na fila → **Tentar novamente** após corrigir rede/login
+
 ## Referências
 
 - [GUIA_COMPLETO.md](../sirene-validator/docs/GUIA_COMPLETO.md) — firmware e MQTT

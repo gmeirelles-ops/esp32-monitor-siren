@@ -1235,13 +1235,6 @@
 /home/meirelles/diponto/Firmware/esp32-monitor-siren/sirene-validator/build/esp-idf/mqtt_bridge/CMakeFiles/install.dir
 /home/meirelles/diponto/Firmware/esp32-monitor-siren/sirene-validator/build/esp-idf/mqtt_bridge/CMakeFiles/install/local.dir
 /home/meirelles/diponto/Firmware/esp32-monitor-siren/sirene-validator/build/esp-idf/mqtt_bridge/CMakeFiles/install/strip.dir
-/home/meirelles/diponto/Firmware/esp32-monitor-siren/sirene-validator/build/esp-idf/offline_queue/CMakeFiles/__idf_offline_queue.dir
-/home/meirelles/diponto/Firmware/esp32-monitor-siren/sirene-validator/build/esp-idf/offline_queue/CMakeFiles/edit_cache.dir
-/home/meirelles/diponto/Firmware/esp32-monitor-siren/sirene-validator/build/esp-idf/offline_queue/CMakeFiles/rebuild_cache.dir
-/home/meirelles/diponto/Firmware/esp32-monitor-siren/sirene-validator/build/esp-idf/offline_queue/CMakeFiles/list_install_components.dir
-/home/meirelles/diponto/Firmware/esp32-monitor-siren/sirene-validator/build/esp-idf/offline_queue/CMakeFiles/install.dir
-/home/meirelles/diponto/Firmware/esp32-monitor-siren/sirene-validator/build/esp-idf/offline_queue/CMakeFiles/install/local.dir
-/home/meirelles/diponto/Firmware/esp32-monitor-siren/sirene-validator/build/esp-idf/offline_queue/CMakeFiles/install/strip.dir
 /home/meirelles/diponto/Firmware/esp32-monitor-siren/sirene-validator/build/esp-idf/espressif__cjson/CMakeFiles/__idf_espressif__cjson.dir
 /home/meirelles/diponto/Firmware/esp32-monitor-siren/sirene-validator/build/esp-idf/espressif__cjson/CMakeFiles/edit_cache.dir
 /home/meirelles/diponto/Firmware/esp32-monitor-siren/sirene-validator/build/esp-idf/espressif__cjson/CMakeFiles/rebuild_cache.dir
@@ -1249,6 +1242,13 @@
 /home/meirelles/diponto/Firmware/esp32-monitor-siren/sirene-validator/build/esp-idf/espressif__cjson/CMakeFiles/install.dir
 /home/meirelles/diponto/Firmware/esp32-monitor-siren/sirene-validator/build/esp-idf/espressif__cjson/CMakeFiles/install/local.dir
 /home/meirelles/diponto/Firmware/esp32-monitor-siren/sirene-validator/build/esp-idf/espressif__cjson/CMakeFiles/install/strip.dir
+/home/meirelles/diponto/Firmware/esp32-monitor-siren/sirene-validator/build/esp-idf/offline_queue/CMakeFiles/__idf_offline_queue.dir
+/home/meirelles/diponto/Firmware/esp32-monitor-siren/sirene-validator/build/esp-idf/offline_queue/CMakeFiles/edit_cache.dir
+/home/meirelles/diponto/Firmware/esp32-monitor-siren/sirene-validator/build/esp-idf/offline_queue/CMakeFiles/rebuild_cache.dir
+/home/meirelles/diponto/Firmware/esp32-monitor-siren/sirene-validator/build/esp-idf/offline_queue/CMakeFiles/list_install_components.dir
+/home/meirelles/diponto/Firmware/esp32-monitor-siren/sirene-validator/build/esp-idf/offline_queue/CMakeFiles/install.dir
+/home/meirelles/diponto/Firmware/esp32-monitor-siren/sirene-validator/build/esp-idf/offline_queue/CMakeFiles/install/local.dir
+/home/meirelles/diponto/Firmware/esp32-monitor-siren/sirene-validator/build/esp-idf/offline_queue/CMakeFiles/install/strip.dir
 /home/meirelles/diponto/Firmware/esp32-monitor-siren/sirene-validator/build/esp-idf/ota_update/CMakeFiles/__idf_ota_update.dir
 /home/meirelles/diponto/Firmware/esp32-monitor-siren/sirene-validator/build/esp-idf/ota_update/CMakeFiles/edit_cache.dir
 /home/meirelles/diponto/Firmware/esp32-monitor-siren/sirene-validator/build/esp-idf/ota_update/CMakeFiles/rebuild_cache.dir

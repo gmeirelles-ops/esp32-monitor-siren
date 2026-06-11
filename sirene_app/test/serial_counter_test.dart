@@ -92,5 +92,29 @@ void main() {
       expect(r.isIntact, false);
       expect(r.duplicates, [1]);
     });
+
+    test('reconcileSerials inclui veredito case-insensitive', () async {
+      await db.insertTestResult(
+        deviceId: 'aabbccddeeff',
+        numeroOp: '2026001',
+        veredito: 'Aprovado',
+        potenciaMedia: 20.0,
+        sequencial: 1,
+        aprovadosNoLote: 1,
+        serial: '1232600018',
+      );
+      await db.insertTestResult(
+        deviceId: 'aabbccddeeff',
+        numeroOp: '2026001',
+        veredito: 'aprovado',
+        potenciaMedia: 20.0,
+        sequencial: 2,
+        aprovadosNoLote: 2,
+        serial: '1232600026',
+      );
+      final r = await db.reconcileSerials('123', '26');
+      expect(r.found, [1, 2]);
+      expect(r.isIntact, true);
+    });
   });
 }

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../shared/widgets/desktop_form_layout.dart';
 import '../../shared/widgets/form_section_card.dart';
+import '../../shared/widgets/global_app_bar_actions.dart';
 import '../mqtt/mqtt_providers.dart';
 
 class AdminScreen extends ConsumerStatefulWidget {
@@ -63,7 +64,10 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     });
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Admin')),
+      appBar: AppBar(
+        title: const Text('Admin'),
+        actions: globalAppBarActions(),
+      ),
       body: ListView(
         children: [
           DesktopFormLayout(

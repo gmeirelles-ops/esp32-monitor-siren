@@ -8,6 +8,7 @@ host_tests: \
   CMakeFiles/host_tests.dir/test_fsm.c.o \
   CMakeFiles/host_tests.dir/test_serial.c.o \
   CMakeFiles/host_tests.dir/test_url.c.o \
+  CMakeFiles/host_tests.dir/test_batch_quota.c.o \
   libpure_logic.a \
   /usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/libm.so \
   /usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/libm.so \
@@ -53,6 +54,8 @@ CMakeFiles/host_tests.dir/test_fsm.c.o:
 CMakeFiles/host_tests.dir/test_serial.c.o:
 
 CMakeFiles/host_tests.dir/test_url.c.o:
+
+CMakeFiles/host_tests.dir/test_batch_quota.c.o:
 
 libpure_logic.a:
 

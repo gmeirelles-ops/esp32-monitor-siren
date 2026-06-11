@@ -216,6 +216,7 @@
 /home/meirelles/diponto/Firmware/esp32-monitor-siren/sirene-validator/build/esp-idf/mqtt_bridge/libmqtt_bridge.a
 /home/meirelles/diponto/Firmware/esp32-monitor-siren/sirene-validator/build/esp-idf/espressif__mqtt/libespressif__mqtt.a
 /home/meirelles/diponto/Firmware/esp32-monitor-siren/sirene-validator/build/esp-idf/device_id/libdevice_id.a
+/home/meirelles/diponto/Firmware/esp32-monitor-siren/sirene-validator/build/esp-idf/espressif__cjson/libespressif__cjson.a
 /home/meirelles/diponto/Firmware/esp32-monitor-siren/sirene-validator/build/esp-idf/offline_queue/liboffline_queue.a
 /home/meirelles/diponto/Firmware/esp32-monitor-siren/sirene-validator/build/esp-idf/spiffs/libspiffs.a
 /home/meirelles/diponto/Firmware/esp32-monitor-siren/sirene-validator/build/esp-idf/espressif__cjson/libespressif__cjson.a
@@ -232,7 +233,6 @@
 /home/meirelles/diponto/Firmware/esp32-monitor-siren/sirene-validator/build/esp-idf/pzem/libpzem.a
 /home/meirelles/diponto/Firmware/esp32-monitor-siren/sirene-validator/build/esp-idf/wifi_prov/libwifi_prov.a
 /home/meirelles/diponto/Firmware/esp32-monitor-siren/sirene-validator/build/esp-idf/offline_queue/liboffline_queue.a
-/home/meirelles/diponto/Firmware/esp32-monitor-siren/sirene-validator/build/esp-idf/espressif__cjson/libespressif__cjson.a
 /home/meirelles/diponto/Firmware/esp32-monitor-siren/sirene-validator/build/esp-idf/ota_update/libota_update.a
 /home/meirelles/diponto/Firmware/esp32-monitor-siren/sirene-validator/build/esp-idf/telemetry/libtelemetry.a
 /home/meirelles/diponto/Firmware/esp32-monitor-siren/sirene-validator/build/esp-idf/pure_logic/libpure_logic.a

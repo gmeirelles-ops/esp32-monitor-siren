@@ -32,6 +32,8 @@ bool pure_fsm_can_accept_batch(pure_state_t state, bool ota_active);
 bool pure_fsm_can_accept_calibration(pure_state_t state, bool ota_active);
 bool pure_fsm_can_accept_ota(pure_state_t state);
 
+bool pure_batch_quota_reached(uint32_t aprovados, uint32_t quantidade_total);
+
 bool pure_serial_body_valid(const char body[9]);
 
 bool pure_ota_url_valid(const char *url);

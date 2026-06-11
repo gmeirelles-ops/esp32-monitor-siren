@@ -24,7 +24,8 @@
 #define MQTT_DEFAULT_PORT     1883
 
 /* Timing */
-#define INRUSH_DISCARD_MS     500
+#define INRUSH_DISCARD_MS         500
+#define PZEM_SAMPLE_READ_RETRIES  3
 #define CALIBRATION_SEC           5
 #define CALIBRATION_SAMPLE_MS     500
 #define BUTTON_DEBOUNCE_MS    50

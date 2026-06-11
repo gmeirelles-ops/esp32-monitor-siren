@@ -8,6 +8,7 @@ set(CMAKE_DEPENDS_LANGUAGES
 
 # The set of dependency files which are needed:
 set(CMAKE_DEPENDS_DEPENDENCY_FILES
+  "/home/meirelles/diponto/Firmware/esp32-monitor-siren/sirene-validator/host_tests/test_batch_quota.c" "CMakeFiles/host_tests.dir/test_batch_quota.c.o" "gcc" "CMakeFiles/host_tests.dir/test_batch_quota.c.o.d"
   "/home/meirelles/diponto/Firmware/esp32-monitor-siren/sirene-validator/host_tests/test_fifo.c" "CMakeFiles/host_tests.dir/test_fifo.c.o" "gcc" "CMakeFiles/host_tests.dir/test_fifo.c.o.d"
   "/home/meirelles/diponto/Firmware/esp32-monitor-siren/sirene-validator/host_tests/test_fsm.c" "CMakeFiles/host_tests.dir/test_fsm.c.o" "gcc" "CMakeFiles/host_tests.dir/test_fsm.c.o.d"
   "/home/meirelles/diponto/Firmware/esp32-monitor-siren/sirene-validator/host_tests/test_main.c" "CMakeFiles/host_tests.dir/test_main.c.o" "gcc" "CMakeFiles/host_tests.dir/test_main.c.o.d"

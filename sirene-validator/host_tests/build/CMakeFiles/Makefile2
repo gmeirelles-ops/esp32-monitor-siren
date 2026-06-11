@@ -88,7 +88,7 @@ clean: CMakeFiles/host_tests.dir/clean
 CMakeFiles/pure_logic.dir/all:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/pure_logic.dir/build.make CMakeFiles/pure_logic.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/pure_logic.dir/build.make CMakeFiles/pure_logic.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/meirelles/diponto/Firmware/esp32-monitor-siren/sirene-validator/host_tests/build/CMakeFiles --progress-num=8,9 "Built target pure_logic"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/meirelles/diponto/Firmware/esp32-monitor-siren/sirene-validator/host_tests/build/CMakeFiles --progress-num=9,10 "Built target pure_logic"
 .PHONY : CMakeFiles/pure_logic.dir/all
 
 # Build rule for subdir invocation for target.
@@ -105,7 +105,7 @@ pure_logic: CMakeFiles/pure_logic.dir/rule
 # codegen rule for target.
 CMakeFiles/pure_logic.dir/codegen:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/pure_logic.dir/build.make CMakeFiles/pure_logic.dir/codegen
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/meirelles/diponto/Firmware/esp32-monitor-siren/sirene-validator/host_tests/build/CMakeFiles --progress-num=8,9 "Finished codegen for target pure_logic"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/meirelles/diponto/Firmware/esp32-monitor-siren/sirene-validator/host_tests/build/CMakeFiles --progress-num=9,10 "Finished codegen for target pure_logic"
 .PHONY : CMakeFiles/pure_logic.dir/codegen
 
 # clean rule for target.
@@ -120,12 +120,12 @@ CMakeFiles/pure_logic.dir/clean:
 CMakeFiles/host_tests.dir/all: CMakeFiles/pure_logic.dir/all
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/host_tests.dir/build.make CMakeFiles/host_tests.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/host_tests.dir/build.make CMakeFiles/host_tests.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/meirelles/diponto/Firmware/esp32-monitor-siren/sirene-validator/host_tests/build/CMakeFiles --progress-num=1,2,3,4,5,6,7 "Built target host_tests"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/meirelles/diponto/Firmware/esp32-monitor-siren/sirene-validator/host_tests/build/CMakeFiles --progress-num=1,2,3,4,5,6,7,8 "Built target host_tests"
 .PHONY : CMakeFiles/host_tests.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/host_tests.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/meirelles/diponto/Firmware/esp32-monitor-siren/sirene-validator/host_tests/build/CMakeFiles 9
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/meirelles/diponto/Firmware/esp32-monitor-siren/sirene-validator/host_tests/build/CMakeFiles 10
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/host_tests.dir/all
 	$(CMAKE_COMMAND) -E cmake_progress_start /home/meirelles/diponto/Firmware/esp32-monitor-siren/sirene-validator/host_tests/build/CMakeFiles 0
 .PHONY : CMakeFiles/host_tests.dir/rule
@@ -137,7 +137,7 @@ host_tests: CMakeFiles/host_tests.dir/rule
 # codegen rule for target.
 CMakeFiles/host_tests.dir/codegen:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/host_tests.dir/build.make CMakeFiles/host_tests.dir/codegen
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/meirelles/diponto/Firmware/esp32-monitor-siren/sirene-validator/host_tests/build/CMakeFiles --progress-num=1,2,3,4,5,6,7 "Finished codegen for target host_tests"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/meirelles/diponto/Firmware/esp32-monitor-siren/sirene-validator/host_tests/build/CMakeFiles --progress-num=1,2,3,4,5,6,7,8 "Finished codegen for target host_tests"
 .PHONY : CMakeFiles/host_tests.dir/codegen
 
 # clean rule for target.

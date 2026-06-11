@@ -25,6 +25,7 @@ class MqttService {
       StreamController<({String deviceId, CalibrationMessage result})>.broadcast();
 
   Timer? _reconnectTimer;
+  StreamSubscription<List<MqttReceivedMessage<MqttMessage>>>? _updatesSub;
   int _backoffSeconds = 1;
   String? _host;
   int? _port;
@@ -48,8 +49,19 @@ class MqttService {
 
   Future<void> disconnect() async {
     _reconnectTimer?.cancel();
-    _client?.disconnect();
+    _reconnectTimer = null;
+    _detachClient(_client);
+    _client = null;
     _setState(AppMqttConnectionState.disconnected);
+  }
+
+  void _detachClient(MqttServerClient? client) {
+    _updatesSub?.cancel();
+    _updatesSub = null;
+    if (client == null) return;
+    client.onConnected = null;
+    client.onDisconnected = null;
+    client.disconnect();
   }
 
   Future<void> publishCommand(String deviceId, Map<String, dynamic> payload) async {
@@ -75,7 +87,10 @@ class MqttService {
         ? AppMqttConnectionState.connecting
         : AppMqttConnectionState.reconnecting);
 
-    _client?.disconnect();
+    final oldClient = _client;
+    _detachClient(oldClient);
+    _client = null;
+
     final clientId = 'sirene_app_${DateTime.now().millisecondsSinceEpoch}';
     _client = MqttServerClient.withPort(_host!, clientId, _port!);
     _client!.logging(on: false);
@@ -101,7 +116,8 @@ class MqttService {
     for (final topic in MqttTopics.allSubscriptions) {
       _client!.subscribe(topic, MqttQos.atLeastOnce);
     }
-    _client!.updates?.listen(_handleUpdates);
+    _updatesSub?.cancel();
+    _updatesSub = _client!.updates?.listen(_handleUpdates);
     _setState(AppMqttConnectionState.connected);
     _backoffSeconds = 1;
   }
@@ -161,7 +177,8 @@ class MqttService {
 
   void dispose() {
     _reconnectTimer?.cancel();
-    _client?.disconnect();
+    _detachClient(_client);
+    _client = null;
     _stateController.close();
     _messageController.close();
     _rejectionController.close();

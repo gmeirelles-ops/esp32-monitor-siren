@@ -22,7 +22,7 @@ Executar lógica pura sem hardware:
 cd sirene-validator && ./scripts/run_host_tests.sh
 ```
 
-Cobre: veredito de potência, anel FIFO, transições da FSM, composição do serial de 10 dígitos e validação de URL OTA.
+Cobre: veredito de potência, anel FIFO, transições da FSM, composição do serial de 10 dígitos, validação de URL OTA e cota de lote (`quantidade_total`).
 
 ## Scripts de bancada (MQTT)
 
@@ -83,7 +83,13 @@ BROKER=192.168.1.100 DEVICE_ID=aabbccddeeff ./scripts/bench_reconnect.sh
 1. Desligue broker MQTT ou Wi-Fi.
 2. Execute testes — dispositivo deve continuar operando.
 3. Verifique fila local (logs / SPIFFS).
-4. Restaure rede — mensagens devem sincronizar em ordem FIFO.
+4. Restaure rede — mensagens devem sincronizar em ordem FIFO, **cada uma no tópico original** (`status`, `alerta` ou `calibracao`).
+
+## 10.8 Robustez de fila, comandos e cota (firmware 1.3+)
+
+1. **Fila offline com tópico:** desligue o broker, force falha PZEM (alerta) ou conclua calibração offline; reconecte e confirme que alertas vão para `sirene/<device_id>/alerta` e calibração para `calibracao`, não para `status`.
+2. **Comando obsoleto:** com teste em andamento (`TESTING`), publique `END_BATCH` ou `SET_BATCH` — deve haver rejeição imediata em `status` com motivo `cmd_durante_teste`, sem encerrar o lote após o teste.
+3. **Cota de lote:** configure `SET_BATCH` com `quantidade_total: 2`, aprove duas peças; ao pressionar o botão novamente, o relé não deve acionar e deve haver rejeição `lote_cheio` (se MQTT conectado) e feedback local de reprovação.
 
 ## 10.5 Falha UART PZEM
 
@@ -95,8 +101,9 @@ BROKER=192.168.1.100 DEVICE_ID=aabbccddeeff ./scripts/bench_reconnect.sh
 
 | Comando | Estado | Resultado esperado |
 |---------|--------|-------------------|
-| `SET_BATCH` | `TESTING` | Rejeição |
-| `END_BATCH` | `TESTING` | Rejeição |
+| `SET_BATCH` | `TESTING` | Rejeição imediata (`cmd_durante_teste`), sem enfileiramento |
+| `END_BATCH` | `TESTING` | Rejeição imediata (`cmd_durante_teste`), sem enfileiramento |
+| `OTA_UPDATE` | `TESTING` | Rejeição imediata (`cmd_durante_teste`) |
 | `START_CALIBRATION` | `BATCH_READY` | Rejeição |
 | `START_CALIBRATION` | `IDLE` | Aceito |
 

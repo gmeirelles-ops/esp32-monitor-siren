@@ -5,6 +5,7 @@ import '../../core/database/database.dart';
 import '../../core/theme/diponto_theme.dart';
 import '../../shared/widgets/desktop_form_layout.dart';
 import '../../shared/widgets/empty_state_view.dart';
+import '../../shared/widgets/global_app_bar_actions.dart';
 import '../../shared/widgets/responsive_field_row.dart';
 import '../cloud/auth/auth_providers.dart';
 import '../mqtt/models/mqtt_messages.dart';
@@ -188,8 +189,17 @@ class _BatchScreenState extends ConsumerState<BatchScreen> {
       }
     });
 
+    ref.listen(printFailureProvider, (prev, next) {
+      if (next != null) {
+        _showSnack(next);
+      }
+    });
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Lote')),
+      appBar: AppBar(
+        title: const Text('Lote'),
+        actions: globalAppBarActions(),
+      ),
       body: productsAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('Erro: $e')),

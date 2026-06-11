@@ -6,155 +6,112 @@ import '../../core/theme/diponto_theme.dart';
 import '../../shared/widgets/desktop_form_layout.dart';
 import '../../shared/widgets/empty_state_view.dart';
 import '../../shared/widgets/form_section_card.dart';
-import '../mqtt/mqtt_providers.dart';
+import '../../shared/widgets/global_app_bar_actions.dart';
+import 'dashboard_providers.dart';
 
-enum _Period { today, week, all }
-
-class _DashboardData {
-  const _DashboardData({
-    required this.summary,
-    required this.throughput,
-    required this.faults,
-    required this.recentAlerts,
-  });
-
-  final ProductionSummary summary;
-  final List<DailyThroughput> throughput;
-  final List<FaultCount> faults;
-  final List<HardwareEvent> recentAlerts;
-}
-
-class DashboardScreen extends ConsumerStatefulWidget {
+class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
 
   @override
-  ConsumerState<DashboardScreen> createState() => _DashboardScreenState();
-}
+  Widget build(BuildContext context, WidgetRef ref) {
+    final period = ref.watch(dashboardPeriodProvider);
+    final dashboardAsync = ref.watch(dashboardDataProvider);
 
-class _DashboardScreenState extends ConsumerState<DashboardScreen> {
-  _Period _period = _Period.week;
-
-  DateTime? _sinceFor(_Period period) {
-    final now = DateTime.now();
-    return switch (period) {
-      _Period.today => DateTime(now.year, now.month, now.day),
-      _Period.week => now.subtract(const Duration(days: 6)),
-      _Period.all => null,
-    };
-  }
-
-  Future<_DashboardData> _load() async {
-    final db = ref.read(databaseProvider);
-    final since = _sinceFor(_period);
-    final summary = await db.productionSummary(since: since);
-    final throughput = await db.throughputByDay(days: 7);
-    final faults = await db.hardwareFaultCounts(since: since);
-    final recentAlerts = await db.recentHardwareEvents(limit: 10);
-    return _DashboardData(
-      summary: summary,
-      throughput: throughput,
-      faults: faults,
-      recentAlerts: recentAlerts,
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Painel')),
-      body: FutureBuilder<_DashboardData>(
-        future: _load(),
-        builder: (context, snapshot) {
-          if (!snapshot.hasData) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          final data = snapshot.data!;
-          return ListView(
-            children: [
-              DesktopFormLayout(
-                maxWidth: 760,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    SegmentedButton<_Period>(
-                      segments: const [
-                        ButtonSegment(value: _Period.today, label: Text('Hoje')),
-                        ButtonSegment(value: _Period.week, label: Text('7 dias')),
-                        ButtonSegment(value: _Period.all, label: Text('Tudo')),
-                      ],
-                      selected: {_period},
-                      onSelectionChanged: (s) => setState(() => _period = s.first),
-                    ),
+      appBar: AppBar(
+        title: const Text('Painel'),
+        actions: globalAppBarActions(),
+      ),
+      body: dashboardAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, _) => Center(child: Text('Erro ao carregar painel: $e')),
+        data: (data) => ListView(
+          children: [
+            DesktopFormLayout(
+              maxWidth: 760,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  SegmentedButton<DashboardPeriod>(
+                    segments: const [
+                      ButtonSegment(value: DashboardPeriod.today, label: Text('Hoje')),
+                      ButtonSegment(value: DashboardPeriod.week, label: Text('7 dias')),
+                      ButtonSegment(value: DashboardPeriod.all, label: Text('Tudo')),
+                    ],
+                    selected: {period},
+                    onSelectionChanged: (s) =>
+                        ref.read(dashboardPeriodProvider.notifier).state = s.first,
+                  ),
+                  const SizedBox(height: 16),
+                  if (data.summary.total == 0)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 48),
+                      child: EmptyStateView(
+                        icon: Icons.insights_outlined,
+                        title: 'Sem dados no período',
+                        subtitle:
+                            'Os testes realizados aparecerão aqui como métricas de produção.',
+                      ),
+                    )
+                  else ...[
+                    _MetricsRow(summary: data.summary, faults: data.faults),
                     const SizedBox(height: 16),
-                    if (data.summary.total == 0)
-                      const Padding(
-                        padding: EdgeInsets.only(top: 48),
-                        child: EmptyStateView(
-                          icon: Icons.insights_outlined,
-                          title: 'Sem dados no período',
-                          subtitle: 'Os testes realizados aparecerão aqui como métricas de produção.',
-                        ),
-                      )
-                    else ...[
-                      _MetricsRow(summary: data.summary, faults: data.faults),
-                      const SizedBox(height: 16),
+                    FormSectionCard(
+                      title: 'Throughput (7 dias)',
+                      child: _BarChart(
+                        bars: [
+                          for (final d in data.throughput)
+                            _Bar(
+                              label: '${d.day.day}/${d.day.month}',
+                              value: d.total.toDouble(),
+                              secondary: d.aprovados.toDouble(),
+                            ),
+                        ],
+                      ),
+                    ),
+                    if (data.faults.isNotEmpty)
                       FormSectionCard(
-                        title: 'Throughput (7 dias)',
+                        title: 'Falhas de hardware',
                         child: _BarChart(
+                          color: DipontoColors.error,
                           bars: [
-                            for (final d in data.throughput)
-                              _Bar(
-                                label: '${d.day.day}/${d.day.month}',
-                                value: d.total.toDouble(),
-                                secondary: d.aprovados.toDouble(),
-                              ),
+                            for (final f in data.faults)
+                              _Bar(label: f.falha, value: f.count.toDouble()),
                           ],
                         ),
                       ),
-                      if (data.faults.isNotEmpty)
-                        FormSectionCard(
-                          title: 'Falhas de hardware',
-                          child: _BarChart(
-                            color: DipontoColors.error,
-                            bars: [
-                              for (final f in data.faults)
-                                _Bar(label: f.falha, value: f.count.toDouble()),
+                  ],
+                  const SizedBox(height: 16),
+                  FormSectionCard(
+                    title: 'Alertas recentes',
+                    child: data.recentAlerts.isEmpty
+                        ? Text(
+                            'Sem alertas recentes.',
+                            style: TextStyle(
+                              color: DipontoColors.onSurface.withValues(alpha: 0.6),
+                            ),
+                          )
+                        : Column(
+                            children: [
+                              for (final a in data.recentAlerts)
+                                ListTile(
+                                  contentPadding: EdgeInsets.zero,
+                                  dense: true,
+                                  leading: const Icon(
+                                    Icons.warning_amber_outlined,
+                                    color: DipontoColors.error,
+                                  ),
+                                  title: Text(a.falha),
+                                  subtitle: Text('${a.deviceId} — ${a.createdAt.toLocal()}'),
+                                ),
                             ],
                           ),
-                        ),
-                    ],
-                    const SizedBox(height: 16),
-                    FormSectionCard(
-                      title: 'Alertas recentes',
-                      child: data.recentAlerts.isEmpty
-                          ? Text(
-                              'Sem alertas recentes.',
-                              style: TextStyle(
-                                color: DipontoColors.onSurface.withValues(alpha: 0.6),
-                              ),
-                            )
-                          : Column(
-                              children: [
-                                for (final a in data.recentAlerts)
-                                  ListTile(
-                                    contentPadding: EdgeInsets.zero,
-                                    dense: true,
-                                    leading: const Icon(
-                                      Icons.warning_amber_outlined,
-                                      color: DipontoColors.error,
-                                    ),
-                                    title: Text(a.falha),
-                                    subtitle: Text('${a.deviceId} — ${a.createdAt.toLocal()}'),
-                                  ),
-                              ],
-                            ),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            ],
-          );
-        },
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -12,6 +12,8 @@ import '../cloud/sync/sync_providers.dart';
 import '../labels/label_printer.dart';
 import '../labels/zpl_generator.dart';
 import '../serial/itf_check_digit.dart';
+import 'message_pump.dart';
+import '../dashboard/dashboard_providers.dart';
 import 'models/mqtt_messages.dart';
 import 'mqtt_parser.dart';
 import 'mqtt_service.dart';
@@ -38,6 +40,8 @@ typedef DuplicateSerialEvent = ({String deviceId, String serial});
 
 final duplicateSerialProvider = StateProvider<DuplicateSerialEvent?>((ref) => null);
 
+final printFailureProvider = StateProvider<String?>((ref) => null);
+
 final devicesProvider =
     StateNotifierProvider<DevicesNotifier, Map<String, DeviceInfo>>((ref) {
   return DevicesNotifier(ref);
@@ -51,6 +55,7 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
   final Ref _ref;
   StreamSubscription<(String, String)>? _sub;
   Timer? _staleTimer;
+  final MessagePump _messagePump = MessagePump();
   final Map<String, DateTime> _batchStartedAt = {};
 
   void _init() {
@@ -59,7 +64,9 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
 
     service.connect(config.mqttHost, config.mqttPort);
 
-    _sub = service.messages.listen(_handleMessage);
+    _sub = service.messages.listen((event) {
+      _messagePump.enqueue(() => _handleMessage(event));
+    });
     _staleTimer = Timer.periodic(const Duration(seconds: 15), (_) => _checkStaleDevices());
   }
 
@@ -156,6 +163,7 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
                 deviceId: deviceId,
                 falha: alert.falha!,
               );
+          _ref.read(localDataRevisionProvider.notifier).state++;
         }
         device.lastSeen = now;
       }
@@ -223,6 +231,7 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
             serial: serial,
             operador: operador,
           );
+          _ref.read(localDataRevisionProvider.notifier).state++;
         }
       }
     }
@@ -242,8 +251,9 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
     try {
       await printer.sendZpl(generateZplLabelRow(serials));
       await db.removeLabelsFromBuffer(toPrint.map((e) => e.id).toList());
-    } catch (_) {
-      // Impressora indisponível — seriais permanecem no buffer
+      _ref.read(printFailureProvider.notifier).state = null;
+    } catch (e) {
+      _ref.read(printFailureProvider.notifier).state = 'Erro na impressão automática: $e';
     }
   }
 
@@ -340,14 +350,6 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
 
 final selectedDeviceIdProvider = StateProvider<String?>((ref) {
   return ref.watch(appConfigProvider).selectedDeviceId;
-});
-
-final labelBufferProvider = StreamProvider<int>((ref) async* {
-  final db = ref.watch(databaseProvider);
-  while (true) {
-    yield await db.labelBufferCount();
-    await Future<void>.delayed(const Duration(seconds: 2));
-  }
 });
 
 final rejectionStreamProvider = StreamProvider<RejectionMessage>((ref) {

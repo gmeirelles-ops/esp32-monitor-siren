@@ -68,6 +68,11 @@ bool pure_fsm_can_accept_ota(pure_state_t state)
     return state != PURE_STATE_TESTING && state != PURE_STATE_OTA_UPDATING;
 }
 
+bool pure_batch_quota_reached(uint32_t aprovados, uint32_t quantidade_total)
+{
+    return quantidade_total > 0 && aprovados >= quantidade_total;
+}
+
 bool pure_serial_body_valid(const char body[9])
 {
     for (int i = 0; i < 9; i++) {

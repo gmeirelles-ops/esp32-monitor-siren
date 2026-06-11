@@ -6,6 +6,8 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:sqlite3_flutter_libs/sqlite3_flutter_libs.dart';
 
+import 'veredito.dart';
+
 part 'database.g.dart';
 
 class TestResults extends Table {
@@ -106,7 +108,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 7;
+  int get schemaVersion => 8;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -133,6 +135,17 @@ class AppDatabase extends _$AppDatabase {
           if (from < 7) {
             await m.createTable(calibrationHistory);
             await m.createTable(opLocks);
+          }
+          if (from < 8) {
+            await m.database.customStatement(
+              'CREATE INDEX IF NOT EXISTS idx_test_results_serial ON test_results(serial)',
+            );
+            await m.database.customStatement(
+              'CREATE INDEX IF NOT EXISTS idx_test_results_created_at ON test_results(created_at)',
+            );
+            await m.database.customStatement(
+              'CREATE INDEX IF NOT EXISTS idx_sync_queue_attempts ON sync_queue(attempts)',
+            );
           }
         },
       );
@@ -234,6 +247,18 @@ class AppDatabase extends _$AppDatabase {
     return (select(labelBufferEntries)
           ..orderBy([(t) => OrderingTerm.asc(t.createdAt)]))
         .get();
+  }
+
+  Stream<List<LabelBufferEntry>> watchLabelBuffer() {
+    return (select(labelBufferEntries)
+          ..orderBy([(t) => OrderingTerm.asc(t.createdAt)]))
+        .watch();
+  }
+
+  Stream<int> watchLabelBufferCount() {
+    final count = countAll();
+    final query = selectOnly(labelBufferEntries)..addColumns([count]);
+    return query.watch().map((rows) => rows.first.read(count) ?? 0);
   }
 
   Future<void> removeLabelsFromBuffer(List<int> ids) async {
@@ -364,6 +389,31 @@ class AppDatabase extends _$AppDatabase {
     return row.read(total) ?? 0;
   }
 
+  Future<List<SyncQueueData>> getFailedSyncItems({int limit = 50}) {
+    return (select(syncQueue)
+          ..where((t) => t.attempts.isBiggerOrEqualValue(5))
+          ..orderBy([(t) => OrderingTerm.asc(t.createdAt)])
+          ..limit(limit))
+        .get();
+  }
+
+  Future<void> resetSyncAttempts(int id) async {
+    await (update(syncQueue)..where((t) => t.id.equals(id))).write(
+      const SyncQueueCompanion(
+        attempts: Value(0),
+        lastError: Value(null),
+      ),
+    );
+  }
+
+  Future<int> resetAllFailedSyncAttempts() async {
+    final failed = await getFailedSyncItems();
+    for (final item in failed) {
+      await resetSyncAttempts(item.id);
+    }
+    return failed.length;
+  }
+
   Future<int> insertHardwareEvent({
     required String deviceId,
     required String falha,
@@ -436,7 +486,7 @@ class AppDatabase extends _$AppDatabase {
     final rows = await query.get();
     var aprovados = 0;
     for (final r in rows) {
-      if (r.veredito.toUpperCase() == 'APROVADO') aprovados++;
+      if (isApprovedVeredito(r.veredito)) aprovados++;
     }
     return ProductionSummary(total: rows.length, aprovados: aprovados);
   }
@@ -455,7 +505,7 @@ class AppDatabase extends _$AppDatabase {
       final current = byDay[day] ?? (total: 0, aprovados: 0);
       byDay[day] = (
         total: current.total + 1,
-        aprovados: current.aprovados + (r.veredito.toUpperCase() == 'APROVADO' ? 1 : 0),
+        aprovados: current.aprovados + (isApprovedVeredito(r.veredito) ? 1 : 0),
       );
     }
 
@@ -528,12 +578,11 @@ class AppDatabase extends _$AppDatabase {
   /// Reconciliação dos sequenciais aprovados de um produto/ano.
   Future<SerialReconciliation> reconcileSerials(String idProduto, String ano) async {
     final prefix = '$idProduto$ano';
-    final rows = await (select(testResults)
-          ..where((t) => t.serial.like('$prefix%') & t.veredito.equals('APROVADO')))
-        .get();
+    final rows = await (select(testResults)..where((t) => t.serial.like('$prefix%'))).get();
 
     final seqCount = <int, int>{};
     for (final row in rows) {
+      if (!isApprovedVeredito(row.veredito)) continue;
       final serial = row.serial;
       if (serial == null || serial.length < 9) continue;
       final seq = int.tryParse(serial.substring(5, 9));

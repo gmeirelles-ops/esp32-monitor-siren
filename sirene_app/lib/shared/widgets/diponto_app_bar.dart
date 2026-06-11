@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/diponto_theme.dart';
+import 'global_app_bar_actions.dart';
 
 class DipontoAppBar extends StatelessWidget implements PreferredSizeWidget {
   const DipontoAppBar({super.key, required this.title, this.actions});
@@ -38,7 +39,7 @@ class DipontoAppBar extends StatelessWidget implements PreferredSizeWidget {
           Text(title),
         ],
       ),
-      actions: actions,
+      actions: globalAppBarActions(actions),
     );
   }
 }

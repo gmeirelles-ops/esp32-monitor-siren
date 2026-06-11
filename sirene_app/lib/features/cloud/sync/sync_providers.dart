@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/database/database.dart';
 import '../../../core/providers/core_providers.dart';
 import '../../products/products_provider.dart';
 import '../auth/auth_providers.dart';
@@ -99,6 +100,24 @@ final syncStatusProvider = FutureProvider<SyncStatus>((ref) async {
     authenticated: authenticated,
   );
 });
+
+final failedSyncItemsProvider = FutureProvider<List<SyncQueueData>>((ref) async {
+  ref.watch(syncStatusProvider);
+  final db = ref.watch(databaseProvider);
+  return db.getFailedSyncItems();
+});
+
+Future<void> retryFailedSyncItems(WidgetRef ref, {int? itemId}) async {
+  final db = ref.read(databaseProvider);
+  if (itemId != null) {
+    await db.resetSyncAttempts(itemId);
+  } else {
+    await db.resetAllFailedSyncAttempts();
+  }
+  await ref.read(syncQueueProcessorProvider).processQueue();
+  ref.invalidate(syncStatusProvider);
+  ref.invalidate(failedSyncItemsProvider);
+}
 
 Future<int> syncCatalogToCloud(WidgetRef ref) async {
   final sync = ref.read(firestoreSyncServiceProvider);

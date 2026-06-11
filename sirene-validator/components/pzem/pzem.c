@@ -131,9 +131,19 @@ bool pzem_measure_cycle(uint32_t duration_sec, uint32_t inrush_discard_ms, pzem_
     while (xTaskGetTickCount() < cycle_end) {
         esp_task_wdt_reset();
         float power = 0;
-        if (!pzem_read_power_w(&power)) {
-            out->uart_error = true;
-            return false;
+        bool read_ok = false;
+        for (int attempt = 0; attempt < PZEM_SAMPLE_READ_RETRIES; attempt++) {
+            if (pzem_read_power_w(&power)) {
+                read_ok = true;
+                break;
+            }
+            if (attempt + 1 < PZEM_SAMPLE_READ_RETRIES) {
+                vTaskDelay(pdMS_TO_TICKS(10));
+            }
+        }
+        if (!read_ok) {
+            vTaskDelay(pdMS_TO_TICKS(100));
+            continue;
         }
         if (xTaskGetTickCount() >= inrush_end) {
             sum += power;

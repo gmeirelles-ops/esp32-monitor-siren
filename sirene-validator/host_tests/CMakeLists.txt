@@ -15,6 +15,7 @@ add_executable(host_tests
     test_fsm.c
     test_serial.c
     test_url.c
+    test_batch_quota.c
 )
 target_include_directories(host_tests PRIVATE .)
 target_link_libraries(host_tests pure_logic m)

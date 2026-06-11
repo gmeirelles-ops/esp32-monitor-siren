@@ -9,6 +9,7 @@ import 'features/batch/batch_screen.dart';
 import 'features/dashboard/dashboard_screen.dart';
 import 'features/devices/devices_screen.dart';
 import 'features/labels/labels_screen.dart';
+import 'features/mqtt/mqtt_providers.dart';
 import 'features/products/products_screen.dart';
 import 'features/provisioning/provisioning_wizard.dart';
 import 'features/settings/settings_screen.dart';
@@ -29,6 +30,7 @@ class _SireneAppState extends ConsumerState<SireneApp> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(syncQueueProcessorProvider);
+      ref.read(devicesProvider);
       if (ref.read(syncEnabledProvider)) {
         ref.read(syncQueueProcessorProvider).start();
       }
