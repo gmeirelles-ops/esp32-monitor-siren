@@ -1,0 +1,7 @@
+{
+	"InstallScripts" : 
+	[
+		"/home/meirelles/diponto/Firmware/esp32-monitor-siren/sirene-validator/host_tests/build/cmake_install.cmake"
+	],
+	"Parallel" : false
+}

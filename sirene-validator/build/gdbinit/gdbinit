@@ -1,0 +1,2 @@
+source /home/meirelles/diponto/Firmware/esp32-monitor-siren/sirene-validator/build/gdbinit/symbols
+source /home/meirelles/diponto/Firmware/esp32-monitor-siren/sirene-validator/build/gdbinit/connect

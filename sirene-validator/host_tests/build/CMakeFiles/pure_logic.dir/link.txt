@@ -1,0 +1,2 @@
+/usr/bin/ar qc libpure_logic.a "CMakeFiles/pure_logic.dir/home/meirelles/diponto/Firmware/esp32-monitor-siren/sirene-validator/components/pure_logic/pure_logic.c.o"
+/usr/bin/ranlib libpure_logic.a

@@ -1,0 +1,26 @@
+{
+    "name": "ESP32 Dev Environment",
+    "image": "esp32-env:latest",
+    "remoteUser": "devuser",
+    "workspaceFolder": "/app",
+    "workspaceMount": "source=${localWorkspaceFolder},target=/app,type=bind",
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "llvm-vs-code-extensions.vscode-clangd",
+                "espressif.esp-idf-extension"
+            ],
+            "settings": {
+                "terminal.integrated.defaultProfile.linux": "bash",
+                "clangd.arguments": [
+                    "--compile-commands-dir=${workspaceFolder}/build",
+                    "--query-driver=**/*-gcc,**/*-g++",
+                    "--background-index",
+                    "--header-insertion=never"
+                ]
+            }
+        }
+    },
+    "runArgs": ["--privileged", "--hostname", "esp32"],
+    "mounts": [{"source": "/dev", "target": "/dev", "type": "bind"}]
+}

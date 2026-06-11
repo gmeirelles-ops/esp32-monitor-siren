@@ -1,0 +1,93 @@
+#include "pure_logic.h"
+
+#include <ctype.h>
+#include <string.h>
+
+bool pure_verdict_approved(float average_w, float potencia_min, float potencia_max)
+{
+    return average_w >= potencia_min && average_w <= potencia_max;
+}
+
+void pure_fifo_init(pure_fifo_t *fifo, uint32_t capacity)
+{
+    fifo->head = 0;
+    fifo->tail = 0;
+    fifo->count = 0;
+    fifo->capacity = capacity;
+}
+
+bool pure_fifo_push(pure_fifo_t *fifo, bool *dropped_oldest)
+{
+    if (dropped_oldest) {
+        *dropped_oldest = false;
+    }
+    if (fifo->count >= fifo->capacity) {
+        if (dropped_oldest) {
+            *dropped_oldest = true;
+        }
+        fifo->head = (fifo->head + 1) % fifo->capacity;
+        fifo->count--;
+    }
+    fifo->tail = (fifo->tail + 1) % fifo->capacity;
+    fifo->count++;
+    return true;
+}
+
+bool pure_fifo_pop(pure_fifo_t *fifo)
+{
+    if (fifo->count == 0) {
+        return false;
+    }
+    fifo->head = (fifo->head + 1) % fifo->capacity;
+    fifo->count--;
+    return true;
+}
+
+bool pure_fifo_is_full(const pure_fifo_t *fifo)
+{
+    return fifo->count >= fifo->capacity;
+}
+
+bool pure_fsm_can_start_test(pure_state_t state, bool pzem_fault, bool ota_active)
+{
+    return state == PURE_STATE_BATCH_READY && !pzem_fault && !ota_active;
+}
+
+bool pure_fsm_can_accept_batch(pure_state_t state, bool ota_active)
+{
+    return state != PURE_STATE_TESTING && !ota_active;
+}
+
+bool pure_fsm_can_accept_calibration(pure_state_t state, bool ota_active)
+{
+    return state == PURE_STATE_IDLE && !ota_active;
+}
+
+bool pure_fsm_can_accept_ota(pure_state_t state)
+{
+    return state != PURE_STATE_TESTING && state != PURE_STATE_OTA_UPDATING;
+}
+
+bool pure_serial_body_valid(const char body[9])
+{
+    for (int i = 0; i < 9; i++) {
+        if (!isdigit((unsigned char)body[i])) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool pure_ota_url_valid(const char *url)
+{
+    if (!url || url[0] == '\0') {
+        return false;
+    }
+    if (strncmp(url, "http://", 7) == 0) {
+        return url[7] != '\0';
+    }
+    if (strncmp(url, "https://", 8) == 0) {
+        return url[8] != '\0';
+    }
+    return false;
+}

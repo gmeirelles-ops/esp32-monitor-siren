@@ -1,0 +1,1 @@
+/usr/bin/cc -Wl,--dependency-file=CMakeFiles/host_tests.dir/link.d CMakeFiles/host_tests.dir/test_main.c.o CMakeFiles/host_tests.dir/test_verdict.c.o CMakeFiles/host_tests.dir/test_fifo.c.o CMakeFiles/host_tests.dir/test_fsm.c.o CMakeFiles/host_tests.dir/test_serial.c.o CMakeFiles/host_tests.dir/test_url.c.o -o host_tests  libpure_logic.a -lm

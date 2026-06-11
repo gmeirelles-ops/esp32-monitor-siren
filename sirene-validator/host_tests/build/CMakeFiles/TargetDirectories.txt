@@ -1,0 +1,5 @@
+/home/meirelles/diponto/Firmware/esp32-monitor-siren/sirene-validator/host_tests/build/CMakeFiles/pure_logic.dir
+/home/meirelles/diponto/Firmware/esp32-monitor-siren/sirene-validator/host_tests/build/CMakeFiles/host_tests.dir
+/home/meirelles/diponto/Firmware/esp32-monitor-siren/sirene-validator/host_tests/build/CMakeFiles/test.dir
+/home/meirelles/diponto/Firmware/esp32-monitor-siren/sirene-validator/host_tests/build/CMakeFiles/edit_cache.dir
+/home/meirelles/diponto/Firmware/esp32-monitor-siren/sirene-validator/host_tests/build/CMakeFiles/rebuild_cache.dir
