@@ -3,6 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/database/database.dart';
 import '../../core/theme/diponto_theme.dart';
+import '../../shared/widgets/desktop_form_layout.dart';
+import '../../shared/widgets/empty_state_view.dart';
+import '../../shared/widgets/responsive_field_row.dart';
+import '../cloud/auth/auth_providers.dart';
 import '../mqtt/models/mqtt_messages.dart';
 import '../mqtt/mqtt_providers.dart';
 import '../products/products_provider.dart';
@@ -25,6 +29,10 @@ class _BatchScreenState extends ConsumerState<BatchScreen> {
   String? _selectedDeviceId;
   String? _selectedProductId;
 
+  int? _lastKnownSeq;
+  SerialReconciliation? _reconciliation;
+  String? _serialInfoKey;
+
   @override
   void dispose() {
     _numeroOp.dispose();
@@ -32,6 +40,33 @@ class _BatchScreenState extends ConsumerState<BatchScreen> {
     _quantidadeTotal.dispose();
     _proximoSequencial.dispose();
     super.dispose();
+  }
+
+  /// Carrega contador e reconciliação para o produto/ano atuais e
+  /// pré-preenche o próximo sequencial sugerido.
+  Future<void> _loadSerialInfo(String idProduto, String ano) async {
+    final key = '$idProduto|$ano';
+    if (key == _serialInfoKey) return;
+    _serialInfoKey = key;
+
+    final db = ref.read(databaseProvider);
+    final last = await db.getLastSequencial(idProduto, ano);
+    final recon = await db.reconcileSerials(idProduto, ano);
+    if (!mounted) return;
+    setState(() {
+      _lastKnownSeq = last;
+      _reconciliation = recon;
+      _proximoSequencial.text = '${(last ?? 0) + 1}';
+    });
+  }
+
+  void _onProductOrYearChanged() {
+    final id = _selectedProductId;
+    final ano = _ano.text.trim();
+    if (id != null && ano.length == 2) {
+      _serialInfoKey = null;
+      _loadSerialInfo(id, ano);
+    }
   }
 
   Product? _selectedProduct(List<Product> products) {
@@ -64,6 +99,12 @@ class _BatchScreenState extends ConsumerState<BatchScreen> {
     }
     final batch = _buildBatch(product);
     if (batch == null) return;
+
+    if (await ref.read(databaseProvider).isOpLocked(batch.numeroOp)) {
+      if (!mounted) return;
+      _showSnack('OP ${batch.numeroOp} já encerrada — use uma nova OP');
+      return;
+    }
 
     setState(() => _sending = true);
     try {
@@ -139,6 +180,14 @@ class _BatchScreenState extends ConsumerState<BatchScreen> {
       }
     });
 
+    ref.listen(duplicateSerialProvider, (prev, next) {
+      if (next != null) {
+        _showSnack('Serial duplicado bloqueado: ${next.serial} — etiqueta não emitida');
+        _serialInfoKey = null;
+        _onProductOrYearChanged();
+      }
+    });
+
     return Scaffold(
       appBar: AppBar(title: const Text('Lote')),
       body: productsAsync.when(
@@ -146,24 +195,27 @@ class _BatchScreenState extends ConsumerState<BatchScreen> {
         error: (e, _) => Center(child: Text('Erro: $e')),
         data: (products) {
           if (products.isEmpty) {
-            return const Padding(
-              padding: EdgeInsets.all(24),
-              child: Center(
-                child: Text(
-                  'Nenhum produto cadastrado.\n'
+            return const EmptyStateView(
+              icon: Icons.inventory_2_outlined,
+              title: 'Nenhum produto cadastrado',
+              subtitle:
                   'Vá em Produtos e cadastre um SKU com autocalibração antes de configurar o lote.',
-                  textAlign: TextAlign.center,
-                ),
-              ),
             );
           }
 
           _selectedProductId ??= products.first.idProduto;
           final product = _selectedProduct(products);
 
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _onProductOrYearChanged();
+          });
+
           return ListView(
-            padding: const EdgeInsets.all(16),
             children: [
+              DesktopFormLayout(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
               if (deviceList.isEmpty)
                 const Text('Nenhum dispositivo detectado ainda.')
               else
@@ -216,16 +268,23 @@ class _BatchScreenState extends ConsumerState<BatchScreen> {
               ],
               if (lastTest != null) ...[
                 const SizedBox(height: 16),
-                Card(
-                  color: lastTest.isApproved
-                      ? DipontoColors.success.withValues(alpha: 0.15)
-                      : DipontoColors.error.withValues(alpha: 0.15),
-                  child: ListTile(
-                    title: Text(lastTest.veredito),
-                    subtitle: Text(
-                      '${lastTest.potenciaMedia.toStringAsFixed(2)} W — seq ${lastTest.sequencial}',
-                    ),
-                  ),
+                Builder(
+                  builder: (context) {
+                    final operador = ref.watch(authStateProvider).valueOrNull?.email;
+                    return Card(
+                      color: lastTest.isApproved
+                          ? DipontoColors.success.withValues(alpha: 0.15)
+                          : DipontoColors.error.withValues(alpha: 0.15),
+                      child: ListTile(
+                        title: Text(lastTest.veredito),
+                        subtitle: Text(
+                          '${lastTest.potenciaMedia.toStringAsFixed(2)} W — seq ${lastTest.sequencial}'
+                          '${operador != null ? '\nOperador: $operador' : ''}',
+                        ),
+                        isThreeLine: operador != null,
+                      ),
+                    );
+                  },
                 ),
               ],
               const SizedBox(height: 16),
@@ -242,7 +301,10 @@ class _BatchScreenState extends ConsumerState<BatchScreen> {
                                 child: Text('${p.idProduto} — ${p.nome}'),
                               ))
                           .toList(),
-                      onChanged: (v) => setState(() => _selectedProductId = v),
+                      onChanged: (v) {
+                        setState(() => _selectedProductId = v);
+                        _onProductOrYearChanged();
+                      },
                     ),
                     if (product != null) ...[
                       const SizedBox(height: 8),
@@ -261,43 +323,111 @@ class _BatchScreenState extends ConsumerState<BatchScreen> {
                       decoration: const InputDecoration(labelText: 'Número OP'),
                       validator: (v) => v == null || v.isEmpty ? 'Obrigatório' : null,
                     ),
-                    TextFormField(
-                      controller: _ano,
-                      decoration: const InputDecoration(labelText: 'Ano (2 dígitos)'),
-                      validator: (v) => v == null || v.length != 2 ? '2 dígitos' : null,
+                    const SizedBox(height: 8),
+                    ResponsiveFieldRow(
+                      flexes: const [2, 3, 3],
+                      children: [
+                        TextFormField(
+                          controller: _ano,
+                          decoration: const InputDecoration(labelText: 'Ano (2 dígitos)'),
+                          validator: (v) => v == null || v.length != 2 ? '2 dígitos' : null,
+                          keyboardType: TextInputType.number,
+                          onChanged: (_) => _onProductOrYearChanged(),
+                        ),
+                        TextFormField(
+                          controller: _quantidadeTotal,
+                          decoration: const InputDecoration(labelText: 'Quantidade total'),
+                          keyboardType: TextInputType.number,
+                        ),
+                        TextFormField(
+                          controller: _proximoSequencial,
+                          decoration: InputDecoration(
+                            labelText: 'Próximo sequencial',
+                            helperText: _lastKnownSeq != null
+                                ? 'Último usado: $_lastKnownSeq'
+                                : 'Sem histórico',
+                          ),
+                          keyboardType: TextInputType.number,
+                        ),
+                      ],
                     ),
-                    TextFormField(
-                      controller: _quantidadeTotal,
-                      decoration: const InputDecoration(labelText: 'Quantidade total'),
-                      keyboardType: TextInputType.number,
-                    ),
-                    TextFormField(
-                      controller: _proximoSequencial,
-                      decoration: const InputDecoration(labelText: 'Próximo sequencial'),
-                      keyboardType: TextInputType.number,
-                    ),
+                    if (_reconciliation != null && !_reconciliation!.isIntact) ...[
+                      const SizedBox(height: 8),
+                      _ReconciliationPanel(reconciliation: _reconciliation!),
+                    ],
                   ],
                 ),
               ),
               const SizedBox(height: 16),
-              ElevatedButton(
-                onPressed: _sending || product == null ? null : () => _sendSetBatch(product),
-                child: _sending
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Text('Configurar lote (SET_BATCH)'),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: ElevatedButton(
+                  onPressed: _sending || product == null ? null : () => _sendSetBatch(product),
+                  child: _sending
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Configurar lote (SET_BATCH)'),
+                ),
               ),
               const SizedBox(height: 8),
-              OutlinedButton(
-                onPressed: _sending ? null : _sendEndBatch,
-                child: const Text('Encerrar lote (END_BATCH)'),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: DipontoColors.error,
+                    side: const BorderSide(color: DipontoColors.error),
+                  ),
+                  onPressed: _sending ? null : _sendEndBatch,
+                  child: const Text('Encerrar lote (END_BATCH)'),
+                ),
+              ),
+                  ],
+                ),
               ),
             ],
           );
         },
+      ),
+    );
+  }
+}
+
+class _ReconciliationPanel extends StatelessWidget {
+  const _ReconciliationPanel({required this.reconciliation});
+
+  final SerialReconciliation reconciliation;
+
+  String _fmt(List<int> seqs) => seqs.map((s) => s.toString().padLeft(4, '0')).join(', ');
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      color: DipontoColors.error.withValues(alpha: 0.12),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              children: [
+                Icon(Icons.report_problem, color: DipontoColors.error, size: 18),
+                SizedBox(width: 8),
+                Text(
+                  'Reconciliação de série',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            if (reconciliation.gaps.isNotEmpty)
+              Text('Sequenciais faltando: ${_fmt(reconciliation.gaps)}'),
+            if (reconciliation.duplicates.isNotEmpty)
+              Text('Sequenciais duplicados: ${_fmt(reconciliation.duplicates)}'),
+          ],
+        ),
       ),
     );
   }

@@ -8,6 +8,7 @@ Map<String, dynamic> mapTestResult({
   required String deviceId,
   required TestResultMessage test,
   String? serial,
+  String? operador,
   required String stationId,
   required DateTime timestamp,
 }) {
@@ -21,6 +22,7 @@ Map<String, dynamic> mapTestResult({
     'sequencial': test.sequencial,
     'aprovados_no_lote': test.aprovadosNoLote,
     if (serial != null) 'serial': serial,
+    if (operador != null) 'operador': operador,
     'timestamp': timestamp.toUtc().toIso8601String(),
     'station_id': stationId,
   };
@@ -88,6 +90,55 @@ Map<String, dynamic> mapBatch({
     'status': status,
     'station_id': stationId,
   };
+}
+
+typedef ParsedProduct = ({
+  String idProduto,
+  String nome,
+  double potenciaRef,
+  double potenciaMin,
+  double potenciaMax,
+  double toleranciaPct,
+  int tempoTesteSec,
+  DateTime? calibradoEm,
+  String? calibradoDeviceId,
+});
+
+double _asDouble(Object? v, [double fallback = 0]) {
+  if (v is num) return v.toDouble();
+  if (v is String) return double.tryParse(v) ?? fallback;
+  return fallback;
+}
+
+int _asInt(Object? v, [int fallback = 0]) {
+  if (v is num) return v.toInt();
+  if (v is String) return int.tryParse(v) ?? fallback;
+  return fallback;
+}
+
+DateTime? _asDateTime(Object? v) {
+  if (v is DateTime) return v;
+  if (v is String) return DateTime.tryParse(v);
+  return null;
+}
+
+/// Converte um documento `products` do Firestore em produto local.
+/// Função pura (sem dependência de Firebase). Retorna `null` sem `id_produto`.
+/// `calibrado_em` aceita ISO string ou DateTime (Timestamp já normalizado).
+ParsedProduct? productFromFirestore(Map<String, dynamic> data) {
+  final idProduto = data['id_produto'];
+  if (idProduto is! String || idProduto.isEmpty) return null;
+  return (
+    idProduto: idProduto,
+    nome: (data['nome'] as String?) ?? '',
+    potenciaRef: _asDouble(data['potencia_ref']),
+    potenciaMin: _asDouble(data['potencia_min']),
+    potenciaMax: _asDouble(data['potencia_max']),
+    toleranciaPct: _asDouble(data['tolerancia_pct']),
+    tempoTesteSec: _asInt(data['tempo_teste_sec']),
+    calibradoEm: _asDateTime(data['calibrado_em']),
+    calibradoDeviceId: data['calibrado_device_id'] as String?,
+  );
 }
 
 Map<String, dynamic> mapProduct({

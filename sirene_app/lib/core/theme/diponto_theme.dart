@@ -5,8 +5,9 @@ abstract final class DipontoColors {
   static const primary = Color(0xFFFFB300);
   static const primaryDark = Color(0xFFFF8F00);
   static const primaryLight = Color(0xFFFFD54F);
-  static const surface = Color(0xFF1A1A1A);
+  static const surface = Color(0xFF121212);
   static const surfaceVariant = Color(0xFF2D2D2D);
+  static const cardElevated = Color(0xFF1E1E1E);
   static const onPrimary = Color(0xFF000000);
   static const onSurface = Color(0xFFFFFFFF);
   static const error = Color(0xFFFF5252);
@@ -62,10 +63,21 @@ ThemeData buildDipontoTheme() {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
     ),
+    outlinedButtonTheme: OutlinedButtonThemeData(
+      style: OutlinedButton.styleFrom(
+        foregroundColor: DipontoColors.onSurface,
+        side: BorderSide(color: DipontoColors.onSurface.withValues(alpha: 0.5)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+    ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
       fillColor: DipontoColors.surfaceVariant,
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: BorderSide(color: DipontoColors.onSurface.withValues(alpha: 0.3)),
+      ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
         borderSide: const BorderSide(color: DipontoColors.primary, width: 2),

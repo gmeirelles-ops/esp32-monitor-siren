@@ -7,6 +7,7 @@ import '../../core/constants/mqtt_topics.dart';
 import '../../core/database/database.dart';
 import '../../core/providers/core_providers.dart';
 import '../../core/utils/device_stale.dart';
+import '../cloud/auth/auth_providers.dart';
 import '../cloud/sync/sync_providers.dart';
 import '../labels/label_printer.dart';
 import '../labels/zpl_generator.dart';
@@ -32,6 +33,10 @@ final mqttConnectionStateProvider = StreamProvider<AppMqttConnectionState>((ref)
 typedef DeviceRejectionEvent = ({String deviceId, RejectionMessage rejection});
 
 final latestRejectionProvider = StateProvider<DeviceRejectionEvent?>((ref) => null);
+
+typedef DuplicateSerialEvent = ({String deviceId, String serial});
+
+final duplicateSerialProvider = StateProvider<DuplicateSerialEvent?>((ref) => null);
 
 final devicesProvider =
     StateNotifierProvider<DevicesNotifier, Map<String, DeviceInfo>>((ref) {
@@ -147,6 +152,10 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
           device.lastHardwareAlert = null;
         } else if (alert.falha != null) {
           device.lastHardwareAlert = alert.falha;
+          await _ref.read(databaseProvider).insertHardwareEvent(
+                deviceId: deviceId,
+                falha: alert.falha!,
+              );
         }
         device.lastSeen = now;
       }
@@ -170,19 +179,35 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
           device.lastTestResult = test;
           device.lastSeen = now;
 
+          final db = _ref.read(databaseProvider);
+          final operador = _ref.read(authServiceProvider)?.currentUser?.email;
           String? serial;
+          var duplicate = false;
           if (test.isApproved) {
-            serial = generateFullSerial(
+            final candidate = generateFullSerial(
               idProduto: test.idProduto,
               ano: test.ano,
               sequencial: test.sequencial,
             );
-            final db = _ref.read(databaseProvider);
-            await db.addLabelToBuffer(serial: serial, numeroOp: test.numeroOp);
-            await _maybePrintLabels(db);
+            duplicate = await db.serialExists(candidate);
+            if (duplicate) {
+              _ref.read(duplicateSerialProvider.notifier).state = (
+                deviceId: deviceId,
+                serial: candidate,
+              );
+            } else {
+              serial = candidate;
+              await db.addLabelToBuffer(serial: serial, numeroOp: test.numeroOp);
+              await db.bumpSerialCounter(
+                idProduto: test.idProduto,
+                ano: test.ano,
+                sequencial: test.sequencial,
+              );
+              await _maybePrintLabels(db);
+            }
           }
 
-          await _ref.read(databaseProvider).insertTestResult(
+          await db.insertTestResult(
             deviceId: deviceId,
             numeroOp: test.numeroOp,
             veredito: test.veredito,
@@ -190,11 +215,13 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
             sequencial: test.sequencial,
             aprovadosNoLote: test.aprovadosNoLote,
             serial: serial,
+            operador: operador,
           );
           await _ref.read(firestoreSyncServiceProvider).enqueueTestResult(
             deviceId: deviceId,
             test: test,
             serial: serial,
+            operador: operador,
           );
         }
       }
@@ -268,6 +295,9 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
     final batch = device?.activeBatch;
     final startedAt = _batchStartedAt[deviceId];
     await service.publishCommand(deviceId, {'cmd': 'END_BATCH'});
+    if (batch != null) {
+      await _ref.read(databaseProvider).lockOp(batch.numeroOp);
+    }
     if (batch != null && startedAt != null) {
       await _ref.read(firestoreSyncServiceProvider).enqueueBatch(
         batch: batch,
@@ -290,6 +320,14 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
   Future<void> sendOtaUpdate(String deviceId, String url) async {
     final service = _ref.read(mqttServiceProvider);
     await service.publishCommand(deviceId, {'cmd': 'OTA_UPDATE', 'url': url});
+  }
+
+  /// Envia OTA_UPDATE para vários dispositivos (campanha).
+  Future<void> sendOtaCampaign(List<String> deviceIds, String url) async {
+    final service = _ref.read(mqttServiceProvider);
+    for (final deviceId in deviceIds) {
+      await service.publishCommand(deviceId, {'cmd': 'OTA_UPDATE', 'url': url});
+    }
   }
 
   @override

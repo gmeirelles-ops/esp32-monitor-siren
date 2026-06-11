@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/database/database.dart';
 import '../../core/theme/diponto_theme.dart';
+import '../../shared/widgets/empty_state_view.dart';
 import 'label_printer.dart';
 import 'zpl_generator.dart';
 import '../mqtt/mqtt_providers.dart';
@@ -17,6 +19,11 @@ class LabelsScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Etiquetas'),
         actions: [
+          IconButton(
+            tooltip: 'Buscar / reimprimir serial',
+            icon: const Icon(Icons.search),
+            onPressed: () => _showReprintDialog(context, ref),
+          ),
           FutureBuilder<int>(
             future: db.labelBufferCount(),
             builder: (context, snapshot) {
@@ -43,8 +50,10 @@ class LabelsScreen extends ConsumerWidget {
           }
           final entries = snapshot.data!;
           if (entries.isEmpty) {
-            return const Center(
-              child: Text('Buffer vazio.\nSeriais aprovados aparecerão aqui.'),
+            return const EmptyStateView(
+              icon: Icons.label_outline,
+              title: 'Buffer de etiquetas vazio',
+              subtitle: 'Seriais aprovados nos testes aparecerão aqui para impressão.',
             );
           }
 
@@ -89,6 +98,104 @@ class LabelsScreen extends ConsumerWidget {
         },
       ),
     );
+  }
+
+  Future<void> _showReprintDialog(BuildContext context, WidgetRef ref) async {
+    final db = ref.read(databaseProvider);
+    final controller = TextEditingController();
+    var results = <TestResult>[];
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setState) {
+          Future<void> search() async {
+            final query = controller.text.trim();
+            if (query.isEmpty) return;
+            final found = await db.searchSerials(query);
+            setState(() => results = found);
+          }
+
+          return AlertDialog(
+            title: const Text('Buscar / reimprimir serial'),
+            content: SizedBox(
+              width: 360,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: controller,
+                    autofocus: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Serial (completo ou parcial)',
+                      suffixIcon: Icon(Icons.search),
+                    ),
+                    onSubmitted: (_) => search(),
+                  ),
+                  const SizedBox(height: 12),
+                  if (results.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                      child: Text('Digite e busque um serial validado.'),
+                    )
+                  else
+                    Flexible(
+                      child: ListView(
+                        shrinkWrap: true,
+                        children: [
+                          for (final r in results)
+                            ListTile(
+                              dense: true,
+                              leading: const Icon(Icons.qr_code, color: DipontoColors.primary),
+                              title: Text(
+                                r.serial ?? '—',
+                                style: const TextStyle(fontFamily: 'monospace'),
+                              ),
+                              subtitle: Text('OP ${r.numeroOp} — ${r.veredito}'),
+                              trailing: r.serial == null
+                                  ? null
+                                  : TextButton.icon(
+                                      icon: const Icon(Icons.print, size: 18),
+                                      label: const Text('Reimprimir'),
+                                      onPressed: () {
+                                        Navigator.pop(ctx);
+                                        _reprintSerial(context, ref, r.serial!);
+                                      },
+                                    ),
+                            ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Fechar')),
+              ElevatedButton(onPressed: search, child: const Text('Buscar')),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _reprintSerial(BuildContext context, WidgetRef ref, String serial) async {
+    final config = ref.read(appConfigProvider);
+    final printer = LabelPrinter(host: config.printerHost, port: config.printerPort);
+    try {
+      await printer.sendZpl(generateZplLabelRow([serial]));
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Etiqueta $serial reenviada à impressora')),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erro na reimpressão: $e')),
+        );
+      }
+    }
   }
 
   Future<void> _printPending(

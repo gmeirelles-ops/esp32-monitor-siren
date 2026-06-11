@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/diponto_theme.dart';
 import '../../shared/widgets/connection_status.dart';
+import '../../shared/widgets/empty_state_view.dart';
 import '../mqtt/models/mqtt_messages.dart';
 import '../mqtt/mqtt_providers.dart';
 import 'device_detail_screen.dart';
@@ -27,11 +28,11 @@ class DevicesScreen extends ConsumerWidget {
         ],
       ),
       body: sorted.isEmpty
-          ? const Center(
-              child: Text(
-                'Aguardando dispositivos...\nConecte-se ao broker MQTT.',
-                textAlign: TextAlign.center,
-              ),
+          ? const EmptyStateView(
+              icon: Icons.router,
+              title: 'Aguardando dispositivos...',
+              subtitle: 'Conecte-se ao broker MQTT nas Configurações.',
+              showProgress: true,
             )
           : ListView.builder(
               padding: const EdgeInsets.all(12),

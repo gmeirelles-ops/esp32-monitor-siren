@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'core/constants/layout.dart';
 import 'core/theme/diponto_theme.dart';
 import 'features/cloud/sync/sync_providers.dart';
 import 'features/admin/admin_screen.dart';
 import 'features/batch/batch_screen.dart';
+import 'features/dashboard/dashboard_screen.dart';
 import 'features/devices/devices_screen.dart';
 import 'features/labels/labels_screen.dart';
 import 'features/products/products_screen.dart';
@@ -36,6 +38,7 @@ class _SireneAppState extends ConsumerState<SireneApp> {
   static const _destinations = [
     (icon: Icons.devices, label: 'Dispositivos'),
     (icon: Icons.playlist_add_check, label: 'Lote'),
+    (icon: Icons.insights, label: 'Painel'),
     (icon: Icons.inventory_2, label: 'Produtos'),
     (icon: Icons.label, label: 'Etiquetas'),
     (icon: Icons.settings, label: 'Configurações'),
@@ -45,6 +48,7 @@ class _SireneAppState extends ConsumerState<SireneApp> {
   static const _screens = [
     DevicesScreen(),
     BatchScreen(),
+    DashboardScreen(),
     ProductsScreen(),
     LabelsScreen(),
     SettingsScreen(),
@@ -64,7 +68,7 @@ class _SireneAppState extends ConsumerState<SireneApp> {
       theme: buildDipontoTheme(),
       home: LayoutBuilder(
         builder: (context, constraints) {
-          final isDesktop = constraints.maxWidth >= 900;
+          final isDesktop = constraints.maxWidth >= kDesktopBreakpoint;
 
           if (isDesktop) {
             return Scaffold(
@@ -85,10 +89,17 @@ class _SireneAppState extends ConsumerState<SireneApp> {
                     selectedIndex: _index,
                     onDestinationSelected: (i) => setState(() => _index = i),
                     labelType: NavigationRailLabelType.all,
+                    minWidth: 88,
                     backgroundColor: DipontoColors.surfaceVariant,
-                    indicatorColor: DipontoColors.primary.withValues(alpha: 0.25),
+                    indicatorShape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    indicatorColor: DipontoColors.primary.withValues(alpha: 0.15),
                     selectedIconTheme: const IconThemeData(color: DipontoColors.primary),
-                    selectedLabelTextStyle: const TextStyle(color: DipontoColors.primary),
+                    selectedLabelTextStyle: const TextStyle(
+                      color: DipontoColors.primary,
+                      fontWeight: FontWeight.w600,
+                    ),
                     destinations: [
                       for (final d in _destinations)
                         NavigationRailDestination(

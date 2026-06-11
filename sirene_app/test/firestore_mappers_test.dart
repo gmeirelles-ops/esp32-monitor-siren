@@ -23,6 +23,7 @@ void main() {
         deviceId: 'aabbccddeeff',
         test: test,
         serial: '1232600018',
+        operador: 'operador.teste@diponto.com.br',
         stationId: 'posto-01',
         timestamp: DateTime.utc(2026, 6, 10, 14, 31),
       );
@@ -30,6 +31,27 @@ void main() {
       expect(map['sequencial'], 1);
       expect(map['serial'], '1232600018');
       expect(map['station_id'], 'posto-01');
+      expect(map['operador'], 'operador.teste@diponto.com.br');
+    });
+
+    test('omite operador quando ausente', () {
+      const test = TestResultMessage(
+        numeroOp: '2026001',
+        idProduto: '123',
+        ano: '26',
+        veredito: 'APROVADO',
+        potenciaMedia: 20.15,
+        sequencial: 1,
+        aprovadosNoLote: 1,
+      );
+      final map = mapTestResult(
+        deviceId: 'aabbccddeeff',
+        test: test,
+        serial: '1232600018',
+        stationId: 'posto-01',
+        timestamp: DateTime.utc(2026, 6, 10, 14, 31),
+      );
+      expect(map.containsKey('operador'), false);
     });
   });
 }

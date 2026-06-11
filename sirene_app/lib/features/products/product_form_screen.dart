@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/database/database.dart';
 import '../../core/theme/diponto_theme.dart';
+import '../../shared/widgets/desktop_form_layout.dart';
 import '../cloud/sync/sync_providers.dart';
 import '../mqtt/models/mqtt_messages.dart';
 import '../mqtt/mqtt_providers.dart';
@@ -147,6 +148,13 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
         calibradoEm: _calibratedAt ?? widget.existing?.calibradoEm,
         calibradoDeviceId: _selectedDeviceId ?? widget.existing?.calibradoDeviceId,
       );
+      if (_calibratedAt != null) {
+        await db.insertCalibration(
+          idProduto: id,
+          potenciaRef: refVal,
+          deviceId: _selectedDeviceId,
+        );
+      }
       final saved = await db.getProduct(id);
       if (saved != null) {
         await ref.read(firestoreSyncServiceProvider).enqueueProduct(saved);
@@ -211,8 +219,11 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
         title: Text(_isEditing ? 'Editar produto' : 'Novo produto'),
       ),
       body: ListView(
-        padding: const EdgeInsets.all(16),
         children: [
+          DesktopFormLayout(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
           Form(
             key: _formKey,
             child: Column(
@@ -324,19 +335,75 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
             decoration: const InputDecoration(labelText: 'Potência máx (W)'),
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
           ),
+          if (_isEditing) ...[
+            const SizedBox(height: 16),
+            const Text('Histórico de calibração', style: TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            _CalibrationHistoryList(idProduto: widget.existing!.idProduto),
+          ],
           const SizedBox(height: 24),
-          ElevatedButton(
-            onPressed: _saving ? null : _save,
-            child: _saving
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : Text(_isEditing ? 'Salvar alterações' : 'Cadastrar produto'),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: ElevatedButton(
+              onPressed: _saving ? null : _save,
+              child: _saving
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Text(_isEditing ? 'Salvar alterações' : 'Cadastrar produto'),
+            ),
+          ),
+              ],
+            ),
           ),
         ],
       ),
+    );
+  }
+}
+
+class _CalibrationHistoryList extends ConsumerWidget {
+  const _CalibrationHistoryList({required this.idProduto});
+
+  final String idProduto;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final db = ref.read(databaseProvider);
+    return FutureBuilder<List<CalibrationHistoryData>>(
+      future: db.getCalibrationHistory(idProduto),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const SizedBox(
+            height: 24,
+            child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+          );
+        }
+        final history = snapshot.data!;
+        if (history.isEmpty) {
+          return Text(
+            'Sem calibrações registradas.',
+            style: TextStyle(color: DipontoColors.onSurface.withValues(alpha: 0.6)),
+          );
+        }
+        return Column(
+          children: [
+            for (final c in history)
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                leading: const Icon(Icons.sensors, color: DipontoColors.primary),
+                title: Text('${c.potenciaRef.toStringAsFixed(2)} W'),
+                subtitle: Text(
+                  '${c.createdAt.toLocal()}'
+                  '${c.deviceId != null ? ' — ${c.deviceId}' : ''}',
+                ),
+              ),
+          ],
+        );
+      },
     );
   }
 }

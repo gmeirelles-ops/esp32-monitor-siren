@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../shared/widgets/desktop_form_layout.dart';
+import '../../shared/widgets/form_section_card.dart';
 import '../mqtt/mqtt_providers.dart';
 
 class AdminScreen extends ConsumerStatefulWidget {
@@ -12,7 +14,7 @@ class AdminScreen extends ConsumerStatefulWidget {
 
 class _AdminScreenState extends ConsumerState<AdminScreen> {
   final _otaUrl = TextEditingController();
-  String? _selectedDeviceId;
+  final Set<String> _selectedDevices = {};
   String? _otaStatus;
 
   @override
@@ -25,11 +27,33 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
+  Future<void> _sendCampaign() async {
+    final targets = _selectedDevices.toList();
+    if (targets.isEmpty || _otaUrl.text.trim().isEmpty) {
+      _showSnack('Selecione ao menos um dispositivo e informe a URL');
+      return;
+    }
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Confirmar campanha OTA'),
+        content: Text('Atualizar firmware de ${targets.length} dispositivo(s)?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+          ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Atualizar')),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+    await ref.read(devicesProvider.notifier).sendOtaCampaign(targets, _otaUrl.text.trim());
+    if (!mounted) return;
+    _showSnack('OTA enviado para ${targets.length} dispositivo(s)');
+  }
+
   @override
   Widget build(BuildContext context) {
     final devices = ref.watch(devicesProvider);
     final deviceList = devices.values.toList();
-    _selectedDeviceId ??= deviceList.isNotEmpty ? deviceList.first.deviceId : null;
 
     ref.listen(otaStreamProvider, (_, next) {
       next.whenData((ota) {
@@ -41,63 +65,68 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Admin')),
       body: ListView(
-        padding: const EdgeInsets.all(16),
         children: [
-          if (deviceList.isEmpty)
-            const Text('Nenhum dispositivo disponível')
-          else
-            DropdownButtonFormField<String>(
-              initialValue: _selectedDeviceId,
-              decoration: const InputDecoration(labelText: 'Dispositivo'),
-              items: deviceList
-                  .map((d) => DropdownMenuItem(value: d.deviceId, child: Text(d.deviceId)))
-                  .toList(),
-              onChanged: (v) => setState(() => _selectedDeviceId = v),
-            ),
-          const SizedBox(height: 24),
-          const Text('Atualização OTA', style: TextStyle(fontWeight: FontWeight.bold)),
-          TextField(
-            controller: _otaUrl,
-            decoration: const InputDecoration(
-              labelText: 'URL do firmware (.bin)',
-              hintText: 'http://192.168.1.10:8080/sirene-validator.bin',
-            ),
-          ),
-          const SizedBox(height: 8),
-          ElevatedButton(
-            onPressed: _selectedDeviceId != null && _otaUrl.text.isNotEmpty
-                ? () async {
-                    final confirm = await showDialog<bool>(
-                      context: context,
-                      builder: (ctx) => AlertDialog(
-                        title: const Text('Confirmar OTA'),
-                        content: Text('Atualizar firmware de $_selectedDeviceId?'),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(ctx, false),
-                            child: const Text('Cancelar'),
-                          ),
-                          ElevatedButton(
-                            onPressed: () => Navigator.pop(ctx, true),
-                            child: const Text('Atualizar'),
-                          ),
-                        ],
+          DesktopFormLayout(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                FormSectionCard(
+                  title: 'Campanha OTA',
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      TextField(
+                        controller: _otaUrl,
+                        decoration: const InputDecoration(
+                          labelText: 'URL do firmware (.bin)',
+                          hintText: 'http://192.168.1.10:8080/sirene-validator.bin',
+                        ),
                       ),
-                    );
-                    if (confirm == true) {
-                      await ref
-                          .read(devicesProvider.notifier)
-                          .sendOtaUpdate(_selectedDeviceId!, _otaUrl.text.trim());
-                    }
-                  }
-                : null,
-            child: const Text('Enviar OTA_UPDATE'),
-          ),
-          if (_otaStatus != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Text(_otaStatus!, style: const TextStyle(fontSize: 12)),
+                      const SizedBox(height: 12),
+                      if (deviceList.isEmpty)
+                        const Text('Nenhum dispositivo disponível')
+                      else ...[
+                        const Text(
+                          'Dispositivos alvo',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        for (final d in deviceList)
+                          CheckboxListTile(
+                            contentPadding: EdgeInsets.zero,
+                            dense: true,
+                            value: _selectedDevices.contains(d.deviceId),
+                            title: Text(d.deviceId),
+                            subtitle: Text(d.estado.label),
+                            onChanged: (checked) => setState(() {
+                              if (checked == true) {
+                                _selectedDevices.add(d.deviceId);
+                              } else {
+                                _selectedDevices.remove(d.deviceId);
+                              }
+                            }),
+                          ),
+                      ],
+                      const SizedBox(height: 12),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: ElevatedButton(
+                          onPressed: _selectedDevices.isEmpty ? null : _sendCampaign,
+                          child: Text(
+                            'Enviar OTA para selecionados (${_selectedDevices.length})',
+                          ),
+                        ),
+                      ),
+                      if (_otaStatus != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Text(_otaStatus!, style: const TextStyle(fontSize: 12)),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
             ),
+          ),
         ],
       ),
     );

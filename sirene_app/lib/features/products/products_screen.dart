@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/diponto_theme.dart';
+import '../../shared/widgets/empty_state_view.dart';
 import 'product_form_screen.dart';
 import 'products_provider.dart';
 
@@ -30,15 +31,12 @@ class ProductsScreen extends ConsumerWidget {
         error: (e, _) => Center(child: Text('Erro: $e')),
         data: (products) {
           if (products.isEmpty) {
-            return const Center(
-              child: Padding(
-                padding: EdgeInsets.all(24),
-                child: Text(
-                  'Nenhum produto cadastrado.\n'
+            return EmptyStateView(
+              icon: Icons.inventory_2_outlined,
+              title: 'Nenhum produto cadastrado',
+              subtitle:
                   'Cadastre um SKU com peça padrão na bancada para definir os limites de potência.',
-                  textAlign: TextAlign.center,
-                ),
-              ),
+              showProgress: false,
             );
           }
 
