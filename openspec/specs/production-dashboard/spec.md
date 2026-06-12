@@ -1,7 +1,7 @@
 # production-dashboard Specification
 
 ## Purpose
-TBD - created by archiving change production-analytics-dashboard. Update Purpose after archive.
+Painel analítico no app Flutter: métricas de produção, throughput e falhas de hardware calculados a partir do SQLite local, sem dependência de nuvem.
 ## Requirements
 ### Requirement: Persistência de falhas de hardware
 O app SHALL persistir localmente cada falha de hardware recebida via MQTT (`alerta` com `falha`), registrando dispositivo, tipo de falha e instante.

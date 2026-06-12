@@ -1,7 +1,7 @@
 # label-printing Specification
 
 ## Purpose
-TBD - created by archiving change validacao-sirenes. Update Purpose after archive.
+Impressão de etiquetas Zebra no app Flutter: geração ZPL, buffer de seriais aprovados e envio à impressora de rede configurada no posto.
 ## Requirements
 ### Requirement: Acúmulo de seriais aprovados em buffer
 O App Flutter SHALL acumular em um buffer local os números de série aprovados antes de emitir comandos de impressão.

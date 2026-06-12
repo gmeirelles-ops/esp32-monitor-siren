@@ -1,7 +1,7 @@
 # ota-update Specification
 
 ## Purpose
-TBD - created by archiving change hardening-producao. Update Purpose after archive.
+Atualização de firmware OTA no ESP32: download HTTP da imagem, validação e reboot com publicação de status de progresso via MQTT.
 ## Requirements
 ### Requirement: Atualização OTA disparada por MQTT
 O dispositivo SHALL iniciar uma atualização de firmware ao receber o comando `OTA_UPDATE` com uma URL de imagem no payload, baixando e aplicando o binário via `esp_https_ota`.

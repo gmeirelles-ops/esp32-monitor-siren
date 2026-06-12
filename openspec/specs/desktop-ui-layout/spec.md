@@ -1,7 +1,7 @@
 # desktop-ui-layout Specification
 
 ## Purpose
-TBD - created by archiving change refine-desktop-ui. Update Purpose after archive.
+Layout desktop do app Flutter: formulários em largura fixa, seções em cards e campos responsivos otimizados para monitores no posto de produção.
 ## Requirements
 ### Requirement: Largura máxima de formulários em desktop
 Em viewports com largura ≥ 900 px, telas com formulários (Lote, Configurações, Admin, cadastro de produto) SHALL limitar a largura do conteúdo do formulário a no máximo 600 px, centralizado horizontalmente, sem esticar campos de texto nem botões de ponta a ponta.

@@ -1,7 +1,7 @@
 # mqtt-client Specification
 
 ## Purpose
-TBD - created by archiving change flutter-companion-app. Update Purpose after archive.
+Cliente MQTT no app Flutter: conexão ao broker, assinatura de tópicos por dispositivo, parsing de mensagens e reconexão com backoff.
 ## Requirements
 ### Requirement: Conexão ao broker MQTT
 O app SHALL conectar-se ao broker MQTT configurado usando protocolo TCP plain (`mqtt://`), compatível com o firmware.

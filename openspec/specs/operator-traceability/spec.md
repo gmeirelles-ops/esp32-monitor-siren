@@ -1,7 +1,7 @@
 # operator-traceability Specification
 
 ## Purpose
-TBD - created by archiving change operator-traceability. Update Purpose after archive.
+Rastreabilidade do operador no app Flutter: associação do e-mail autenticado (Firebase Auth) a cada resultado de teste persistido localmente.
 ## Requirements
 ### Requirement: Identidade do operador no resultado de teste
 O app SHALL registrar o identificador do operador autenticado (e-mail da conta Firebase Auth) em cada resultado de teste persistido, quando houver sessão ativa.

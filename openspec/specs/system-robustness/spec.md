@@ -1,7 +1,7 @@
 # system-robustness Specification
 
 ## Purpose
-TBD - created by archiving change hardening-producao. Update Purpose after archive.
+Robustez operacional do firmware ESP32: task watchdog, reconexão Wi-Fi/MQTT com backoff e recuperação de estado seguro após reinício.
 ## Requirements
 ### Requirement: Task Watchdog nas tarefas críticas
 O dispositivo SHALL monitorar as tarefas críticas com o Task Watchdog (TWDT), incluindo `worker`, `telemetry`, `offline_sync` e `hw_mon`, e SHALL reiniciar de forma controlada caso uma tarefa monitorada deixe de responder.

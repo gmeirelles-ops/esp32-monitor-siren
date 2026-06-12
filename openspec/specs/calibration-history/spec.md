@@ -1,7 +1,7 @@
 # calibration-history Specification
 
 ## Purpose
-TBD - created by archiving change ota-campaign-calibration-oplock. Update Purpose after archive.
+Histórico de calibrações por produto no app Flutter: registro local de ciclos de calibração com potência média, dispositivo e timestamp.
 ## Requirements
 ### Requirement: Registro histórico de calibrações
 O app SHALL registrar um evento de calibração por produto sempre que uma nova autocalibração for concluída e salva, contendo `id_produto`, `potencia_ref`, dispositivo e instante.

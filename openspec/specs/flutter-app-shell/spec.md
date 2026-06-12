@@ -1,7 +1,7 @@
 # flutter-app-shell Specification
 
 ## Purpose
-TBD - created by archiving change flutter-companion-app. Update Purpose after archive.
+Shell do app Flutter companion: navegação principal, AppBar global, Configurações de infraestrutura e indicadores de conexão MQTT.
 ## Requirements
 ### Requirement: Tema visual Diponto amber
 O app Flutter SHALL aplicar uma paleta de cores amber como identidade visual primária, alinhada à marca Diponto, com fundo escuro para uso em ambiente industrial.

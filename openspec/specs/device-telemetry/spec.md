@@ -1,7 +1,7 @@
 # device-telemetry Specification
 
 ## Purpose
-TBD - created by archiving change hardening-producao. Update Purpose after archive.
+Telemetria periódica do firmware ESP32: heartbeat MQTT com estado FSM, RSSI, uptime, fila offline e versão de firmware para monitoramento no app.
 ## Requirements
 ### Requirement: Presença online/offline via Last Will
 O dispositivo SHALL anunciar presença `online` ao conectar ao broker e SHALL configurar um Last Will and Testament (LWT) que marque o dispositivo como `offline` em desconexão inesperada.

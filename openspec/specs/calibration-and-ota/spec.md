@@ -1,7 +1,7 @@
 # calibration-and-ota Specification
 
 ## Purpose
-TBD - created by archiving change flutter-companion-app. Update Purpose after archive.
+Calibração e OTA unitários no app Flutter: disparo de `START_CALIBRATION` e `OTA_UPDATE` por dispositivo com feedback de progresso via MQTT.
 ## Requirements
 ### Requirement: Modo calibração
 O app SHALL permitir autocalibração exclusivamente na tela de cadastro de produtos, enviando `START_CALIBRATION` quando o dispositivo selecionado estiver em estado `IDLE`.

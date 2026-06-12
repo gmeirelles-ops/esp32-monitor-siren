@@ -1,7 +1,7 @@
 # ota-campaign Specification
 
 ## Purpose
-TBD - created by archiving change ota-campaign-calibration-oplock. Update Purpose after archive.
+Campanhas de atualização OTA no app Flutter: seleção de múltiplos dispositivos e envio coordenado de `OTA_UPDATE` com acompanhamento de status por bancada.
 ## Requirements
 ### Requirement: Campanha de OTA para múltiplos dispositivos
 O app SHALL permitir selecionar vários dispositivos e enviar o mesmo `OTA_UPDATE` (URL de firmware) para todos em uma única ação.

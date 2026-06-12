@@ -1,7 +1,7 @@
 # wifi-provisioning-wizard Specification
 
 ## Purpose
-TBD - created by archiving change flutter-companion-app. Update Purpose after archive.
+Assistente de provisionamento no app Flutter: guia o operador para conectar dispositivos ESP32 ao Wi-Fi e broker MQTT via portal embarcado.
 ## Requirements
 ### Requirement: Guia de provisionamento Wi-Fi
 O app SHALL oferecer assistente passo-a-passo para provisionar um dispositivo ESP32 via captive portal.

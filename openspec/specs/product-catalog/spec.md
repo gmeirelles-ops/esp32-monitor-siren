@@ -1,7 +1,7 @@
 # product-catalog Specification
 
 ## Purpose
-TBD - created by archiving change producao-autocalibracao-produto. Update Purpose after archive.
+Catálogo local de produtos no app Flutter: cadastro de SKUs com limites de potência, tempo de teste e metadados de calibração usados nos lotes.
 ## Requirements
 ### Requirement: Cadastro local de produtos
 O app SHALL persistir um catálogo de produtos em SQLite contendo, no mínimo: `id_produto` (3 dígitos), `nome`, `potencia_ref`, `potencia_min`, `potencia_max`, `tolerancia_pct`, `tempo_teste_sec`, `calibrado_em` e `calibrado_device_id`.

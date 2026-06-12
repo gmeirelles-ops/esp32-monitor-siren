@@ -1,7 +1,7 @@
 # serial-and-labels Specification
 
 ## Purpose
-TBD - created by archiving change flutter-companion-app. Update Purpose after archive.
+Geração de seriais e etiquetas no app Flutter: dígito verificador ITF, formato de código de barras e integração com fluxo de aprovação de testes.
 ## Requirements
 ### Requirement: Cálculo do dígito verificador ITF 2 de 5
 O app Flutter SHALL calcular o dígito verificador ITF 2 de 5 a partir dos 9 primeiros dígitos (id_produto + ano + sequencial).

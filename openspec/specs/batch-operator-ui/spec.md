@@ -1,7 +1,7 @@
 # batch-operator-ui Specification
 
 ## Purpose
-TBD - created by archiving change flutter-companion-app. Update Purpose after archive.
+Interface de operação de lote no app Flutter: configuração `SET_BATCH`, acompanhamento do último teste e encerramento `END_BATCH` por dispositivo.
 ## Requirements
 ### Requirement: Formulário de configuração de lote
 O app SHALL oferecer formulário para enviar `SET_BATCH` selecionando um produto cadastrado, preenchendo automaticamente `id_produto`, `tempo_teste`, `potencia_min` e `potencia_max`, sugerindo automaticamente `proximo_sequencial` a partir do contador por `(id_produto, ano)`, e solicitando ao operador `numero_op`, `ano` e `quantidade_total`.

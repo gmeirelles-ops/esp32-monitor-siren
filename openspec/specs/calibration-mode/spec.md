@@ -1,7 +1,7 @@
 # calibration-mode Specification
 
 ## Purpose
-TBD - created by archiving change validacao-sirenes. Update Purpose after archive.
+Modo de calibração no firmware ESP32: ciclo `START_CALIBRATION` com amostras PZEM em tempo real e publicação do resultado de potência de referência.
 ## Requirements
 ### Requirement: Modo Aprendizado para calibração de potência
 O dispositivo SHALL executar um ciclo de calibração ao receber o comando `START_CALIBRATION`, medindo a potência de uma peça padrão durante 5 segundos e publicando amostras periódicas em tempo real além da média final.

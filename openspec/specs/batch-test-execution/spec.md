@@ -1,7 +1,7 @@
 # batch-test-execution Specification
 
 ## Purpose
-TBD - created by archiving change validacao-sirenes. Update Purpose after archive.
+Execução de testes de sirene no firmware ESP32: configuração de lote via MQTT, ciclo botão–relé–PZEM, veredito de potência e publicação de resultados.
 ## Requirements
 ### Requirement: Configuração de lote via MQTT
 O dispositivo SHALL armazenar os parâmetros de lote recebidos no comando MQTT `SET_BATCH` de forma persistente (NVS) e aguardar o acionamento do botão físico para executar testes.

@@ -1,7 +1,7 @@
 # op-lock Specification
 
 ## Purpose
-TBD - created by archiving change ota-campaign-calibration-oplock. Update Purpose after archive.
+Bloqueio de ordem de produção (OP) encerrada no app Flutter: impede reutilização de `numero_op` após `END_BATCH` para evitar colisão de rastreabilidade.
 ## Requirements
 ### Requirement: Bloqueio de OP encerrada
 O app SHALL marcar uma OP como encerrada ao enviar `END_BATCH` e SHALL bloquear a configuração de um novo lote (`SET_BATCH`) que reutilize uma OP encerrada.

@@ -1,7 +1,7 @@
 # offline-resilience Specification
 
 ## Purpose
-TBD - created by archiving change validacao-sirenes. Update Purpose after archive.
+Resiliência offline do firmware ESP32: testes e lote continuam sem rede, fila FIFO persistente de mensagens MQTT e sincronização em segundo plano após reconexão.
 ## Requirements
 ### Requirement: Continuidade dos testes em modo offline
 O dispositivo SHALL continuar executando os testes de sirene normalmente mesmo quando a conexão Wi-Fi ou com o broker MQTT estiver indisponível durante um lote.

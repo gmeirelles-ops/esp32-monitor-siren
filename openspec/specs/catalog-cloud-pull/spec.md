@@ -1,7 +1,7 @@
 # catalog-cloud-pull Specification
 
 ## Purpose
-TBD - created by archiving change catalog-cloud-and-reprint. Update Purpose after archive.
+Sincronização do catálogo de produtos da nuvem para o SQLite local no app Flutter, via pull manual ou automático ao habilitar sync Firestore.
 ## Requirements
 ### Requirement: Download do catálogo a partir do Firestore
 Quando a sincronização estiver habilitada e o Firebase disponível, o app SHALL permitir baixar a coleção `products` do Firestore e fazer upsert dos produtos no SQLite local por `id_produto`.

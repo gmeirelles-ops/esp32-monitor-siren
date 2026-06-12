@@ -1,7 +1,7 @@
 # serial-counter Specification
 
 ## Purpose
-TBD - created by archiving change serial-counter-per-product. Update Purpose after archive.
+Contador de serial por produto e ano no app Flutter, com reconciliação contra resultados de teste aprovados no SQLite local.
 ## Requirements
 ### Requirement: Contador persistente de sequencial por produto e ano
 O app SHALL manter um contador persistente do último sequencial utilizado por combinação `(id_produto, ano)`, atualizado a cada serial aprovado emitido localmente.
