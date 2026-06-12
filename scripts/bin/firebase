@@ -1,7 +1,0 @@
-#!/usr/bin/env bash
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-LOCAL_FB="$ROOT/node_modules/.bin/firebase"
-if [[ -x "$LOCAL_FB" ]]; then
-  exec "$LOCAL_FB" "$@"
-fi
-exec npx -y firebase-tools@latest "$@"

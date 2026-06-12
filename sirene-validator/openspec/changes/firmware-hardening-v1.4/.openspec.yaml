@@ -1,6 +1,0 @@
-schema: spec-driven
-name: firmware-hardening-v1.4
-description: >
-  Hardening do firmware sirene-validator v1.4: robustez MQTT/worker,
-  validação de comandos, ACK de lote, telemetria enriquecida e consistência FSM.
-  GPIO do botão permanece em 0 (bancada de teste).
