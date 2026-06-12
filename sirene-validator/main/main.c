@@ -30,27 +30,43 @@ static app_state_t s_state_before_fault;
 static bool s_calibrating;
 static QueueHandle_t s_work_queue;
 static QueueHandle_t s_button_queue;
+static QueueHandle_t s_pzem_queue;
+static volatile bool s_pzem_busy;
 
 typedef enum {
     WORK_BUTTON_PRESS = 1,
     WORK_MQTT_PAYLOAD,
 } work_type_t;
 
+typedef enum {
+    PZEM_WORK_TEST = 1,
+    PZEM_WORK_CALIBRATION,
+} pzem_work_type_t;
+
 typedef struct {
     work_type_t type;
     char payload[512];
 } work_item_t;
 
+typedef struct {
+    pzem_work_type_t type;
+    uint32_t duration_sec;
+} pzem_work_item_t;
+
 static void publish_or_queue(const char *topic_suffix, const char *json);
 static void run_test_cycle(uint32_t duration_sec);
 static bool parse_set_batch(cJSON *root);
+static void publish_batch_ack(void);
 static void handle_end_batch(void);
+static void handle_end_batch_with_reason(const char *motivo);
 static void handle_start_calibration(void);
 static void on_calibration_sample(float power_w, uint32_t elapsed_ms, void *ctx);
 static void handle_ota_update(cJSON *root);
 static void publish_test_result(bool approved, float potencia_media, uint32_t sequencial_usado);
 static void process_mqtt_payload(const char *payload);
 static void worker_task(void *arg);
+static void pzem_worker_task(void *arg);
+static bool enqueue_pzem_work(pzem_work_type_t type, uint32_t duration_sec);
 static void hardware_monitor_task(void *arg);
 static bool telemetry_snapshot(telemetry_snapshot_t *out);
 static void on_mqtt_connected(void);
@@ -77,6 +93,15 @@ static void publish_test_result(bool approved, float potencia_media, uint32_t se
              s_batch.numero_op, s_batch.id_produto, s_batch.ano,
              approved ? "APROVADO" : "REPROVADO", potencia_media,
              (unsigned long)sequencial_usado, (unsigned long)s_batch.aprovados);
+    publish_or_queue("status", json);
+}
+
+static void publish_batch_ack(void)
+{
+    char json[192];
+    snprintf(json, sizeof(json),
+             "{\"tipo\":\"batch\",\"evento\":\"configurado\",\"numero_op\":\"%s\",\"estado\":\"BATCH_READY\"}",
+             s_batch.numero_op);
     publish_or_queue("status", json);
 }
 
@@ -126,73 +151,124 @@ static void run_test_cycle(uint32_t duration_sec)
     }
 
     publish_test_result(approved, result.average_w, sequencial_usado);
-    state_machine_set(STATE_BATCH_READY);
+
+    if (approved && pure_batch_quota_reached(s_batch.aprovados, s_batch.quantidade_total)) {
+        handle_end_batch_with_reason("cota_atingida");
+    } else {
+        state_machine_set(STATE_BATCH_READY);
+    }
 }
 
 static bool parse_set_batch(cJSON *root)
 {
-    cJSON *item;
-    item = cJSON_GetObjectItem(root, "numero_op");
-    if (!cJSON_IsString(item)) return false;
-    strncpy(s_batch.numero_op, item->valuestring, sizeof(s_batch.numero_op) - 1);
+    pure_batch_input_t in;
+    memset(&in, 0, sizeof(in));
+
+    cJSON *item = cJSON_GetObjectItem(root, "numero_op");
+    if (!cJSON_IsString(item) || !pure_batch_copy_str(in.numero_op, sizeof(in.numero_op), item->valuestring)) {
+        return false;
+    }
 
     item = cJSON_GetObjectItem(root, "id_produto");
-    if (!cJSON_IsString(item)) return false;
-    strncpy(s_batch.id_produto, item->valuestring, sizeof(s_batch.id_produto) - 1);
+    if (!cJSON_IsString(item) || !pure_batch_copy_str(in.id_produto, sizeof(in.id_produto), item->valuestring)) {
+        return false;
+    }
 
     item = cJSON_GetObjectItem(root, "ano");
-    if (!cJSON_IsString(item)) return false;
-    strncpy(s_batch.ano, item->valuestring, sizeof(s_batch.ano) - 1);
+    if (!cJSON_IsString(item) || !pure_batch_copy_str(in.ano, sizeof(in.ano), item->valuestring)) {
+        return false;
+    }
 
     item = cJSON_GetObjectItem(root, "tempo_teste");
-    if (!cJSON_IsNumber(item)) return false;
-    s_batch.tempo_teste_sec = (uint32_t)item->valuedouble;
+    if (!cJSON_IsNumber(item)) {
+        return false;
+    }
+    in.tempo_teste_sec = (uint32_t)item->valuedouble;
 
     item = cJSON_GetObjectItem(root, "potencia_min");
-    if (!cJSON_IsNumber(item)) return false;
-    s_batch.potencia_min = (float)item->valuedouble;
+    if (!cJSON_IsNumber(item)) {
+        return false;
+    }
+    in.potencia_min = (float)item->valuedouble;
 
     item = cJSON_GetObjectItem(root, "potencia_max");
-    if (!cJSON_IsNumber(item)) return false;
-    s_batch.potencia_max = (float)item->valuedouble;
+    if (!cJSON_IsNumber(item)) {
+        return false;
+    }
+    in.potencia_max = (float)item->valuedouble;
 
     item = cJSON_GetObjectItem(root, "quantidade_total");
-    if (!cJSON_IsNumber(item)) return false;
-    s_batch.quantidade_total = (uint32_t)item->valuedouble;
+    if (!cJSON_IsNumber(item)) {
+        return false;
+    }
+    in.quantidade_total = (uint32_t)item->valuedouble;
 
     item = cJSON_GetObjectItem(root, "proximo_sequencial");
-    if (!cJSON_IsNumber(item)) return false;
-    s_batch.proximo_sequencial = (uint32_t)item->valuedouble;
+    if (!cJSON_IsNumber(item)) {
+        return false;
+    }
+    in.proximo_sequencial = (uint32_t)item->valuedouble;
 
-    s_batch.aprovados = 0;
+    if (!pure_batch_fields_valid(&in)) {
+        return false;
+    }
+
+    bool same_op = s_batch.active && pure_batch_same_op(s_batch.numero_op, in.numero_op);
+    uint32_t preserved_aprovados = same_op ? s_batch.aprovados : 0;
+    uint32_t preserved_sequencial = same_op ? s_batch.proximo_sequencial : in.proximo_sequencial;
+    if (same_op && in.proximo_sequencial > preserved_sequencial) {
+        preserved_sequencial = in.proximo_sequencial;
+    }
+
+    strcpy(s_batch.numero_op, in.numero_op);
+    strcpy(s_batch.id_produto, in.id_produto);
+    strcpy(s_batch.ano, in.ano);
+    s_batch.tempo_teste_sec = in.tempo_teste_sec;
+    s_batch.potencia_min = in.potencia_min;
+    s_batch.potencia_max = in.potencia_max;
+    s_batch.quantidade_total = in.quantidade_total;
+    s_batch.proximo_sequencial = preserved_sequencial;
+    s_batch.aprovados = preserved_aprovados;
     s_batch.active = true;
+
     batch_storage_save(&s_batch);
     state_machine_set(STATE_BATCH_READY);
+    telemetry_publish_now();
+    publish_batch_ack();
     return true;
 }
 
-static void handle_end_batch(void)
+static void handle_end_batch_with_reason(const char *motivo)
 {
     if (state_machine_get() == STATE_TESTING) {
         mqtt_bridge_publish_rejection("end_batch_durante_teste");
         return;
     }
+    if (motivo != NULL) {
+        char json[128];
+        snprintf(json, sizeof(json),
+                 "{\"tipo\":\"batch\",\"evento\":\"encerrado\",\"motivo\":\"%s\"}", motivo);
+        publish_or_queue("status", json);
+    }
     memset(&s_batch, 0, sizeof(s_batch));
     batch_storage_clear();
     state_machine_set(STATE_IDLE);
+    telemetry_publish_now();
+}
+
+static void handle_end_batch(void)
+{
+    handle_end_batch_with_reason(NULL);
 }
 
 static void on_calibration_sample(float power_w, uint32_t elapsed_ms, void *ctx)
 {
     (void)ctx;
-    if (!mqtt_bridge_is_connected()) {
-        return;
-    }
     char json[128];
     snprintf(json, sizeof(json),
              "{\"tipo\":\"calibracao_amostra\",\"potencia_w\":%.2f,\"elapsed_ms\":%lu}",
              power_w, (unsigned long)elapsed_ms);
-    mqtt_bridge_publish("calibracao", json);
+    publish_or_queue("calibracao", json);
 }
 
 static void handle_start_calibration(void)
@@ -268,7 +344,11 @@ static void process_mqtt_payload(const char *payload)
     } else if (strcmp(cmd->valuestring, "END_BATCH") == 0) {
         handle_end_batch();
     } else if (strcmp(cmd->valuestring, "START_CALIBRATION") == 0) {
-        handle_start_calibration();
+        if (!state_machine_can_accept_calibration()) {
+            mqtt_bridge_publish_rejection("calibracao_estado_invalido");
+        } else if (!enqueue_pzem_work(PZEM_WORK_CALIBRATION, 0)) {
+            mqtt_bridge_publish_rejection("pzem_ocupado");
+        }
     } else if (strcmp(cmd->valuestring, "OTA_UPDATE") == 0) {
         handle_ota_update(root);
     } else {
@@ -326,7 +406,41 @@ static void on_mqtt_command(const char *payload, int len)
     work_item_t item = {.type = WORK_MQTT_PAYLOAD};
     memcpy(item.payload, payload, len);
     item.payload[len] = '\0';
-    xQueueSend(s_work_queue, &item, 0);
+    if (xQueueSend(s_work_queue, &item, 0) != pdTRUE) {
+        mqtt_bridge_publish_rejection("fila_cheia");
+    }
+}
+
+static bool enqueue_pzem_work(pzem_work_type_t type, uint32_t duration_sec)
+{
+    if (s_pzem_busy) {
+        return false;
+    }
+    pzem_work_item_t item = {
+        .type = type,
+        .duration_sec = duration_sec,
+    };
+    return xQueueSend(s_pzem_queue, &item, 0) == pdTRUE;
+}
+
+static void pzem_worker_task(void *arg)
+{
+    (void)arg;
+    esp_task_wdt_add(NULL);
+    pzem_work_item_t item;
+    while (true) {
+        esp_task_wdt_reset();
+        if (xQueueReceive(s_pzem_queue, &item, pdMS_TO_TICKS(500)) != pdTRUE) {
+            continue;
+        }
+        s_pzem_busy = true;
+        if (item.type == PZEM_WORK_TEST) {
+            run_test_cycle(item.duration_sec);
+        } else if (item.type == PZEM_WORK_CALIBRATION) {
+            handle_start_calibration();
+        }
+        s_pzem_busy = false;
+    }
 }
 
 static void worker_task(void *arg)
@@ -339,7 +453,7 @@ static void worker_task(void *arg)
         uint8_t btn_ev;
         if (xQueueReceive(s_button_queue, &btn_ev, 0) == pdTRUE) {
             if (!s_calibrating) {
-                run_test_cycle(s_batch.tempo_teste_sec);
+                enqueue_pzem_work(PZEM_WORK_TEST, s_batch.tempo_teste_sec);
             }
         }
         if (xQueueReceive(s_work_queue, &item, pdMS_TO_TICKS(500)) != pdTRUE) {
@@ -368,6 +482,16 @@ static bool telemetry_snapshot(telemetry_snapshot_t *out)
     out->estado = state_machine_name(state_machine_get());
     out->fila = offline_queue_count();
     out->firmware_version = FIRMWARE_VERSION;
+    out->batch_active = s_batch.active;
+    if (s_batch.active) {
+        out->numero_op = s_batch.numero_op;
+        out->proximo_sequencial = s_batch.proximo_sequencial;
+        out->aprovados = s_batch.aprovados;
+    } else {
+        out->numero_op = "";
+        out->proximo_sequencial = 0;
+        out->aprovados = 0;
+    }
     return true;
 }
 
@@ -432,6 +556,7 @@ void app_main(void)
 
     s_work_queue = xQueueCreate(4, sizeof(work_item_t));
     s_button_queue = xQueueCreate(4, sizeof(uint8_t));
+    s_pzem_queue = xQueueCreate(2, sizeof(pzem_work_item_t));
     button_init(s_button_queue);
     offline_queue_init();
     telemetry_init();
@@ -464,6 +589,7 @@ void app_main(void)
     telemetry_set_snapshot_provider(telemetry_snapshot);
     telemetry_start();
     offline_queue_sync_task_start();
+    xTaskCreate(pzem_worker_task, "pzem_worker", 8192, NULL, 6, NULL);
     xTaskCreate(worker_task, "worker", 8192, NULL, 6, NULL);
     xTaskCreate(hardware_monitor_task, "hw_mon", 3072, NULL, 5, NULL);
 

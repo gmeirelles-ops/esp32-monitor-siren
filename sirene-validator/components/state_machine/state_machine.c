@@ -1,6 +1,7 @@
 #include "state_machine.h"
 
 #include "esp_log.h"
+#include "pure_logic.h"
 
 static const char *TAG = "state";
 static app_state_t s_state = STATE_PROVISIONING;
@@ -43,22 +44,27 @@ const char *state_machine_name(app_state_t state)
     }
 }
 
+static pure_state_t to_pure_state(app_state_t state)
+{
+    return (pure_state_t)state;
+}
+
 bool state_machine_can_start_test(void)
 {
-    return s_state == STATE_BATCH_READY;
+    return pure_fsm_can_start_test(to_pure_state(s_state), false, false);
 }
 
 bool state_machine_can_accept_batch_cmd(void)
 {
-    return s_state != STATE_TESTING && s_state != STATE_OTA_UPDATING;
+    return pure_fsm_can_accept_batch(to_pure_state(s_state), false);
 }
 
 bool state_machine_can_accept_calibration(void)
 {
-    return s_state == STATE_IDLE;
+    return pure_fsm_can_accept_calibration(to_pure_state(s_state), false);
 }
 
 bool state_machine_can_accept_ota(void)
 {
-    return s_state != STATE_TESTING && s_state != STATE_OTA_UPDATING;
+    return pure_fsm_can_accept_ota(to_pure_state(s_state));
 }

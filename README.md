@@ -83,6 +83,15 @@ Guia completo de deploy, provisionamento Wi-Fi/MQTT, Firebase e cadastro de prod
 
 → **[docs/PRODUCAO.md](docs/PRODUCAO.md)**
 
+### App Windows no pendrive
+
+```powershell
+# Na raiz, em PC Windows com Flutter + VS C++
+powershell -ExecutionPolicy Bypass -File scripts\build_windows_release.ps1
+```
+
+Ou baixe o ZIP pelo GitHub Actions: **CI** → **Run workflow** → artifact `DipontoSireneValidator-win64.zip`.
+
 ## OpenSpec (desenvolvimento)
 
 Changes ativas ficam em `openspec/changes/<nome>/`. Workflow:
@@ -103,6 +112,6 @@ Specs de capabilities: `openspec/specs/<capability>/spec.md`
 
 ## CI e branch protection
 
-O workflow `.github/workflows/ci.yml` roda em push/PR para `main`. O build IDF completo está disponível apenas via **workflow_dispatch** (ação manual no GitHub) até cache do ESP-IDF estar estável.
+O workflow `.github/workflows/ci.yml` roda em push/PR para `main`. Jobs manuais (**workflow_dispatch**): build IDF completo e **Windows portable release** (ZIP do app para pendrive).
 
 Recomenda-se habilitar branch protection em `main` exigindo os checks `Flutter tests` e `Firmware host tests` antes do merge.

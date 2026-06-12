@@ -31,12 +31,36 @@ O target Linux usa o mesmo layout desktop (`NavigationRail`) e o mesmo fluxo de 
 | Gerar `.exe` instalável | Não | Sim |
 | Abrir `ms-settings:network-wifi` | Não | Sim |
 
-## Build para Windows (máquina de destino ou CI)
+## Build para Windows (pendrive / posto)
 
 Pré-requisitos no Windows:
 
 - [Flutter SDK](https://docs.flutter.dev/get-started/install/windows)
 - Visual Studio 2022 com workload **"Desktop development with C++"**
+
+Na **raiz do monorepo**:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\build_windows_release.ps1
+```
+
+No Linux, o script `scripts/build_windows_release.sh` apenas orienta — não gera `.exe`.
+
+### Pacote gerado
+
+```
+dist/DipontoSireneValidator-<versão>-win64/
+├── LEIA-ME.txt
+├── Iniciar Diponto Sirene Validator.bat
+└── app/
+    ├── sirene_app.exe
+    ├── flutter_windows.dll
+    └── data/
+```
+
+Também: `dist/DipontoSireneValidator-<versão>-win64.zip` — copie para o pendrive.
+
+### Build manual (sem script)
 
 ```bash
 cd sirene_app
@@ -45,16 +69,7 @@ dart run build_runner build
 flutter build windows --release
 ```
 
-Saída:
-
-```
-build/windows/x64/runner/Release/
-├── sirene_app.exe
-├── flutter_windows.dll
-└── data/
-```
-
-Copie a pasta `Release/` inteira para o PC do posto (não só o `.exe`).
+Saída em `build/windows/x64/runner/Release/` — copie a pasta inteira (não só o `.exe`).
 
 ## Configuração no posto (Windows)
 
@@ -66,6 +81,9 @@ Copie a pasta `Release/` inteira para o PC do posto (não só o `.exe`).
 
 Checklist completo: [docs/PRODUCAO.md](../docs/PRODUCAO.md)
 
-## CI opcional (GitHub Actions)
+## CI — artifact Windows (sem máquina local)
 
-Para gerar o `.exe` automaticamente sem máquina Windows local, use um runner `windows-latest` no pipeline. O código-fonte é o mesmo; só o ambiente de build muda.
+1. Abra [Actions](../../actions/workflows/ci.yml) no GitHub
+2. **Run workflow** (disparo manual)
+3. Baixe o artifact **DipontoSireneValidator-win64.zip** do job *Windows portable release*
+4. Extraia no pendrive ou PC do posto e execute o `.bat`

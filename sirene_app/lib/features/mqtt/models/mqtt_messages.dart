@@ -171,4 +171,17 @@ class BatchConfig {
     'quantidade_total': quantidadeTotal,
     'proximo_sequencial': proximoSequencial,
   };
+
+  BatchConfig copyWith({int? proximoSequencial}) {
+    return BatchConfig(
+      numeroOp: numeroOp,
+      idProduto: idProduto,
+      ano: ano,
+      tempoTeste: tempoTeste,
+      potenciaMin: potenciaMin,
+      potenciaMax: potenciaMax,
+      quantidadeTotal: quantidadeTotal,
+      proximoSequencial: proximoSequencial ?? this.proximoSequencial,
+    );
+  }
 }

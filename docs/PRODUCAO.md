@@ -34,6 +34,39 @@ BROKER=192.168.51.87 DEVICE_ID=<mac_hex> ./scripts/bench_calibration.sh
 
 ## 3. App Flutter (Windows)
 
+### Pendrive / distribuição portátil (recomendado)
+
+Gera ZIP pronto para copiar no pendrive e testar no posto:
+
+**No Windows (dev):**
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\build_windows_release.ps1
+```
+
+**Sem PC Windows (GitHub Actions):**
+1. GitHub → **Actions** → workflow **CI** → **Run workflow**
+2. Ao concluir, baixe o artifact **DipontoSireneValidator-win64.zip**
+3. Copie o ZIP para o pendrive
+
+**No PC do posto:**
+1. Extraia o ZIP inteiro (mantenha a pasta `app\` junto do `.bat`)
+2. Duplo clique em **Iniciar Diponto Sirene Validator.bat**
+3. Leia `LEIA-ME.txt` no pacote para pré-requisitos e smoke test
+
+Saída do script:
+```
+dist/DipontoSireneValidator-<versão>-win64/
+├── LEIA-ME.txt
+├── Iniciar Diponto Sirene Validator.bat
+└── app/
+    ├── sirene_app.exe
+    └── data/   ← obrigatório; não copie só o .exe
+```
+
+> Dados SQLite ficam no perfil do usuário Windows (`%APPDATA%`), não no pendrive.
+
+### Build manual (alternativa)
+
 No PC de produção (não compila no Linux):
 
 ```bash
@@ -43,7 +76,7 @@ dart run build_runner build
 flutter build windows --release
 ```
 
-Instale/copie `build/windows/x64/runner/Release/` para o posto.
+Copie `build/windows/x64/runner/Release/` inteira para o posto.
 
 Configure em **Configurações**:
 - Broker MQTT (host + porta) — deve coincidir com o broker provisionado nos ESP32

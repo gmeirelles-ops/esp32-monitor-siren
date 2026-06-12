@@ -34,15 +34,23 @@ static void publish_heartbeat(void)
         .estado = "DESCONHECIDO",
         .fila = 0,
         .firmware_version = FIRMWARE_VERSION,
+        .numero_op = "",
+        .proximo_sequencial = 0,
+        .aprovados = 0,
+        .batch_active = false,
     };
     if (s_provider) {
         s_provider(&snap);
     }
-    char json[256];
+    char json[384];
     snprintf(json, sizeof(json),
-             "{\"uptime\":%lld,\"rssi\":%d,\"estado\":\"%s\",\"fila\":%u,\"firmware_version\":\"%s\"}",
+             "{\"uptime\":%lld,\"rssi\":%d,\"estado\":\"%s\",\"fila\":%u,"
+             "\"firmware_version\":\"%s\",\"numero_op\":\"%s\","
+             "\"proximo_sequencial\":%lu,\"aprovados\":%lu}",
              (long long)(esp_timer_get_time() / 1000000LL),
-             snap.rssi, snap.estado, (unsigned)snap.fila, snap.firmware_version);
+             snap.rssi, snap.estado, (unsigned)snap.fila, snap.firmware_version,
+             snap.batch_active ? snap.numero_op : "",
+             (unsigned long)snap.proximo_sequencial, (unsigned long)snap.aprovados);
     mqtt_bridge_publish("heartbeat", json);
 }
 

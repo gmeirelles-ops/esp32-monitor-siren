@@ -94,6 +94,7 @@ class MqttService {
     final clientId = 'sirene_app_${DateTime.now().millisecondsSinceEpoch}';
     _client = MqttServerClient.withPort(_host!, clientId, _port!);
     _client!.logging(on: false);
+    _client!.setProtocolV311();
     _client!.keepAlivePeriod = 30;
     _client!.autoReconnect = false;
     _client!.onConnected = _onConnected;
@@ -113,13 +114,19 @@ class MqttService {
   }
 
   void _onConnected() {
+    // O stream `updates` é broadcast: mensagens retidas do broker chegam logo
+    // após o SUBACK e são perdidas se o listener ainda não estiver ativo.
+    _attachUpdatesListener();
     for (final topic in MqttTopics.allSubscriptions) {
       _client!.subscribe(topic, MqttQos.atLeastOnce);
     }
-    _updatesSub?.cancel();
-    _updatesSub = _client!.updates?.listen(_handleUpdates);
     _setState(AppMqttConnectionState.connected);
     _backoffSeconds = 1;
+  }
+
+  void _attachUpdatesListener() {
+    _updatesSub?.cancel();
+    _updatesSub = _client!.updates?.listen(_handleUpdates);
   }
 
   void _onDisconnected() {

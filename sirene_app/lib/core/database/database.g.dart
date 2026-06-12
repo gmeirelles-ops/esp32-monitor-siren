@@ -3262,6 +3262,348 @@ class OpLocksCompanion extends UpdateCompanion<OpLock> {
   }
 }
 
+class $OperatorsTable extends Operators
+    with TableInfo<$OperatorsTable, Operator> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $OperatorsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _codigoMeta = const VerificationMeta('codigo');
+  @override
+  late final GeneratedColumn<String> codigo = GeneratedColumn<String>(
+    'codigo',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'),
+  );
+  static const VerificationMeta _nomeMeta = const VerificationMeta('nome');
+  @override
+  late final GeneratedColumn<String> nome = GeneratedColumn<String>(
+    'nome',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _ativoMeta = const VerificationMeta('ativo');
+  @override
+  late final GeneratedColumn<bool> ativo = GeneratedColumn<bool>(
+    'ativo',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("ativo" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [id, codigo, nome, ativo, createdAt];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'operators';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<Operator> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('codigo')) {
+      context.handle(
+        _codigoMeta,
+        codigo.isAcceptableOrUnknown(data['codigo']!, _codigoMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_codigoMeta);
+    }
+    if (data.containsKey('nome')) {
+      context.handle(
+        _nomeMeta,
+        nome.isAcceptableOrUnknown(data['nome']!, _nomeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nomeMeta);
+    }
+    if (data.containsKey('ativo')) {
+      context.handle(
+        _ativoMeta,
+        ativo.isAcceptableOrUnknown(data['ativo']!, _ativoMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  Operator map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return Operator(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      codigo: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}codigo'],
+      )!,
+      nome: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}nome'],
+      )!,
+      ativo: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}ativo'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+    );
+  }
+
+  @override
+  $OperatorsTable createAlias(String alias) {
+    return $OperatorsTable(attachedDatabase, alias);
+  }
+}
+
+class Operator extends DataClass implements Insertable<Operator> {
+  final int id;
+  final String codigo;
+  final String nome;
+  final bool ativo;
+  final DateTime createdAt;
+  const Operator({
+    required this.id,
+    required this.codigo,
+    required this.nome,
+    required this.ativo,
+    required this.createdAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['codigo'] = Variable<String>(codigo);
+    map['nome'] = Variable<String>(nome);
+    map['ativo'] = Variable<bool>(ativo);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    return map;
+  }
+
+  OperatorsCompanion toCompanion(bool nullToAbsent) {
+    return OperatorsCompanion(
+      id: Value(id),
+      codigo: Value(codigo),
+      nome: Value(nome),
+      ativo: Value(ativo),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory Operator.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return Operator(
+      id: serializer.fromJson<int>(json['id']),
+      codigo: serializer.fromJson<String>(json['codigo']),
+      nome: serializer.fromJson<String>(json['nome']),
+      ativo: serializer.fromJson<bool>(json['ativo']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'codigo': serializer.toJson<String>(codigo),
+      'nome': serializer.toJson<String>(nome),
+      'ativo': serializer.toJson<bool>(ativo),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  Operator copyWith({
+    int? id,
+    String? codigo,
+    String? nome,
+    bool? ativo,
+    DateTime? createdAt,
+  }) => Operator(
+    id: id ?? this.id,
+    codigo: codigo ?? this.codigo,
+    nome: nome ?? this.nome,
+    ativo: ativo ?? this.ativo,
+    createdAt: createdAt ?? this.createdAt,
+  );
+  Operator copyWithCompanion(OperatorsCompanion data) {
+    return Operator(
+      id: data.id.present ? data.id.value : this.id,
+      codigo: data.codigo.present ? data.codigo.value : this.codigo,
+      nome: data.nome.present ? data.nome.value : this.nome,
+      ativo: data.ativo.present ? data.ativo.value : this.ativo,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('Operator(')
+          ..write('id: $id, ')
+          ..write('codigo: $codigo, ')
+          ..write('nome: $nome, ')
+          ..write('ativo: $ativo, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, codigo, nome, ativo, createdAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is Operator &&
+          other.id == this.id &&
+          other.codigo == this.codigo &&
+          other.nome == this.nome &&
+          other.ativo == this.ativo &&
+          other.createdAt == this.createdAt);
+}
+
+class OperatorsCompanion extends UpdateCompanion<Operator> {
+  final Value<int> id;
+  final Value<String> codigo;
+  final Value<String> nome;
+  final Value<bool> ativo;
+  final Value<DateTime> createdAt;
+  const OperatorsCompanion({
+    this.id = const Value.absent(),
+    this.codigo = const Value.absent(),
+    this.nome = const Value.absent(),
+    this.ativo = const Value.absent(),
+    this.createdAt = const Value.absent(),
+  });
+  OperatorsCompanion.insert({
+    this.id = const Value.absent(),
+    required String codigo,
+    required String nome,
+    this.ativo = const Value.absent(),
+    required DateTime createdAt,
+  }) : codigo = Value(codigo),
+       nome = Value(nome),
+       createdAt = Value(createdAt);
+  static Insertable<Operator> custom({
+    Expression<int>? id,
+    Expression<String>? codigo,
+    Expression<String>? nome,
+    Expression<bool>? ativo,
+    Expression<DateTime>? createdAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (codigo != null) 'codigo': codigo,
+      if (nome != null) 'nome': nome,
+      if (ativo != null) 'ativo': ativo,
+      if (createdAt != null) 'created_at': createdAt,
+    });
+  }
+
+  OperatorsCompanion copyWith({
+    Value<int>? id,
+    Value<String>? codigo,
+    Value<String>? nome,
+    Value<bool>? ativo,
+    Value<DateTime>? createdAt,
+  }) {
+    return OperatorsCompanion(
+      id: id ?? this.id,
+      codigo: codigo ?? this.codigo,
+      nome: nome ?? this.nome,
+      ativo: ativo ?? this.ativo,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (codigo.present) {
+      map['codigo'] = Variable<String>(codigo.value);
+    }
+    if (nome.present) {
+      map['nome'] = Variable<String>(nome.value);
+    }
+    if (ativo.present) {
+      map['ativo'] = Variable<bool>(ativo.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('OperatorsCompanion(')
+          ..write('id: $id, ')
+          ..write('codigo: $codigo, ')
+          ..write('nome: $nome, ')
+          ..write('ativo: $ativo, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -3275,6 +3617,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $CalibrationHistoryTable calibrationHistory =
       $CalibrationHistoryTable(this);
   late final $OpLocksTable opLocks = $OpLocksTable(this);
+  late final $OperatorsTable operators = $OperatorsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -3288,6 +3631,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     hardwareEvents,
     calibrationHistory,
     opLocks,
+    operators,
   ];
 }
 
@@ -5040,6 +5384,194 @@ typedef $$OpLocksTableProcessedTableManager =
       OpLock,
       PrefetchHooks Function()
     >;
+typedef $$OperatorsTableCreateCompanionBuilder =
+    OperatorsCompanion Function({
+      Value<int> id,
+      required String codigo,
+      required String nome,
+      Value<bool> ativo,
+      required DateTime createdAt,
+    });
+typedef $$OperatorsTableUpdateCompanionBuilder =
+    OperatorsCompanion Function({
+      Value<int> id,
+      Value<String> codigo,
+      Value<String> nome,
+      Value<bool> ativo,
+      Value<DateTime> createdAt,
+    });
+
+class $$OperatorsTableFilterComposer
+    extends Composer<_$AppDatabase, $OperatorsTable> {
+  $$OperatorsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get codigo => $composableBuilder(
+    column: $table.codigo,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get nome => $composableBuilder(
+    column: $table.nome,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get ativo => $composableBuilder(
+    column: $table.ativo,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$OperatorsTableOrderingComposer
+    extends Composer<_$AppDatabase, $OperatorsTable> {
+  $$OperatorsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get codigo => $composableBuilder(
+    column: $table.codigo,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get nome => $composableBuilder(
+    column: $table.nome,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get ativo => $composableBuilder(
+    column: $table.ativo,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$OperatorsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $OperatorsTable> {
+  $$OperatorsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get codigo =>
+      $composableBuilder(column: $table.codigo, builder: (column) => column);
+
+  GeneratedColumn<String> get nome =>
+      $composableBuilder(column: $table.nome, builder: (column) => column);
+
+  GeneratedColumn<bool> get ativo =>
+      $composableBuilder(column: $table.ativo, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+}
+
+class $$OperatorsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $OperatorsTable,
+          Operator,
+          $$OperatorsTableFilterComposer,
+          $$OperatorsTableOrderingComposer,
+          $$OperatorsTableAnnotationComposer,
+          $$OperatorsTableCreateCompanionBuilder,
+          $$OperatorsTableUpdateCompanionBuilder,
+          (Operator, BaseReferences<_$AppDatabase, $OperatorsTable, Operator>),
+          Operator,
+          PrefetchHooks Function()
+        > {
+  $$OperatorsTableTableManager(_$AppDatabase db, $OperatorsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$OperatorsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$OperatorsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$OperatorsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<String> codigo = const Value.absent(),
+                Value<String> nome = const Value.absent(),
+                Value<bool> ativo = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+              }) => OperatorsCompanion(
+                id: id,
+                codigo: codigo,
+                nome: nome,
+                ativo: ativo,
+                createdAt: createdAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required String codigo,
+                required String nome,
+                Value<bool> ativo = const Value.absent(),
+                required DateTime createdAt,
+              }) => OperatorsCompanion.insert(
+                id: id,
+                codigo: codigo,
+                nome: nome,
+                ativo: ativo,
+                createdAt: createdAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$OperatorsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $OperatorsTable,
+      Operator,
+      $$OperatorsTableFilterComposer,
+      $$OperatorsTableOrderingComposer,
+      $$OperatorsTableAnnotationComposer,
+      $$OperatorsTableCreateCompanionBuilder,
+      $$OperatorsTableUpdateCompanionBuilder,
+      (Operator, BaseReferences<_$AppDatabase, $OperatorsTable, Operator>),
+      Operator,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -5060,4 +5592,6 @@ class $AppDatabaseManager {
       $$CalibrationHistoryTableTableManager(_db, _db.calibrationHistory);
   $$OpLocksTableTableManager get opLocks =>
       $$OpLocksTableTableManager(_db, _db.opLocks);
+  $$OperatorsTableTableManager get operators =>
+      $$OperatorsTableTableManager(_db, _db.operators);
 }

@@ -6,7 +6,8 @@ import '../../core/theme/diponto_theme.dart';
 import '../../shared/widgets/desktop_form_layout.dart';
 import '../../shared/widgets/empty_state_view.dart';
 import '../../shared/widgets/form_section_card.dart';
-import '../../shared/widgets/global_app_bar_actions.dart';
+import '../../shared/widgets/screen_app_bar.dart';
+import '../../shared/widgets/simple_bar_chart.dart';
 import 'dashboard_providers.dart';
 
 class DashboardScreen extends ConsumerWidget {
@@ -14,14 +15,11 @@ class DashboardScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final period = ref.watch(dashboardPeriodProvider);
+    final filters = ref.watch(dashboardFiltersProvider);
     final dashboardAsync = ref.watch(dashboardDataProvider);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Painel'),
-        actions: globalAppBarActions(),
-      ),
+      appBar: screenAppBar(context, title: 'Painel'),
       body: dashboardAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('Erro ao carregar painel: $e')),
@@ -32,54 +30,101 @@ class DashboardScreen extends ConsumerWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  SegmentedButton<DashboardPeriod>(
-                    segments: const [
-                      ButtonSegment(value: DashboardPeriod.today, label: Text('Hoje')),
-                      ButtonSegment(value: DashboardPeriod.week, label: Text('7 dias')),
-                      ButtonSegment(value: DashboardPeriod.all, label: Text('Tudo')),
-                    ],
-                    selected: {period},
-                    onSelectionChanged: (s) =>
-                        ref.read(dashboardPeriodProvider.notifier).state = s.first,
-                  ),
+                  _FiltersSection(filters: filters, options: data.filterOptions),
                   const SizedBox(height: 16),
                   if (data.summary.total == 0)
-                    const Padding(
-                      padding: EdgeInsets.only(top: 48),
+                    Padding(
+                      padding: const EdgeInsets.only(top: 48),
                       child: EmptyStateView(
                         icon: Icons.insights_outlined,
-                        title: 'Sem dados no período',
-                        subtitle:
-                            'Os testes realizados aparecerão aqui como métricas de produção.',
+                        title: filters.hasActiveFilters
+                            ? 'Nenhum teste com estes filtros'
+                            : 'Sem dados no período',
+                        subtitle: filters.hasActiveFilters
+                            ? 'Ajuste o período ou limpe os filtros de lote, produto ou dispositivo.'
+                            : 'Os testes realizados aparecerão aqui como métricas de produção.',
                       ),
                     )
                   else ...[
                     _MetricsRow(summary: data.summary, faults: data.faults),
                     const SizedBox(height: 16),
                     FormSectionCard(
-                      title: 'Throughput (7 dias)',
-                      child: _BarChart(
+                      title: _throughputTitle(filters.period),
+                      child: SimpleBarChart(
                         bars: [
                           for (final d in data.throughput)
-                            _Bar(
+                            SimpleBarChartBar(
                               label: '${d.day.day}/${d.day.month}',
                               value: d.total.toDouble(),
-                              secondary: d.aprovados.toDouble(),
+                              stackedValue: d.aprovados.toDouble(),
                             ),
                         ],
+                        showLegend: true,
+                        legendTotalLabel: 'Testado',
+                        legendStackedLabel: 'Aprovados',
+                        valueFormatter: (v) => v.toInt().toString(),
                       ),
                     ),
-                    if (data.faults.isNotEmpty)
+                    const SizedBox(height: 16),
+                    FormSectionCard(
+                      title: 'Yield por dia (%)',
+                      child: SimpleBarChart(
+                        bars: [
+                          for (final d in data.throughput)
+                            SimpleBarChartBar(
+                              label: '${d.day.day}/${d.day.month}',
+                              value: d.total == 0 ? 0 : (d.aprovados / d.total) * 100,
+                              color: DipontoColors.success,
+                            ),
+                        ],
+                        defaultColor: DipontoColors.success,
+                        valueFormatter: (v) => '${v.toStringAsFixed(0)}%',
+                      ),
+                    ),
+                    if (data.batchSummaries.isNotEmpty) ...[
+                      const SizedBox(height: 16),
                       FormSectionCard(
-                        title: 'Falhas de hardware',
-                        child: _BarChart(
-                          color: DipontoColors.error,
-                          bars: [
-                            for (final f in data.faults)
-                              _Bar(label: f.falha, value: f.count.toDouble()),
+                        title: 'Produção por lote',
+                        child: Column(
+                          children: [
+                            for (final batch in data.batchSummaries)
+                              Card(
+                                margin: const EdgeInsets.only(bottom: 6),
+                                child: ListTile(
+                                  dense: true,
+                                  title: Text('OP ${batch.numeroOp}'),
+                                  subtitle: Text(
+                                    '${batch.aprovados} aprovados · ${batch.reprovados} reprovados · '
+                                    'yield ${batch.yieldPct.toStringAsFixed(1)}%',
+                                  ),
+                                  trailing: Text(
+                                    '${batch.total} testes',
+                                    style: const TextStyle(fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                              ),
                           ],
                         ),
                       ),
+                    ],
+                    if (data.faults.isNotEmpty) ...[
+                      const SizedBox(height: 16),
+                      FormSectionCard(
+                        title: 'Falhas de hardware',
+                        child: SimpleBarChart(
+                          bars: [
+                            for (final f in data.faults)
+                              SimpleBarChartBar(
+                                label: f.falha,
+                                value: f.count.toDouble(),
+                                color: DipontoColors.error,
+                              ),
+                          ],
+                          defaultColor: DipontoColors.error,
+                          valueFormatter: (v) => v.toInt().toString(),
+                        ),
+                      ),
+                    ],
                   ],
                   const SizedBox(height: 16),
                   FormSectionCard(
@@ -112,6 +157,114 @@ class DashboardScreen extends ConsumerWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  String _throughputTitle(DashboardPeriod period) {
+    return switch (period) {
+      DashboardPeriod.today => 'Throughput (hoje)',
+      DashboardPeriod.week => 'Throughput (7 dias)',
+      DashboardPeriod.all => 'Throughput (30 dias)',
+    };
+  }
+}
+
+class _FiltersSection extends ConsumerWidget {
+  const _FiltersSection({required this.filters, required this.options});
+
+  final DashboardFilters filters;
+  final DashboardFilterOptions options;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final notifier = ref.read(dashboardFiltersProvider.notifier);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SegmentedButton<DashboardPeriod>(
+          segments: const [
+            ButtonSegment(value: DashboardPeriod.today, label: Text('Hoje')),
+            ButtonSegment(value: DashboardPeriod.week, label: Text('7 dias')),
+            ButtonSegment(value: DashboardPeriod.all, label: Text('Tudo')),
+          ],
+          selected: {filters.period},
+          onSelectionChanged: (s) =>
+              notifier.state = filters.copyWith(period: s.first),
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 12,
+          runSpacing: 8,
+          children: [
+            _FilterDropdown(
+              label: 'Lote (OP)',
+              value: filters.numeroOp,
+              items: options.ops,
+              onChanged: (v) => notifier.state = v == null
+                  ? filters.copyWith(clearNumeroOp: true)
+                  : filters.copyWith(numeroOp: v),
+            ),
+            _FilterDropdown(
+              label: 'Produto',
+              value: filters.idProduto,
+              items: options.products,
+              onChanged: (v) => notifier.state = v == null
+                  ? filters.copyWith(clearIdProduto: true)
+                  : filters.copyWith(idProduto: v),
+            ),
+            _FilterDropdown(
+              label: 'Dispositivo',
+              value: filters.deviceId,
+              items: options.devices,
+              onChanged: (v) => notifier.state = v == null
+                  ? filters.copyWith(clearDeviceId: true)
+                  : filters.copyWith(deviceId: v),
+            ),
+            if (filters.hasActiveFilters)
+              TextButton.icon(
+                onPressed: () => notifier.state = DashboardFilters(period: filters.period),
+                icon: const Icon(Icons.filter_alt_off, size: 18),
+                label: const Text('Limpar filtros'),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _FilterDropdown extends StatelessWidget {
+  const _FilterDropdown({
+    required this.label,
+    required this.value,
+    required this.items,
+    required this.onChanged,
+  });
+
+  final String label;
+  final String? value;
+  final List<String> items;
+  final ValueChanged<String?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 200,
+      child: DropdownButtonFormField<String?>(
+        decoration: InputDecoration(
+          labelText: label,
+          isDense: true,
+          border: const OutlineInputBorder(),
+        ),
+        value: value,
+        items: [
+          const DropdownMenuItem<String?>(value: null, child: Text('Todos')),
+          for (final item in items)
+            DropdownMenuItem<String?>(value: item, child: Text(item)),
+        ],
+        onChanged: onChanged,
       ),
     );
   }
@@ -196,92 +349,6 @@ class _MetricCard extends StatelessWidget {
             label,
             style: TextStyle(color: DipontoColors.onSurface.withValues(alpha: 0.6)),
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _Bar {
-  const _Bar({required this.label, required this.value, this.secondary});
-
-  final String label;
-  final double value;
-  final double? secondary;
-}
-
-/// Gráfico de barras leve, sem dependência externa.
-class _BarChart extends StatelessWidget {
-  const _BarChart({required this.bars, this.color = DipontoColors.primary});
-
-  final List<_Bar> bars;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    final maxValue = bars.fold<double>(1, (m, b) => b.value > m ? b.value : m);
-
-    return SizedBox(
-      height: 160,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          for (final bar in bars)
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    Text(
-                      bar.value.toInt().toString(),
-                      style: const TextStyle(fontSize: 11),
-                    ),
-                    const SizedBox(height: 2),
-                    Expanded(
-                      child: Align(
-                        alignment: Alignment.bottomCenter,
-                        child: FractionallySizedBox(
-                          heightFactor: (bar.value / maxValue).clamp(0.02, 1.0),
-                          child: Stack(
-                            alignment: Alignment.bottomCenter,
-                            children: [
-                              Container(
-                                decoration: BoxDecoration(
-                                  color: color.withValues(alpha: 0.35),
-                                  borderRadius: const BorderRadius.vertical(
-                                    top: Radius.circular(4),
-                                  ),
-                                ),
-                              ),
-                              if (bar.secondary != null && bar.value > 0)
-                                FractionallySizedBox(
-                                  heightFactor: (bar.secondary! / bar.value).clamp(0.0, 1.0),
-                                  child: Container(
-                                    decoration: BoxDecoration(
-                                      color: color,
-                                      borderRadius: const BorderRadius.vertical(
-                                        top: Radius.circular(4),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      bar.label,
-                      style: const TextStyle(fontSize: 10),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
-            ),
         ],
       ),
     );

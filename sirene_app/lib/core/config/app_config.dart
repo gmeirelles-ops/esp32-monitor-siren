@@ -19,6 +19,7 @@ class AppConfig {
   String? get selectedDeviceId => _prefs.getString('selected_device_id');
   String get stationId => _prefs.getString('station_id') ?? defaultStationId;
   bool get syncEnabled => _prefs.getBool('sync_enabled') ?? false;
+  int? get activeOperatorId => _prefs.getInt('active_operator_id');
 
   String get mqttUri => 'mqtt://$mqttHost:$mqttPort';
 
@@ -39,4 +40,12 @@ class AppConfig {
 
   Future<void> setSyncEnabled(bool value) =>
       _prefs.setBool('sync_enabled', value);
+
+  Future<void> setActiveOperatorId(int? value) async {
+    if (value == null) {
+      await _prefs.remove('active_operator_id');
+    } else {
+      await _prefs.setInt('active_operator_id', value);
+    }
+  }
 }

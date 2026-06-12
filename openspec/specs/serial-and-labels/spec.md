@@ -15,11 +15,15 @@ O app Flutter SHALL calcular o dígito verificador ITF 2 de 5 a partir dos 9 pri
 - **THEN** o app preenche com zeros à esquerda para compor exatamente 4 dígitos no serial
 
 ### Requirement: Geração de serial após aprovação
-O app SHALL gerar automaticamente o serial completo ao receber confirmação de aprovação via MQTT.
+O app SHALL gerar automaticamente um serial completo e distinto para cada aprovação no lote, usando o `sequencial` informado no resultado do teste (MQTT ou simulador), de modo que múltiplas aprovações na mesma OP produzam múltiplos seriais no buffer.
 
 #### Scenario: Serial gerado em aprovação
-- **WHEN** chega `status` com `tipo: "teste"` e `veredito: "APROVADO"`
-- **THEN** o app gera o serial de 10 dígitos e o exibe ao operador
+- **WHEN** chega `status` com `tipo: "teste"` e `veredito: "APROVADO"` com `sequencial` N
+- **THEN** o app gera o serial de 10 dígitos com sequencial N e o adiciona ao buffer se inédito
+
+#### Scenario: Várias aprovações no mesmo lote
+- **WHEN** quatro aprovações ocorrem na mesma OP
+- **THEN** o buffer contém quatro entradas com seriais diferentes e sequenciais crescentes
 
 ### Requirement: Buffer de seriais para impressão
 O app SHALL acumular seriais aprovados em buffer local antes de enviar comandos de impressão.
@@ -48,4 +52,11 @@ O app SHALL permitir configurar IP e porta da impressora Zebra (padrão porta 91
 #### Scenario: Impressora configurada
 - **WHEN** o operador informa IP `192.168.1.50` e porta `9100`
 - **THEN** o app persiste a configuração e utiliza esse endereço para envio ZPL
+
+### Requirement: Visibilidade de seriais pendentes por OP
+A tela Etiquetas SHALL listar todos os seriais no buffer com OP associada, permitindo ao operador verificar que múltiplas aprovações geraram múltiplas etiquetas pendentes.
+
+#### Scenario: Buffer com quatro seriais
+- **WHEN** quatro seriais da mesma OP estão no buffer
+- **THEN** a tela Etiquetas exibe quatro itens distintos com seus respectivos códigos
 

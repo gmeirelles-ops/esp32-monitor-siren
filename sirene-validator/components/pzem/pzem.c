@@ -3,9 +3,22 @@
 #include "board_config.h"
 #include "driver/uart.h"
 #include "esp_log.h"
+#include "esp_random.h"
 #include "esp_task_wdt.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+
+#if CONFIG_DEV_MOCK_PZEM
+static float mock_sample_power_w(void)
+{
+    /* ~70% in 18–22 W, ~30% out of range for exercising approve/reject paths */
+    if ((esp_random() % 100) < 70) {
+        return 18.0f + (float)(esp_random() % 401) / 100.0f;
+    }
+    return (esp_random() % 2) == 0 ? 12.0f + (float)(esp_random() % 300) / 100.0f
+                                   : 23.0f + (float)(esp_random() % 500) / 100.0f;
+}
+#endif
 
 static const char *TAG = "pzem";
 static pzem_fault_cb_t s_fault_cb;
@@ -132,6 +145,11 @@ bool pzem_measure_cycle(uint32_t duration_sec, uint32_t inrush_discard_ms, pzem_
         esp_task_wdt_reset();
         float power = 0;
         bool read_ok = false;
+#if CONFIG_DEV_MOCK_PZEM
+        power = mock_sample_power_w();
+        read_ok = true;
+        vTaskDelay(pdMS_TO_TICKS(100));
+#else
         for (int attempt = 0; attempt < PZEM_SAMPLE_READ_RETRIES; attempt++) {
             if (pzem_read_power_w(&power)) {
                 read_ok = true;
@@ -145,6 +163,7 @@ bool pzem_measure_cycle(uint32_t duration_sec, uint32_t inrush_discard_ms, pzem_
             vTaskDelay(pdMS_TO_TICKS(100));
             continue;
         }
+#endif
         if (xTaskGetTickCount() >= inrush_end) {
             sum += power;
             out->sample_count++;

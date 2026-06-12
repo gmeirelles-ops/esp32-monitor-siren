@@ -4,10 +4,12 @@ import 'package:intl/intl.dart';
 
 import '../../core/config/app_config.dart';
 import '../../shared/widgets/desktop_form_layout.dart';
+import '../../shared/widgets/screen_app_bar.dart';
 import '../../shared/widgets/form_section_card.dart';
-import '../../shared/widgets/global_app_bar_actions.dart';
 import '../../shared/widgets/responsive_field_row.dart';
+import '../admin/admin_screen.dart';
 import '../cloud/auth/auth_providers.dart';
+import '../devices/devices_screen.dart';
 import '../cloud/auth/login_screen.dart';
 import '../cloud/firebase_bootstrap.dart';
 import '../cloud/sync/sync_providers.dart';
@@ -154,19 +156,57 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final failedItems = ref.watch(failedSyncItemsProvider);
     final authenticated = ref.watch(isAuthenticatedProvider);
     final syncEnabled = ref.watch(syncEnabledProvider);
+    final devices = ref.watch(devicesProvider);
+    final onlineCount = devices.values.where((d) => d.isOnline).length;
     final dateFmt = DateFormat('dd/MM/yyyy HH:mm');
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Configurações'),
-        actions: globalAppBarActions(),
-      ),
+      appBar: screenAppBar(context, title: 'Configurações'),
       body: ListView(
         children: [
           DesktopFormLayout(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                FormSectionCard(
+                  title: 'Posto',
+                  child: Column(
+                    children: [
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.devices_outlined),
+                        title: const Text('Dispositivos'),
+                        subtitle: Text(
+                          devices.isEmpty
+                              ? 'Nenhuma bancada detectada'
+                              : '$onlineCount de ${devices.length} online',
+                        ),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => const DevicesScreen(),
+                            ),
+                          );
+                        },
+                      ),
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.admin_panel_settings_outlined),
+                        title: const Text('Administração (OTA)'),
+                        subtitle: const Text('Firmware e comandos remotos'),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => const AdminScreen(),
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ),
                 FormSectionCard(
                   title: 'Broker MQTT',
                   child: ResponsiveFieldRow(

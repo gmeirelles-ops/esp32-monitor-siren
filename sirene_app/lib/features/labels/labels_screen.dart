@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 
 import '../../core/database/database.dart';
 import '../../core/theme/diponto_theme.dart';
 import '../../shared/widgets/empty_state_view.dart';
-import '../../shared/widgets/global_app_bar_actions.dart';
+import '../../shared/widgets/screen_app_bar.dart';
+import 'label_buffer_grouping.dart';
 import 'label_print_logic.dart';
 import 'label_printer.dart';
 import 'zpl_generator.dart';
@@ -17,11 +19,13 @@ class LabelsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final db = ref.watch(databaseProvider);
     final printFailure = ref.watch(printFailureProvider);
+    final dateFmt = DateFormat('dd/MM HH:mm');
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Etiquetas'),
-        actions: globalAppBarActions([
+      appBar: screenAppBar(
+        context,
+        title: 'Etiquetas',
+        actions: [
           IconButton(
             tooltip: 'Buscar / reimprimir serial',
             icon: const Icon(Icons.search),
@@ -43,7 +47,7 @@ class LabelsScreen extends ConsumerWidget {
               );
             },
           ),
-        ]),
+        ],
       ),
       body: StreamBuilder<List<LabelBufferEntry>>(
         stream: db.watchLabelBuffer(),
@@ -59,6 +63,8 @@ class LabelsScreen extends ConsumerWidget {
               subtitle: 'Seriais aprovados nos testes aparecerão aqui para impressão.',
             );
           }
+
+          final groups = groupLabelBufferByOp(entries);
 
           return Column(
             children: [
@@ -92,16 +98,49 @@ class LabelsScreen extends ConsumerWidget {
                   ),
                 ),
               Expanded(
-                child: ListView.builder(
-                  itemCount: entries.length,
-                  itemBuilder: (context, index) {
-                    final entry = entries[index];
-                    return ListTile(
-                      leading: const Icon(Icons.qr_code, color: DipontoColors.primary),
-                      title: Text(entry.serial, style: const TextStyle(fontFamily: 'monospace')),
-                      subtitle: Text('OP ${entry.numeroOp}'),
-                    );
-                  },
+                child: ListView(
+                  children: [
+                    for (final group in groups)
+                      Card(
+                        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        child: ExpansionTile(
+                          leading: const Icon(Icons.inventory_2_outlined, color: DipontoColors.primary),
+                          title: Text('OP ${group.numeroOp}'),
+                          subtitle: Text('${group.count} etiqueta(s) pendente(s)'),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (group.orphanCount > 0)
+                                Padding(
+                                  padding: const EdgeInsets.only(right: 8),
+                                  child: Chip(
+                                    label: Text('${group.orphanCount} órfã(s)'),
+                                    visualDensity: VisualDensity.compact,
+                                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                  ),
+                                ),
+                              TextButton.icon(
+                                onPressed: () => _printPending(context, ref, group.entries),
+                                icon: const Icon(Icons.print, size: 18),
+                                label: const Text('Imprimir lote'),
+                              ),
+                            ],
+                          ),
+                          children: [
+                            for (final entry in group.entries)
+                              ListTile(
+                                dense: true,
+                                leading: const Icon(Icons.qr_code, color: DipontoColors.primary),
+                                title: Text(
+                                  entry.serial,
+                                  style: const TextStyle(fontFamily: 'monospace'),
+                                ),
+                                subtitle: Text(dateFmt.format(entry.createdAt.toLocal())),
+                              ),
+                          ],
+                        ),
+                      ),
+                  ],
                 ),
               ),
               Padding(

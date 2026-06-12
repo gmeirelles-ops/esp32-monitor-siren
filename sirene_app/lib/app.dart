@@ -3,17 +3,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/constants/layout.dart';
 import 'core/theme/diponto_theme.dart';
+import 'features/cadastros/cadastros_screen.dart';
 import 'features/cloud/sync/sync_providers.dart';
-import 'features/admin/admin_screen.dart';
 import 'features/batch/batch_screen.dart';
 import 'features/dashboard/dashboard_screen.dart';
-import 'features/devices/devices_screen.dart';
 import 'features/labels/labels_screen.dart';
 import 'features/mqtt/mqtt_providers.dart';
-import 'features/products/products_screen.dart';
 import 'features/provisioning/provisioning_wizard.dart';
 import 'features/settings/settings_screen.dart';
 import 'shared/widgets/diponto_app_bar.dart';
+import 'shared/widgets/print_failure_shell.dart';
 
 class SireneApp extends ConsumerStatefulWidget {
   const SireneApp({super.key});
@@ -38,23 +37,19 @@ class _SireneAppState extends ConsumerState<SireneApp> {
   }
 
   static const _destinations = [
-    (icon: Icons.devices, label: 'Dispositivos'),
     (icon: Icons.playlist_add_check, label: 'Lote'),
     (icon: Icons.insights, label: 'Painel'),
-    (icon: Icons.inventory_2, label: 'Produtos'),
     (icon: Icons.label, label: 'Etiquetas'),
+    (icon: Icons.folder_copy_outlined, label: 'Cadastros'),
     (icon: Icons.settings, label: 'Configurações'),
-    (icon: Icons.admin_panel_settings, label: 'Admin'),
   ];
 
   static const _screens = [
-    DevicesScreen(),
     BatchScreen(),
     DashboardScreen(),
-    ProductsScreen(),
     LabelsScreen(),
+    CadastrosScreen(),
     SettingsScreen(),
-    AdminScreen(),
   ];
 
   void _openProvisioning(BuildContext context) {
@@ -68,6 +63,7 @@ class _SireneAppState extends ConsumerState<SireneApp> {
     return MaterialApp(
       title: 'Diponto Sirene Validator',
       theme: buildDipontoTheme(),
+      builder: (context, child) => PrintFailureShell(child: child ?? const SizedBox.shrink()),
       home: LayoutBuilder(
         builder: (context, constraints) {
           final isDesktop = constraints.maxWidth >= kDesktopBreakpoint;
@@ -77,12 +73,11 @@ class _SireneAppState extends ConsumerState<SireneApp> {
               appBar: DipontoAppBar(
                 title: _destinations[_index].label,
                 actions: [
-                  if (_index == 0)
-                    IconButton(
-                      tooltip: 'Provisionamento Wi-Fi',
-                      onPressed: () => _openProvisioning(context),
-                      icon: const Icon(Icons.wifi),
-                    ),
+                  IconButton(
+                    tooltip: 'Provisionamento Wi-Fi',
+                    onPressed: () => _openProvisioning(context),
+                    icon: const Icon(Icons.wifi),
+                  ),
                 ],
               ),
               body: Row(
@@ -127,12 +122,6 @@ class _SireneAppState extends ConsumerState<SireneApp> {
                   NavigationDestination(icon: Icon(d.icon), label: d.label),
               ],
             ),
-            floatingActionButton: _index == 0
-                ? FloatingActionButton(
-                    onPressed: () => _openProvisioning(context),
-                    child: const Icon(Icons.wifi),
-                  )
-                : null,
           );
         },
       ),

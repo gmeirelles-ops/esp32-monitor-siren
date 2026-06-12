@@ -3,14 +3,18 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/database/database.dart';
 import '../../core/theme/diponto_theme.dart';
+import '../../shared/widgets/active_operator_chip.dart';
 import '../../shared/widgets/desktop_form_layout.dart';
+import '../../shared/widgets/screen_app_bar.dart';
 import '../../shared/widgets/empty_state_view.dart';
-import '../../shared/widgets/global_app_bar_actions.dart';
+import '../../shared/widgets/form_section_card.dart';
 import '../../shared/widgets/responsive_field_row.dart';
-import '../cloud/auth/auth_providers.dart';
 import '../mqtt/models/mqtt_messages.dart';
 import '../mqtt/mqtt_providers.dart';
+import '../operators/operator_selector_sheet.dart';
+import '../operators/operators_provider.dart';
 import '../products/products_provider.dart';
+import 'batch_live_screen.dart';
 
 class BatchScreen extends ConsumerStatefulWidget {
   const BatchScreen({super.key});
@@ -43,8 +47,6 @@ class _BatchScreenState extends ConsumerState<BatchScreen> {
     super.dispose();
   }
 
-  /// Carrega contador e reconciliação para o produto/ano atuais e
-  /// pré-preenche o próximo sequencial sugerido.
   Future<void> _loadSerialInfo(String idProduto, String ano) async {
     final key = '$idProduto|$ano';
     if (key == _serialInfoKey) return;
@@ -92,7 +94,21 @@ class _BatchScreenState extends ConsumerState<BatchScreen> {
     );
   }
 
+  void _openLiveDashboard(String deviceId, String numeroOp) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => BatchLiveScreen(deviceId: deviceId, numeroOp: numeroOp),
+      ),
+    );
+  }
+
   Future<void> _sendSetBatch(Product product) async {
+    final activeOp = await ref.read(activeOperatorProvider.future);
+    if (activeOp == null) {
+      _showSnack('Selecione o operador do turno antes de configurar o lote');
+      return;
+    }
+
     final deviceId = _selectedDeviceId;
     if (deviceId == null) {
       _showSnack('Selecione um dispositivo');
@@ -110,45 +126,13 @@ class _BatchScreenState extends ConsumerState<BatchScreen> {
     setState(() => _sending = true);
     try {
       final notifier = ref.read(devicesProvider.notifier);
-      await notifier.sendSetBatch(deviceId, batch);
-      final ok = await notifier.waitForState(deviceId, DeviceFsmState.batchReady);
+      final rejection = await notifier.sendSetBatch(deviceId, batch);
       if (!mounted) return;
-      if (ok) {
-        _showSnack('Lote configurado com sucesso');
+      if (rejection != null) {
+        _showSnack('Comando rejeitado: $rejection');
       } else {
-        _showSnack('Timeout aguardando BATCH_READY — tente novamente');
+        _openLiveDashboard(deviceId, batch.numeroOp);
       }
-    } catch (e) {
-      _showSnack('Erro: $e');
-    } finally {
-      if (mounted) setState(() => _sending = false);
-    }
-  }
-
-  Future<void> _sendEndBatch() async {
-    final deviceId = _selectedDeviceId;
-    if (deviceId == null) return;
-
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Encerrar lote?'),
-        content: const Text('Isso limpará o lote ativo no dispositivo.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
-          ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Encerrar')),
-        ],
-      ),
-    );
-    if (confirm != true) return;
-
-    setState(() => _sending = true);
-    try {
-      final notifier = ref.read(devicesProvider.notifier);
-      await notifier.sendEndBatch(deviceId);
-      final ok = await notifier.waitForState(deviceId, DeviceFsmState.idle);
-      if (!mounted) return;
-      _showSnack(ok ? 'Lote encerrado' : 'Timeout aguardando IDLE');
     } catch (e) {
       _showSnack('Erro: $e');
     } finally {
@@ -169,11 +153,7 @@ class _BatchScreenState extends ConsumerState<BatchScreen> {
         (deviceList.isNotEmpty ? deviceList.first.deviceId : null);
 
     final device = _selectedDeviceId != null ? devices[_selectedDeviceId] : null;
-    final estado = device?.estado ?? DeviceFsmState.unknown;
-    final batch = device?.activeBatch;
-    final lastTest = device?.lastTestResult;
-    final aprovados = lastTest?.aprovadosNoLote ?? 0;
-    final total = batch?.quantidadeTotal ?? 0;
+    final activeBatch = device?.activeBatch;
 
     ref.listen(latestRejectionProvider, (prev, next) {
       if (next != null) {
@@ -189,17 +169,8 @@ class _BatchScreenState extends ConsumerState<BatchScreen> {
       }
     });
 
-    ref.listen(printFailureProvider, (prev, next) {
-      if (next != null) {
-        _showSnack(next);
-      }
-    });
-
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Lote'),
-        actions: globalAppBarActions(),
-      ),
+      appBar: screenAppBar(context, title: 'Lote'),
       body: productsAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('Erro: $e')),
@@ -209,7 +180,7 @@ class _BatchScreenState extends ConsumerState<BatchScreen> {
               icon: Icons.inventory_2_outlined,
               title: 'Nenhum produto cadastrado',
               subtitle:
-                  'Vá em Produtos e cadastre um SKU com autocalibração antes de configurar o lote.',
+                  'Vá em Cadastros → Produtos e cadastre um SKU com autocalibração antes de configurar o lote.',
             );
           }
 
@@ -226,174 +197,192 @@ class _BatchScreenState extends ConsumerState<BatchScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-              if (deviceList.isEmpty)
-                const Text('Nenhum dispositivo detectado ainda.')
-              else
-                DropdownButtonFormField<String>(
-                  initialValue: _selectedDeviceId,
-                  decoration: const InputDecoration(labelText: 'Dispositivo'),
-                  items: deviceList
-                      .map((d) => DropdownMenuItem(value: d.deviceId, child: Text(d.deviceId)))
-                      .toList(),
-                  onChanged: (v) {
-                    setState(() => _selectedDeviceId = v);
-                    ref.read(selectedDeviceIdProvider.notifier).state = v;
-                    ref.read(appConfigProvider).setSelectedDeviceId(v);
-                  },
-                ),
-              const SizedBox(height: 16),
-              if (estado == DeviceFsmState.batchReady)
-                Card(
-                  color: DipontoColors.primary.withValues(alpha: 0.15),
-                  child: const ListTile(
-                    leading: Icon(Icons.touch_app, color: DipontoColors.primary),
-                    title: Text('Pressione o botão no dispositivo'),
-                    subtitle: Text('O teste só inicia pelo botão físico'),
-                  ),
-                ),
-              if (estado == DeviceFsmState.testing)
-                const Card(
-                  child: ListTile(
-                    leading: SizedBox(
-                      width: 24,
-                      height: 24,
-                      child: CircularProgressIndicator(color: DipontoColors.primary),
-                    ),
-                    title: Text('Teste em andamento...'),
-                  ),
-                ),
-              if (total > 0) ...[
-                const SizedBox(height: 8),
-                LinearProgressIndicator(
-                  value: total > 0 ? (aprovados / total).clamp(0.0, 1.0) : 0,
-                  color: DipontoColors.primary,
-                  backgroundColor: DipontoColors.surfaceVariant,
-                ),
-                Text('$aprovados / $total aprovados'),
-                if (aprovados >= total)
-                  const Text(
-                    'Meta atingida — considere encerrar o lote',
-                    style: TextStyle(color: DipontoColors.primaryLight),
-                  ),
-              ],
-              if (lastTest != null) ...[
-                const SizedBox(height: 16),
-                Builder(
-                  builder: (context) {
-                    final operador = ref.watch(authStateProvider).valueOrNull?.email;
-                    return Card(
-                      color: lastTest.isApproved
-                          ? DipontoColors.success.withValues(alpha: 0.15)
-                          : DipontoColors.error.withValues(alpha: 0.15),
-                      child: ListTile(
-                        title: Text(lastTest.veredito),
-                        subtitle: Text(
-                          '${lastTest.potenciaMedia.toStringAsFixed(2)} W — seq ${lastTest.sequencial}'
-                          '${operador != null ? '\nOperador: $operador' : ''}',
-                        ),
-                        isThreeLine: operador != null,
-                      ),
-                    );
-                  },
-                ),
-              ],
-              const SizedBox(height: 16),
-              Form(
-                key: _formKey,
-                child: Column(
-                  children: [
-                    DropdownButtonFormField<String>(
-                      initialValue: _selectedProductId,
-                      decoration: const InputDecoration(labelText: 'Produto'),
-                      items: products
-                          .map((p) => DropdownMenuItem(
-                                value: p.idProduto,
-                                child: Text('${p.idProduto} — ${p.nome}'),
-                              ))
-                          .toList(),
-                      onChanged: (v) {
-                        setState(() => _selectedProductId = v);
-                        _onProductOrYearChanged();
-                      },
-                    ),
-                    if (product != null) ...[
-                      const SizedBox(height: 8),
-                      _ReadOnlyTile('Tempo teste', '${product.tempoTesteSec} s'),
-                      _ReadOnlyTile(
-                        'Potência mín',
-                        '${product.potenciaMin.toStringAsFixed(2)} W',
-                      ),
-                      _ReadOnlyTile(
-                        'Potência máx',
-                        '${product.potenciaMax.toStringAsFixed(2)} W',
-                      ),
-                    ],
-                    TextFormField(
-                      controller: _numeroOp,
-                      decoration: const InputDecoration(labelText: 'Número OP'),
-                      validator: (v) => v == null || v.isEmpty ? 'Obrigatório' : null,
-                    ),
-                    const SizedBox(height: 8),
-                    ResponsiveFieldRow(
-                      flexes: const [2, 3, 3],
-                      children: [
-                        TextFormField(
-                          controller: _ano,
-                          decoration: const InputDecoration(labelText: 'Ano (2 dígitos)'),
-                          validator: (v) => v == null || v.length != 2 ? '2 dígitos' : null,
-                          keyboardType: TextInputType.number,
-                          onChanged: (_) => _onProductOrYearChanged(),
-                        ),
-                        TextFormField(
-                          controller: _quantidadeTotal,
-                          decoration: const InputDecoration(labelText: 'Quantidade total'),
-                          keyboardType: TextInputType.number,
-                        ),
-                        TextFormField(
-                          controller: _proximoSequencial,
-                          decoration: InputDecoration(
-                            labelText: 'Próximo sequencial',
-                            helperText: _lastKnownSeq != null
-                                ? 'Último usado: $_lastKnownSeq'
-                                : 'Sem histórico',
+                    FormSectionCard(
+                      title: 'Turno',
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Operador responsável pelos testes deste turno.',
+                            style: TextStyle(color: Colors.grey, fontSize: 13),
                           ),
-                          keyboardType: TextInputType.number,
-                        ),
-                      ],
+                          const SizedBox(height: 8),
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: ActiveOperatorChip(
+                              compact: false,
+                              key: ValueKey(_selectedDeviceId),
+                            ),
+                          ),
+                          TextButton.icon(
+                            onPressed: () => showOperatorSelector(context, ref),
+                            icon: const Icon(Icons.swap_horiz),
+                            label: const Text('Trocar operador'),
+                          ),
+                        ],
+                      ),
                     ),
-                    if (_reconciliation != null && !_reconciliation!.isIntact) ...[
-                      const SizedBox(height: 8),
-                      _ReconciliationPanel(reconciliation: _reconciliation!),
-                    ],
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: ElevatedButton(
-                  onPressed: _sending || product == null ? null : () => _sendSetBatch(product),
-                  child: _sending
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Text('Configurar lote (SET_BATCH)'),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: OutlinedButton(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: DipontoColors.error,
-                    side: const BorderSide(color: DipontoColors.error),
-                  ),
-                  onPressed: _sending ? null : _sendEndBatch,
-                  child: const Text('Encerrar lote (END_BATCH)'),
-                ),
-              ),
+                    FormSectionCard(
+                      title: 'Bancada',
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          if (deviceList.isEmpty)
+                            const Text('Nenhum dispositivo detectado ainda.')
+                          else
+                            DropdownButtonFormField<String>(
+                              initialValue: _selectedDeviceId,
+                              decoration: const InputDecoration(labelText: 'Dispositivo'),
+                              selectedItemBuilder: (context) => [
+                                for (final d in deviceList)
+                                  Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: Text(
+                                      d.deviceId,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                              ],
+                              items: deviceList
+                                  .map(
+                                    (d) => DropdownMenuItem(
+                                      value: d.deviceId,
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            Icons.circle,
+                                            size: 10,
+                                            color: d.isOnline
+                                                ? DipontoColors.success
+                                                : DipontoColors.error,
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Text(d.deviceId),
+                                        ],
+                                      ),
+                                    ),
+                                  )
+                                  .toList(),
+                              onChanged: (v) {
+                                setState(() => _selectedDeviceId = v);
+                                ref.read(selectedDeviceIdProvider.notifier).state = v;
+                                ref.read(appConfigProvider).setSelectedDeviceId(v);
+                              },
+                            ),
+                          if (activeBatch != null && _selectedDeviceId != null) ...[
+                            const SizedBox(height: 12),
+                            Card(
+                              color: DipontoColors.primary.withValues(alpha: 0.12),
+                              child: ListTile(
+                                leading: const Icon(
+                                  Icons.dashboard_outlined,
+                                  color: DipontoColors.primary,
+                                ),
+                                title: const Text('Lote em andamento'),
+                                subtitle: Text('OP ${activeBatch.numeroOp}'),
+                                trailing: const Icon(Icons.chevron_right),
+                                onTap: () =>
+                                    _openLiveDashboard(_selectedDeviceId!, activeBatch.numeroOp),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    FormSectionCard(
+                      title: 'Produto e OP',
+                      child: Form(
+                        key: _formKey,
+                        child: Column(
+                          children: [
+                            DropdownButtonFormField<String>(
+                              initialValue: _selectedProductId,
+                              decoration: const InputDecoration(labelText: 'Produto'),
+                              items: products
+                                  .map(
+                                    (p) => DropdownMenuItem(
+                                      value: p.idProduto,
+                                      child: Text('${p.idProduto} — ${p.nome}'),
+                                    ),
+                                  )
+                                  .toList(),
+                              onChanged: (v) {
+                                setState(() => _selectedProductId = v);
+                                _onProductOrYearChanged();
+                              },
+                            ),
+                            if (product != null) ...[
+                              const SizedBox(height: 8),
+                              _ReadOnlyTile('Tempo teste', '${product.tempoTesteSec} s'),
+                              _ReadOnlyTile(
+                                'Potência mín',
+                                '${product.potenciaMin.toStringAsFixed(2)} W',
+                              ),
+                              _ReadOnlyTile(
+                                'Potência máx',
+                                '${product.potenciaMax.toStringAsFixed(2)} W',
+                              ),
+                            ],
+                            TextFormField(
+                              controller: _numeroOp,
+                              decoration: const InputDecoration(labelText: 'Número OP'),
+                              validator: (v) => v == null || v.isEmpty ? 'Obrigatório' : null,
+                            ),
+                            const SizedBox(height: 8),
+                            ResponsiveFieldRow(
+                              flexes: const [2, 3, 3],
+                              children: [
+                                TextFormField(
+                                  controller: _ano,
+                                  decoration: const InputDecoration(labelText: 'Ano (2 dígitos)'),
+                                  validator: (v) =>
+                                      v == null || v.length != 2 ? '2 dígitos' : null,
+                                  keyboardType: TextInputType.number,
+                                  onChanged: (_) => _onProductOrYearChanged(),
+                                ),
+                                TextFormField(
+                                  controller: _quantidadeTotal,
+                                  decoration: const InputDecoration(labelText: 'Quantidade total'),
+                                  keyboardType: TextInputType.number,
+                                ),
+                                TextFormField(
+                                  controller: _proximoSequencial,
+                                  decoration: InputDecoration(
+                                    labelText: 'Próximo sequencial',
+                                    helperText: _lastKnownSeq != null
+                                        ? 'Último usado: $_lastKnownSeq'
+                                        : 'Sem histórico',
+                                  ),
+                                  keyboardType: TextInputType.number,
+                                ),
+                              ],
+                            ),
+                            if (_reconciliation != null && !_reconciliation!.isIntact) ...[
+                              const SizedBox(height: 8),
+                              _ReconciliationPanel(reconciliation: _reconciliation!),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                    FormSectionCard(
+                      title: 'Ações',
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: ElevatedButton(
+                          onPressed:
+                              _sending || product == null ? null : () => _sendSetBatch(product),
+                          child: _sending
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              : const Text('Configurar lote (SET_BATCH)'),
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),

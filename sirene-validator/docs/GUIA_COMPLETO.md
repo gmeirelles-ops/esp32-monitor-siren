@@ -306,10 +306,12 @@ mosquitto_pub -h $BROKER -q 1 \
 }
 ```
 
-- Todos os campos são obrigatórios
-- `aprovados` é zerado ao receber novo lote
+- Todos os campos são obrigatórios; validação rejeita `tempo_teste` fora de 1–120 s, potências invertidas, `id_produto` ≠ 3 dígitos, `ano` ≠ 2 dígitos
+- `aprovados` é zerado apenas quando `numero_op` **muda**; reenvio com mesmo OP preserva progresso
+- `proximo_sequencial` no mesmo OP usa `max(atual, payload)` — não regride acidentalmente
 - Rejeitado durante `TESTING` ou `OTA_UPDATING`
-- **Sem ACK** — o app deve aguardar heartbeat com `estado: "BATCH_READY"`
+- **ACK** em `status`: `{"tipo":"batch","evento":"configurado","numero_op":"...","estado":"BATCH_READY"}`
+- Ao atingir `quantidade_total` aprovados, lote encerra automaticamente com `{"tipo":"batch","evento":"encerrado","motivo":"cota_atingida"}`
 
 #### END_BATCH — Encerrar lote
 
@@ -381,6 +383,20 @@ Códigos de `motivo`:
 | `ota_estado_invalido` | OTA em TESTING |
 | `ota_url_invalida` | URL vazia ou esquema inválido |
 | `ota_falha_inicio` | Falha ao iniciar task OTA |
+| `fila_cheia` | Fila interna de comandos MQTT cheia |
+| `pzem_ocupado` | Calibração/teste já em andamento |
+| `cmd_durante_teste` | Comando bloqueado durante TESTING |
+
+#### Confirmação de lote (`status`) — v1.4+
+
+```json
+{
+  "tipo": "batch",
+  "evento": "configurado",
+  "numero_op": "2026001",
+  "estado": "BATCH_READY"
+}
+```
 
 #### Heartbeat (`heartbeat`) — a cada 30 s
 
@@ -390,9 +406,14 @@ Códigos de `motivo`:
   "rssi": -62,
   "estado": "BATCH_READY",
   "fila": 0,
-  "firmware_version": "1.2.0"
+  "firmware_version": "1.4.0",
+  "numero_op": "2026001",
+  "proximo_sequencial": 3,
+  "aprovados": 2
 }
 ```
+
+Sem lote ativo: `numero_op` vazio, `proximo_sequencial` e `aprovados` zerados.
 
 Publicado **imediatamente** ao reconectar MQTT (além do intervalo de 30 s).
 
@@ -623,15 +644,29 @@ Local: `sirene_app/` (Windows desktop em produção)
 | Impressora Zebra IP | `192.168.1.50` | App → Configurações |
 | Impressora porta | `9100` | App → Configurações |
 
+### Fluxo do operador (tela inicial: Lote)
+
+1. **Selecionar operador** — obrigatório no início do turno (chip no cabeçalho; persistido na sessão).
+2. **Configurar lote** — na tela **Lote** (hub principal): OP, produto, limites, `SET_BATCH`.
+3. **Acompanhar testes** — dashboard ao vivo na mesma tela (estado FSM, aprovados/reprovados).
+4. **Imprimir etiquetas** — buffer ZPL a partir dos aprovados.
+5. **Cadastros** (admin) — produtos e operadores na mesma tela, abas **Produtos** / **Operadores**.
+6. **Dispositivo** — em **Configurações → Dispositivo** (não é mais a tela inicial); descoberta MQTT em background.
+
+> A tela **Dispositivos** deixou de ser a rota inicial. O operador de bancada começa pelo lote, não pela infraestrutura MQTT.
+
 ### Funcionalidades
 
-- Descoberta automática de dispositivos (`sirene/+/heartbeat`)
-- Configuração de lote (`SET_BATCH` / `END_BATCH`)
+- Seleção e cadastro de **operadores** (SQLite local; sync opcional Firestore `operators`)
+- Tela **Lote** como hub operacional (configuração + dashboard ao vivo)
+- Descoberta automática de dispositivos (`sirene/+/heartbeat`) em Configurações
+- Configuração de lote (`SET_BATCH` / `END_BATCH`) com vínculo `operador_id` / `operador_nome`
 - Monitoramento em tempo real (estado FSM, resultados)
 - Geração de serial ITF 2 de 5 em aprovações
 - Buffer de etiquetas ZPL (múltiplos de 3)
 - Calibração e OTA (seção Admin)
 - Provisionamento Wi-Fi guiado
+- Indicadores de status MQTT/dispositivo no cabeçalho global
 
 ### Build Windows
 
@@ -678,12 +713,26 @@ ESP32 ──MQTT──► Mosquitto ──► App Flutter ──► Firestore
 }
 ```
 
+#### Coleção `operators`
+
+```json
+{
+  "nome": "Maria Silva",
+  "matricula": "OP-042",
+  "ativo": true,
+  "station_id": "posto-01",
+  "updated_at": "2026-06-10T08:00:00Z"
+}
+```
+
 #### Coleção `test_results`
 
 ```json
 {
   "device_id": "aabbccddeeff",
   "numero_op": "2026001",
+  "operador_id": 42,
+  "operador_nome": "Maria Silva",
   "veredito": "APROVADO",
   "potencia_media": 20.15,
   "sequencial": 1,
@@ -704,6 +753,8 @@ Chave de idempotência: `numero_op` + `sequencial` (evita duplicatas após recon
   "quantidade_total": 10,
   "aprovados": 3,
   "device_id": "aabbccddeeff",
+  "operador_id": 42,
+  "operador_nome": "Maria Silva",
   "started_at": "2026-06-10T14:00:00Z",
   "status": "active"
 }
@@ -715,10 +766,11 @@ Chave de idempotência: `numero_op` + `sequencial` (evita duplicatas após recon
 2. Com sync habilitado em **Configurações → Nuvem**, o app enfileira gravações em `SyncQueue` (Drift) e envia ao Firestore quando online.
 3. Login Firebase (e-mail/senha) é obrigatório para habilitar sync.
 4. Eventos sincronizados automaticamente:
-   - `tipo: "teste"` → `test_results/{numero_op}_{sequencial}`
+   - `tipo: "teste"` → `test_results/{numero_op}_{sequencial}` (inclui `operador_id`, `operador_nome`)
    - heartbeat / presença → `devices/{device_id}` (debounce 60 s; offline imediato)
-   - `SET_BATCH` / `END_BATCH` → `batches/{numero_op}`
+   - `SET_BATCH` / `END_BATCH` → `batches/{numero_op}` (inclui `operador_id`, `operador_nome`)
    - cadastro/recalibração de produto → `products/{id_produto}`
+   - cadastro/edição de operador → `operators/{id}`
 
 ### Como configurar Firebase (primeira vez)
 

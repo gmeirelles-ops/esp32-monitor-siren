@@ -70,3 +70,27 @@ jobs:
         run: |
           cd sirene-validator
           idf.py -B build build
+
+  windows-release:
+    name: Windows portable release
+    runs-on: windows-latest
+    if: github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: "3.44.0"
+          cache: true
+
+      - name: Build portable ZIP
+        shell: pwsh
+        run: ./scripts/build_windows_release.ps1
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: DipontoSireneValidator-win64
+          path: dist/*.zip
+          if-no-files-found: error

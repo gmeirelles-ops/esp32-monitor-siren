@@ -3,9 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/diponto_theme.dart';
 import '../../shared/widgets/empty_state_view.dart';
-import '../../shared/widgets/global_app_bar_actions.dart';
 import '../mqtt/models/mqtt_messages.dart';
 import '../mqtt/mqtt_providers.dart';
+import '../provisioning/provisioning_wizard.dart';
+import '../../shared/widgets/diponto_app_bar.dart';
 import 'device_detail_screen.dart';
 
 class DevicesScreen extends ConsumerWidget {
@@ -14,20 +15,51 @@ class DevicesScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final devices = ref.watch(devicesProvider);
+    final mqttState = ref.watch(mqttConnectionStateProvider).value ??
+        AppMqttConnectionState.disconnected;
     final sorted = devices.values.toList()
       ..sort((a, b) => a.deviceId.compareTo(b.deviceId));
 
+    final (emptyTitle, emptySubtitle, showProgress) = switch (mqttState) {
+      AppMqttConnectionState.connected => (
+          'Aguardando dispositivos...',
+          'MQTT conectado. Nenhuma sirene publicou presença ainda.',
+          true,
+        ),
+      AppMqttConnectionState.connecting ||
+      AppMqttConnectionState.reconnecting => (
+          'Conectando ao broker MQTT...',
+          'Verifique host e porta em Configurações.',
+          true,
+        ),
+      AppMqttConnectionState.disconnected => (
+          'Broker MQTT desconectado',
+          'Configure o broker em Configurações e toque em Salvar.',
+          false,
+        ),
+    };
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Dispositivos'),
-        actions: globalAppBarActions(),
+      appBar: DipontoAppBar(
+        title: 'Dispositivos',
+        actions: [
+          IconButton(
+            tooltip: 'Provisionamento Wi-Fi',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(builder: (_) => const ProvisioningWizard()),
+              );
+            },
+            icon: const Icon(Icons.wifi),
+          ),
+        ],
       ),
       body: sorted.isEmpty
-          ? const EmptyStateView(
+          ? EmptyStateView(
               icon: Icons.router,
-              title: 'Aguardando dispositivos...',
-              subtitle: 'Conecte-se ao broker MQTT nas Configurações.',
-              showProgress: true,
+              title: emptyTitle,
+              subtitle: emptySubtitle,
+              showProgress: showProgress,
             )
           : ListView.builder(
               padding: const EdgeInsets.all(12),

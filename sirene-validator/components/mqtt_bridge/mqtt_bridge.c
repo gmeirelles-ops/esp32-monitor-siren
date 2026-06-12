@@ -20,10 +20,12 @@ static bool s_connected;
 static char s_presenca_topic[64];
 static char s_broker_uri[128];
 static uint32_t s_reconnect_delay_ms = MQTT_RECONNECT_BASE_MS;
+static volatile bool s_reconnect_scheduled;
 
 static void mqtt_reconnect_task(void *arg)
 {
     (void)arg;
+    s_reconnect_scheduled = false;
     uint32_t jitter = esp_random() % 500;
     vTaskDelay(pdMS_TO_TICKS(s_reconnect_delay_ms + jitter));
     if (s_client) {
@@ -40,6 +42,10 @@ static void mqtt_reconnect_task(void *arg)
 
 static void schedule_mqtt_reconnect(void)
 {
+    if (s_reconnect_scheduled) {
+        return;
+    }
+    s_reconnect_scheduled = true;
     xTaskCreate(mqtt_reconnect_task, "mqtt_reconn", 3072, NULL, 4, NULL);
 }
 
@@ -52,6 +58,7 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
     switch ((esp_mqtt_event_id_t)event_id) {
     case MQTT_EVENT_CONNECTED:
         s_connected = true;
+        s_reconnect_scheduled = false;
         s_reconnect_delay_ms = MQTT_RECONNECT_BASE_MS;
         {
             char topic[64];

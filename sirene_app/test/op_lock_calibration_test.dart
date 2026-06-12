@@ -46,6 +46,20 @@ void main() {
       expect(history.first.potenciaRef, 21.5);
       expect(history.last.potenciaRef, 20.0);
     });
+
+    test('watchCalibrationHistory emite após insert', () async {
+      final emissions = <List<CalibrationHistoryData>>[];
+      final sub = db.watchCalibrationHistory('123').listen(emissions.add);
+      await Future<void>.delayed(Duration.zero);
+      expect(emissions.last, isEmpty);
+
+      await db.insertCalibration(idProduto: '123', potenciaRef: 22.0, deviceId: 'd1');
+      await Future<void>.delayed(Duration.zero);
+
+      expect(emissions.last.length, 1);
+      expect(emissions.last.first.potenciaRef, 22.0);
+      await sub.cancel();
+    });
   });
 
   group('recentHardwareEvents', () {

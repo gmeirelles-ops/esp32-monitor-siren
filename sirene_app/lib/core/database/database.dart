@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:sqlite3_flutter_libs/sqlite3_flutter_libs.dart';
 
+import 'batch_metrics.dart';
 import 'veredito.dart';
 
 part 'database.g.dart';
@@ -90,6 +91,14 @@ class OpLocks extends Table {
   Set<Column> get primaryKey => {numeroOp};
 }
 
+class Operators extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get codigo => text().unique()();
+  TextColumn get nome => text()();
+  BoolColumn get ativo => boolean().withDefault(const Constant(true))();
+  DateTimeColumn get createdAt => dateTime()();
+}
+
 @DriftDatabase(
   tables: [
     TestResults,
@@ -100,6 +109,7 @@ class OpLocks extends Table {
     HardwareEvents,
     CalibrationHistory,
     OpLocks,
+    Operators,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -108,7 +118,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 8;
+  int get schemaVersion => 9;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -146,6 +156,9 @@ class AppDatabase extends _$AppDatabase {
             await m.database.customStatement(
               'CREATE INDEX IF NOT EXISTS idx_sync_queue_attempts ON sync_queue(attempts)',
             );
+          }
+          if (from < 9) {
+            await m.createTable(operators);
           }
         },
       );
@@ -228,6 +241,19 @@ class AppDatabase extends _$AppDatabase {
           ..orderBy([(t) => OrderingTerm.desc(t.createdAt)])
           ..limit(limit))
         .get();
+  }
+
+  Stream<List<TestResult>> watchTestsByOp(String numeroOp, {int limit = 200}) {
+    return (select(testResults)
+          ..where((t) => t.numeroOp.equals(numeroOp))
+          ..orderBy([(t) => OrderingTerm.desc(t.createdAt)])
+          ..limit(limit))
+        .watch();
+  }
+
+  Future<BatchMetrics> getBatchMetrics(String numeroOp) async {
+    final rows = await (select(testResults)..where((t) => t.numeroOp.equals(numeroOp))).get();
+    return computeBatchMetrics(rows);
   }
 
   Future<int> addLabelToBuffer({
@@ -462,6 +488,73 @@ class AppDatabase extends _$AppDatabase {
         .get();
   }
 
+  Stream<List<CalibrationHistoryData>> watchCalibrationHistory(String idProduto) {
+    return (select(calibrationHistory)
+          ..where((t) => t.idProduto.equals(idProduto))
+          ..orderBy([
+            (t) => OrderingTerm.desc(t.createdAt),
+            (t) => OrderingTerm.desc(t.id),
+          ]))
+        .watch();
+  }
+
+  Stream<List<Operator>> watchActiveOperators() {
+    return (select(operators)
+          ..where((t) => t.ativo.equals(true))
+          ..orderBy([(t) => OrderingTerm.asc(t.nome)]))
+        .watch();
+  }
+
+  Stream<List<Operator>> watchAllOperators() {
+    return (select(operators)..orderBy([(t) => OrderingTerm.asc(t.nome)])).watch();
+  }
+
+  Future<Operator?> getOperatorById(int id) {
+    return (select(operators)..where((t) => t.id.equals(id))).getSingleOrNull();
+  }
+
+  Future<bool> operatorCodigoExists(String codigo, {int? excludeId}) async {
+    final query = select(operators)..where((t) => t.codigo.equals(codigo.trim()));
+    if (excludeId != null) {
+      query.where((t) => t.id.equals(excludeId).not());
+    }
+    final row = await query.getSingleOrNull();
+    return row != null;
+  }
+
+  Future<int> insertOperator({
+    required String codigo,
+    required String nome,
+    bool ativo = true,
+  }) {
+    return into(operators).insert(
+      OperatorsCompanion.insert(
+        codigo: codigo.trim(),
+        nome: nome.trim(),
+        ativo: Value(ativo),
+        createdAt: DateTime.now(),
+      ),
+    );
+  }
+
+  Future<void> updateOperator({
+    required int id,
+    required String codigo,
+    required String nome,
+    required bool ativo,
+  }) {
+    return (update(operators)..where((t) => t.id.equals(id))).write(
+      OperatorsCompanion(
+        codigo: Value(codigo.trim()),
+        nome: Value(nome.trim()),
+        ativo: Value(ativo),
+      ),
+    );
+  }
+
+  /// Rótulo legível para rastreio em testes.
+  static String operatorLabel(Operator op) => '${op.codigo} — ${op.nome}';
+
   Future<void> lockOp(String numeroOp) async {
     await into(opLocks).insertOnConflictUpdate(
       OpLocksCompanion.insert(
@@ -478,12 +571,73 @@ class AppDatabase extends _$AppDatabase {
     return row != null;
   }
 
-  Future<ProductionSummary> productionSummary({DateTime? since}) async {
+  Future<List<TestResult>> testResultsFiltered({
+    DateTime? since,
+    String? numeroOp,
+    String? idProduto,
+    String? deviceId,
+  }) async {
     final query = select(testResults);
     if (since != null) {
       query.where((t) => t.createdAt.isBiggerOrEqualValue(since));
     }
+    if (numeroOp != null && numeroOp.isNotEmpty) {
+      query.where((t) => t.numeroOp.equals(numeroOp));
+    }
+    if (deviceId != null && deviceId.isNotEmpty) {
+      query.where((t) => t.deviceId.equals(deviceId));
+    }
     final rows = await query.get();
+    if (idProduto == null || idProduto.isEmpty) return rows;
+    final prefix = idProduto.padLeft(3, '0').substring(0, 3);
+    return rows
+        .where((r) =>
+            r.serial != null && r.serial!.length >= 3 && r.serial!.startsWith(prefix))
+        .toList();
+  }
+
+  Future<List<String>> distinctOps() async {
+    final rows = await select(testResults).get();
+    return rows.map((r) => r.numeroOp).toSet().toList()..sort();
+  }
+
+  Future<List<String>> distinctDevices() async {
+    final rows = await select(testResults).get();
+    return rows.map((r) => r.deviceId).toSet().toList()..sort();
+  }
+
+  Future<List<String>> distinctProducts() async {
+    final fromSerials = <String>{};
+    final rows = await select(testResults).get();
+    for (final r in rows) {
+      final serial = r.serial;
+      if (serial != null && serial.length >= 3) {
+        fromSerials.add(serial.substring(0, 3));
+      }
+    }
+    final counters = await select(serialCounters).get();
+    for (final c in counters) {
+      fromSerials.add(c.idProduto.padLeft(3, '0').substring(0, 3));
+    }
+    final productRows = await select(products).get();
+    for (final p in productRows) {
+      fromSerials.add(p.idProduto.padLeft(3, '0').substring(0, 3));
+    }
+    return fromSerials.toList()..sort();
+  }
+
+  Future<ProductionSummary> productionSummary({
+    DateTime? since,
+    String? numeroOp,
+    String? idProduto,
+    String? deviceId,
+  }) async {
+    final rows = await testResultsFiltered(
+      since: since,
+      numeroOp: numeroOp,
+      idProduto: idProduto,
+      deviceId: deviceId,
+    );
     var aprovados = 0;
     for (final r in rows) {
       if (isApprovedVeredito(r.veredito)) aprovados++;
@@ -491,12 +645,51 @@ class AppDatabase extends _$AppDatabase {
     return ProductionSummary(total: rows.length, aprovados: aprovados);
   }
 
-  Future<List<DailyThroughput>> throughputByDay({int days = 7}) async {
-    final since = DateTime.now().subtract(Duration(days: days - 1));
+  Future<List<BatchProductionSummary>> batchSummaryInPeriod({
+    DateTime? since,
+    String? idProduto,
+    String? deviceId,
+  }) async {
+    final rows = await testResultsFiltered(
+      since: since,
+      idProduto: idProduto,
+      deviceId: deviceId,
+    );
+    final byOp = <String, ({int total, int aprovados})>{};
+    for (final r in rows) {
+      final current = byOp[r.numeroOp] ?? (total: 0, aprovados: 0);
+      byOp[r.numeroOp] = (
+        total: current.total + 1,
+        aprovados: current.aprovados + (isApprovedVeredito(r.veredito) ? 1 : 0),
+      );
+    }
+    final result = byOp.entries
+        .map(
+          (e) => BatchProductionSummary(
+            numeroOp: e.key,
+            total: e.value.total,
+            aprovados: e.value.aprovados,
+          ),
+        )
+        .toList()
+      ..sort((a, b) => b.total.compareTo(a.total));
+    return result;
+  }
+
+  Future<List<DailyThroughput>> throughputByDay({
+    required DateTime since,
+    required int days,
+    String? numeroOp,
+    String? idProduto,
+    String? deviceId,
+  }) async {
     final start = DateTime(since.year, since.month, since.day);
-    final rows = await (select(testResults)
-          ..where((t) => t.createdAt.isBiggerOrEqualValue(start)))
-        .get();
+    final rows = await testResultsFiltered(
+      since: start,
+      numeroOp: numeroOp,
+      idProduto: idProduto,
+      deviceId: deviceId,
+    );
 
     final byDay = <DateTime, ({int total, int aprovados})>{};
     for (final r in rows) {
@@ -518,10 +711,16 @@ class AppDatabase extends _$AppDatabase {
     return result;
   }
 
-  Future<List<FaultCount>> hardwareFaultCounts({DateTime? since}) async {
+  Future<List<FaultCount>> hardwareFaultCounts({
+    DateTime? since,
+    String? deviceId,
+  }) async {
     final query = select(hardwareEvents);
     if (since != null) {
       query.where((t) => t.createdAt.isBiggerOrEqualValue(since));
+    }
+    if (deviceId != null && deviceId.isNotEmpty) {
+      query.where((t) => t.deviceId.equals(deviceId));
     }
     final rows = await query.get();
     final counts = <String, int>{};
@@ -648,6 +847,22 @@ class FaultCount {
 
   final String falha;
   final int count;
+}
+
+class BatchProductionSummary {
+  const BatchProductionSummary({
+    required this.numeroOp,
+    required this.total,
+    required this.aprovados,
+  });
+
+  final String numeroOp;
+  final int total;
+  final int aprovados;
+
+  int get reprovados => total - aprovados;
+
+  double get yieldPct => total == 0 ? 0 : (aprovados / total) * 100;
 }
 
 LazyDatabase _openConnection() {

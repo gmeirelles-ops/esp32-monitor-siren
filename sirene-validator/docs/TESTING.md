@@ -24,6 +24,50 @@ cd sirene-validator && ./scripts/run_host_tests.sh
 
 Cobre: veredito de potência, anel FIFO, transições da FSM, composição do serial de 10 dígitos, validação de URL OTA e cota de lote (`quantidade_total`).
 
+## Bancada sem PZEM (mock de desenvolvimento)
+
+Para exercitar o ciclo completo botão → relé → veredito → MQTT **sem** o sensor PZEM-004T:
+
+```bash
+cd sirene-validator
+idf.py menuconfig
+# Component config → PZEM → Enable "Use mock PZEM readings (development only)"
+idf.py build flash monitor
+```
+
+O firmware gera amostras de potência sintéticas (~70% dentro de 18–22 W). **Não habilite em produção.**
+
+No app Flutter (modo debug), use **Lote → dashboard ao vivo → Simular teste (dev)** para injetar resultados fictícios sem hardware.
+
+## App Flutter — operador e fluxo lote-primeiro
+
+### 15.1 Seleção de operador
+
+1. Abra o app — a primeira tela deve ser **Lote** (não Dispositivos).
+2. Sem operador selecionado, tente configurar lote — o app deve bloquear e exibir seletor de operador.
+3. Selecione um operador ativo — o nome deve aparecer no cabeçalho (chip "Operador: …").
+4. Feche e reabra o app — o operador deve permanecer selecionado na sessão.
+5. Troque de operador pelo chip no cabeçalho (sem teste em andamento) — lotes e testes subsequentes devem usar o novo operador.
+
+### 15.2 Cadastro de operadores
+
+1. Acesse **Cadastros → aba Operadores** (admin).
+2. Cadastre operador com nome obrigatório e matrícula opcional.
+3. Tente matrícula duplicada — deve exibir erro de validação.
+4. Desative um operador — não deve aparecer na seleção do posto, mas permanece em histórico.
+
+### 15.3 Dispositivo em Configurações
+
+1. Com `device_id` não configurado, a tela **Lote** deve exibir banner com link para **Configurações → Dispositivo**.
+2. Em Configurações, confirme descoberta via heartbeat e seleção do ESP32 alvo.
+3. O cabeçalho global deve indicar status MQTT e dispositivo (online/offline).
+
+### 15.4 Rastreabilidade operador → lote → teste
+
+1. Selecione operador, configure lote e aprove uma peça (hardware ou simulação debug).
+2. Verifique no SQLite local (ou sync Firestore, se habilitado) que `batches` e `test_results` contêm `operador_id` e `operador_nome`.
+3. Com sync habilitado, confirme documentos em `operators`, `batches` e `test_results` no Firestore.
+
 ## Scripts de bancada (MQTT)
 
 Com `mosquitto-clients` instalado e `DEVICE_ID` do ESP32:
@@ -85,11 +129,15 @@ BROKER=192.168.1.100 DEVICE_ID=aabbccddeeff ./scripts/bench_reconnect.sh
 3. Verifique fila local (logs / SPIFFS).
 4. Restaure rede — mensagens devem sincronizar em ordem FIFO, **cada uma no tópico original** (`status`, `alerta` ou `calibracao`).
 
-## 10.8 Robustez de fila, comandos e cota (firmware 1.3+)
+## 10.8 Robustez de fila, comandos e cota (firmware 1.4+)
 
-1. **Fila offline com tópico:** desligue o broker, force falha PZEM (alerta) ou conclua calibração offline; reconecte e confirme que alertas vão para `sirene/<device_id>/alerta` e calibração para `calibracao`, não para `status`.
+1. **Fila offline com tópico:** desligue o broker, force falha PZEM (alerta) ou conclua calibração offline; reconecte e confirme que alertas vão para `sirene/<device_id>/alerta` e calibração (incluindo `calibracao_amostra`) para `calibracao`, não para `status`.
 2. **Comando obsoleto:** com teste em andamento (`TESTING`), publique `END_BATCH` ou `SET_BATCH` — deve haver rejeição imediata em `status` com motivo `cmd_durante_teste`, sem encerrar o lote após o teste.
-3. **Cota de lote:** configure `SET_BATCH` com `quantidade_total: 2`, aprove duas peças; ao pressionar o botão novamente, o relé não deve acionar e deve haver rejeição `lote_cheio` (se MQTT conectado) e feedback local de reprovação.
+3. **Cota de lote:** configure `SET_BATCH` com `quantidade_total: 2`, aprove duas peças; o firmware deve publicar `{"tipo":"batch","evento":"encerrado","motivo":"cota_atingida"}` e ir para `IDLE` automaticamente.
+4. **ACK de SET_BATCH:** após `SET_BATCH` válido, confirme `{"tipo":"batch","evento":"configurado",...}` em `status`.
+5. **SET_BATCH mesmo OP:** com 2 aprovados, reenvie `SET_BATCH` com mesmo `numero_op` e novos limites — `aprovados` deve permanecer 2.
+6. **Validação:** envie `potencia_min` > `potencia_max` — rejeição `set_batch_campos_invalidos`.
+7. **Heartbeat:** com lote ativo, confirme campos `numero_op`, `proximo_sequencial`, `aprovados` no heartbeat.
 
 ## 10.5 Falha UART PZEM
 

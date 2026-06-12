@@ -148,13 +148,6 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
         calibradoEm: _calibratedAt ?? widget.existing?.calibradoEm,
         calibradoDeviceId: _selectedDeviceId ?? widget.existing?.calibradoDeviceId,
       );
-      if (_calibratedAt != null) {
-        await db.insertCalibration(
-          idProduto: id,
-          potenciaRef: refVal,
-          deviceId: _selectedDeviceId,
-        );
-      }
       final saved = await db.getProduct(id);
       if (saved != null) {
         await ref.read(firestoreSyncServiceProvider).enqueueProduct(saved);
@@ -190,8 +183,18 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
     });
 
     ref.listen(calibrationCompleteProvider, (_, next) {
-      next.whenData((event) {
+      next.whenData((event) async {
         if (event.deviceId != _selectedDeviceId || !_measuring) return;
+        final idProduto =
+            widget.existing?.idProduto ?? normalizeProductId(_idProduto.text);
+        if (idProduto.isNotEmpty) {
+          await ref.read(databaseProvider).insertCalibration(
+                idProduto: idProduto,
+                potenciaRef: event.result.potenciaMedia,
+                deviceId: event.deviceId,
+              );
+        }
+        if (!mounted) return;
         setState(() {
           _measuring = false;
           _calibratedAt = DateTime.now();
@@ -372,8 +375,8 @@ class _CalibrationHistoryList extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final db = ref.read(databaseProvider);
-    return FutureBuilder<List<CalibrationHistoryData>>(
-      future: db.getCalibrationHistory(idProduto),
+    return StreamBuilder<List<CalibrationHistoryData>>(
+      stream: db.watchCalibrationHistory(idProduto),
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
           return const SizedBox(

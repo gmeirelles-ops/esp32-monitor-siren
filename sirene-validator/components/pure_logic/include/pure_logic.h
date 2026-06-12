@@ -34,6 +34,21 @@ bool pure_fsm_can_accept_ota(pure_state_t state);
 
 bool pure_batch_quota_reached(uint32_t aprovados, uint32_t quantidade_total);
 
+typedef struct {
+    char numero_op[16];
+    char id_produto[4];
+    char ano[3];
+    uint32_t tempo_teste_sec;
+    float potencia_min;
+    float potencia_max;
+    uint32_t quantidade_total;
+    uint32_t proximo_sequencial;
+} pure_batch_input_t;
+
+bool pure_batch_copy_str(char *dst, size_t dst_len, const char *src);
+bool pure_batch_same_op(const char *a, const char *b);
+bool pure_batch_fields_valid(const pure_batch_input_t *in);
+
 bool pure_serial_body_valid(const char body[9]);
 
 bool pure_ota_url_valid(const char *url);

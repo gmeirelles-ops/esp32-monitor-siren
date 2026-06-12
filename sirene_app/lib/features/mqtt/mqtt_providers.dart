@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -13,7 +14,10 @@ import '../labels/label_printer.dart';
 import '../labels/zpl_generator.dart';
 import '../serial/itf_check_digit.dart';
 import 'message_pump.dart';
+import '../batch/batch_live_providers.dart';
+import '../batch/batch_serial_logic.dart';
 import '../dashboard/dashboard_providers.dart';
+import '../operators/operators_provider.dart';
 import 'models/mqtt_messages.dart';
 import 'mqtt_parser.dart';
 import 'mqtt_service.dart';
@@ -57,6 +61,7 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
   Timer? _staleTimer;
   final MessagePump _messagePump = MessagePump();
   final Map<String, DateTime> _batchStartedAt = {};
+  final Map<String, int> _rejectionEpoch = {};
 
   void _init() {
     final service = _ref.read(mqttServiceProvider);
@@ -101,10 +106,33 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
   void _emitRejection(String deviceId, RejectionMessage rejection) {
     final device = _getOrCreate(deviceId);
     device.lastRejection = rejection;
+    _rejectionEpoch[deviceId] = (_rejectionEpoch[deviceId] ?? 0) + 1;
     _ref.read(latestRejectionProvider.notifier).state = (
       deviceId: deviceId,
       rejection: rejection,
     );
+  }
+
+  void _setDeviceEstado(String deviceId, DeviceFsmState estado) {
+    final device = _getOrCreate(deviceId);
+    device.estado = estado;
+    state = {...state};
+  }
+
+  /// Aguarda rejeição MQTT após um comando (firmware não envia ACK explícito).
+  Future<String?> waitForRejection(
+    String deviceId, {
+    Duration timeout = const Duration(seconds: 3),
+  }) async {
+    final epochBefore = _rejectionEpoch[deviceId] ?? 0;
+    final deadline = DateTime.now().add(timeout);
+    while (DateTime.now().isBefore(deadline)) {
+      if ((_rejectionEpoch[deviceId] ?? 0) > epochBefore) {
+        return state[deviceId]?.lastRejection?.motivo;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+    }
+    return null;
   }
 
   Future<void> _handleMessage((String, String) event) async {
@@ -184,59 +212,120 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
 
         final test = MqttParser.parseTestResult(json);
         if (test != null) {
-          device.lastTestResult = test;
+          await processTestResult(deviceId, test);
           device.lastSeen = now;
-
-          final db = _ref.read(databaseProvider);
-          final operador = _ref.read(authServiceProvider)?.currentUser?.email;
-          String? serial;
-          var duplicate = false;
-          if (test.isApproved) {
-            final candidate = generateFullSerial(
-              idProduto: test.idProduto,
-              ano: test.ano,
-              sequencial: test.sequencial,
-            );
-            duplicate = await db.serialExists(candidate);
-            if (duplicate) {
-              _ref.read(duplicateSerialProvider.notifier).state = (
-                deviceId: deviceId,
-                serial: candidate,
-              );
-            } else {
-              serial = candidate;
-              await db.addLabelToBuffer(serial: serial, numeroOp: test.numeroOp);
-              await db.bumpSerialCounter(
-                idProduto: test.idProduto,
-                ano: test.ano,
-                sequencial: test.sequencial,
-              );
-              await _maybePrintLabels(db);
-            }
-          }
-
-          await db.insertTestResult(
-            deviceId: deviceId,
-            numeroOp: test.numeroOp,
-            veredito: test.veredito,
-            potenciaMedia: test.potenciaMedia,
-            sequencial: test.sequencial,
-            aprovadosNoLote: test.aprovadosNoLote,
-            serial: serial,
-            operador: operador,
-          );
-          await _ref.read(firestoreSyncServiceProvider).enqueueTestResult(
-            deviceId: deviceId,
-            test: test,
-            serial: serial,
-            operador: operador,
-          );
-          _ref.read(localDataRevisionProvider.notifier).state++;
         }
       }
     }
 
     state = {...state};
+  }
+
+  /// Processa resultado de teste (MQTT ou simulador de desenvolvimento).
+  Future<void> processTestResult(
+    String deviceId,
+    TestResultMessage test, {
+    String? operador,
+  }) async {
+    final device = _getOrCreate(deviceId);
+    device.lastTestResult = test;
+
+    final db = _ref.read(databaseProvider);
+    final operadorFinal =
+        operador ?? await resolveOperadorLabel(_ref);
+    String? serial;
+    if (test.isApproved) {
+      final candidate = generateFullSerial(
+        idProduto: test.idProduto,
+        ano: test.ano,
+        sequencial: test.sequencial,
+      );
+      final duplicate = await db.serialExists(candidate);
+      if (duplicate) {
+        _ref.read(duplicateSerialProvider.notifier).state = (
+          deviceId: deviceId,
+          serial: candidate,
+        );
+      } else {
+        serial = candidate;
+        await db.addLabelToBuffer(serial: serial, numeroOp: test.numeroOp);
+        await db.bumpSerialCounter(
+          idProduto: test.idProduto,
+          ano: test.ano,
+          sequencial: test.sequencial,
+        );
+        await _maybePrintLabels(db);
+        _advanceBatchSequencial(deviceId, test);
+      }
+    }
+
+    await db.insertTestResult(
+      deviceId: deviceId,
+      numeroOp: test.numeroOp,
+      veredito: test.veredito,
+      potenciaMedia: test.potenciaMedia,
+      sequencial: test.sequencial,
+      aprovadosNoLote: test.aprovadosNoLote,
+      serial: serial,
+      operador: operadorFinal,
+    );
+    await _ref.read(firestoreSyncServiceProvider).enqueueTestResult(
+      deviceId: deviceId,
+      test: test,
+      serial: serial,
+      operador: operadorFinal,
+    );
+    _ref.read(localDataRevisionProvider.notifier).state++;
+    state = {...state};
+  }
+
+  void _advanceBatchSequencial(String deviceId, TestResultMessage test) {
+    final device = state[deviceId];
+    final batch = device?.activeBatch;
+    if (batch == null || batch.numeroOp != test.numeroOp) return;
+    device!.activeBatch = batch.copyWith(proximoSequencial: test.sequencial + 1);
+  }
+
+  static const devSimulatorOperador = 'dev-simulator';
+
+  /// Simula um ciclo de teste com potência fictícia (somente desenvolvimento).
+  Future<void> simulateTestResult(
+    String deviceId, {
+    bool? forceApproved,
+  }) async {
+    final device = state[deviceId];
+    final batch = device?.activeBatch;
+    if (batch == null) {
+      throw StateError('Configure um lote antes de simular');
+    }
+
+    final metrics = await _ref.read(databaseProvider).getBatchMetrics(batch.numeroOp);
+    final rng = Random();
+    final approved = forceApproved ?? rng.nextBool();
+    final potencia = approved
+        ? batch.potenciaMin +
+            rng.nextDouble() * (batch.potenciaMax - batch.potenciaMin)
+        : (rng.nextBool()
+            ? batch.potenciaMin - 1.5 - rng.nextDouble() * 3
+            : batch.potenciaMax + 1.5 + rng.nextDouble() * 3);
+
+    final aprovadosNoLote = approved ? metrics.aprovados + 1 : metrics.aprovados;
+    final sequencial = nextBatchSequencial(batch);
+    final test = TestResultMessage(
+      numeroOp: batch.numeroOp,
+      idProduto: batch.idProduto,
+      ano: batch.ano,
+      veredito: approved ? 'APROVADO' : 'REPROVADO',
+      potenciaMedia: potencia,
+      sequencial: sequencial,
+      aprovadosNoLote: aprovadosNoLote,
+    );
+
+    _setDeviceEstado(deviceId, DeviceFsmState.testing);
+    await Future<void>.delayed(const Duration(milliseconds: 400));
+    await processTestResult(deviceId, test, operador: devSimulatorOperador);
+    _setDeviceEstado(deviceId, DeviceFsmState.batchReady);
+    _ref.read(batchDevSimulatorUsedProvider.notifier).state = true;
   }
 
   Future<void> _maybePrintLabels(AppDatabase db) async {
@@ -272,10 +361,15 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
     }
   }
 
-  Future<void> sendSetBatch(String deviceId, BatchConfig batch) async {
+  /// Publica SET_BATCH e retorna motivo de rejeição, ou null se aceito.
+  Future<String?> sendSetBatch(String deviceId, BatchConfig batch) async {
     final service = _ref.read(mqttServiceProvider);
     await service.publishCommand(deviceId, batch.toSetBatchJson());
+    final rejection = await waitForRejection(deviceId);
+    if (rejection != null) return rejection;
+
     setActiveBatch(deviceId, batch);
+    _setDeviceEstado(deviceId, DeviceFsmState.batchReady);
     final startedAt = _batchStartedAt[deviceId] ?? DateTime.now();
     await _ref.read(firestoreSyncServiceProvider).enqueueBatch(
       batch: batch,
@@ -283,12 +377,13 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
       status: 'active',
       startedAt: startedAt,
     );
+    return null;
   }
 
   Future<bool> waitForState(
     String deviceId,
     DeviceFsmState expected, {
-    Duration timeout = const Duration(seconds: 10),
+    Duration timeout = const Duration(seconds: 35),
   }) async {
     final deadline = DateTime.now().add(timeout);
     while (DateTime.now().isBefore(deadline)) {
@@ -299,12 +394,16 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
     return false;
   }
 
-  Future<void> sendEndBatch(String deviceId) async {
+  /// Publica END_BATCH e retorna motivo de rejeição, ou null se aceito.
+  Future<String?> sendEndBatch(String deviceId) async {
     final service = _ref.read(mqttServiceProvider);
     final device = state[deviceId];
     final batch = device?.activeBatch;
     final startedAt = _batchStartedAt[deviceId];
     await service.publishCommand(deviceId, {'cmd': 'END_BATCH'});
+    final rejection = await waitForRejection(deviceId);
+    if (rejection != null) return rejection;
+
     if (batch != null) {
       await _ref.read(databaseProvider).lockOp(batch.numeroOp);
     }
@@ -320,6 +419,8 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
     }
     _batchStartedAt.remove(deviceId);
     clearActiveBatch(deviceId);
+    _setDeviceEstado(deviceId, DeviceFsmState.idle);
+    return null;
   }
 
   Future<void> sendStartCalibration(String deviceId) async {
