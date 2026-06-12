@@ -1,0 +1,11 @@
+menu "PZEM"
+
+config DEV_MOCK_PZEM
+    bool "Use mock PZEM readings (development only)"
+    default n
+    help
+        When enabled, pzem_measure_cycle generates synthetic power samples
+        instead of reading the PZEM-004T over UART. Use only on development
+        benches without the sensor wired. Never enable in production firmware.
+
+endmenu

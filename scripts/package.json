@@ -1,0 +1,8 @@
+{
+  "name": "sirene-firebase-scripts",
+  "private": true,
+  "description": "Firebase CLI local para setup e FlutterFire",
+  "dependencies": {
+    "firebase-tools": "^15.20.0"
+  }
+}

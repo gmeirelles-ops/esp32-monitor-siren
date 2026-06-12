@@ -1,0 +1,46 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function hasStationId() {
+      return request.resource.data.keys().hasAll(['station_id'])
+        && request.resource.data.station_id is string
+        && request.resource.data.station_id.size() > 0;
+    }
+
+    match /operators/{operatorId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated() && hasStationId();
+      allow delete: if false;
+    }
+
+    match /products/{productId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated() && hasStationId();
+      allow delete: if false;
+    }
+
+    match /batches/{numeroOp} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated() && hasStationId();
+      allow delete: if false;
+    }
+
+    match /test_results/{resultId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated() && hasStationId();
+      allow delete: if false;
+    }
+
+    match /devices/{deviceId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated();
+      allow delete: if false;
+    }
+  }
+}
