@@ -5,16 +5,37 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function hasStationId() {
+      return request.resource.data.keys().hasAll(['station_id'])
+        && request.resource.data.station_id is string
+        && request.resource.data.station_id.size() > 0;
+    }
+
     match /devices/{deviceId} {
       allow read, write: if isAuthenticated();
     }
 
-    match /test_results/{resultId} {
-      allow read, write: if isAuthenticated();
+    match /test_results/{docId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated() && hasStationId();
+      allow delete: if false;
+
+      match /seriais/{serial} {
+        allow read: if isAuthenticated();
+        allow create, update: if isAuthenticated() && hasStationId();
+        allow delete: if false;
+      }
+
+      match /reprovadas/{sequencial} {
+        allow read: if isAuthenticated();
+        allow create, update: if isAuthenticated() && hasStationId();
+        allow delete: if false;
+      }
     }
 
     match /batches/{batchId} {
-      allow read, write: if isAuthenticated();
+      allow read: if isAuthenticated();
+      allow write: if false;
     }
 
     match /products/{productId} {

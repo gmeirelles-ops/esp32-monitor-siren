@@ -1,5 +1,6 @@
 {
-    "idf.currentSetup": "/home/meirelles/esp/esp-idf",
-    "idf.port": "/dev/ttyUSB0",
-    "idf.flashType": "UART"
+  "idf.currentSetup": "C:\\Users\\gmeir\\esp\\v5.5.1\\esp-idf",
+  "idf.port": "/dev/ttyUSB0",
+  "idf.flashType": "UART",
+  "idf.customExtraVars": {}
 }

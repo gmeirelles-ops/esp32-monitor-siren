@@ -1,11 +1,19 @@
 {
   "indexes": [
     {
+      "collectionGroup": "seriais",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "serial", "order": "ASCENDING" },
+        { "fieldPath": "timestamp", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "test_results",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "numero_op", "order": "ASCENDING" },
-        { "fieldPath": "timestamp", "order": "DESCENDING" }
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "started_at", "order": "DESCENDING" }
       ]
     },
     {

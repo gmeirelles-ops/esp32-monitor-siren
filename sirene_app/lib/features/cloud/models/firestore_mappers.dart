@@ -1,9 +1,114 @@
 import '../../../core/database/database.dart';
 import '../../mqtt/models/mqtt_messages.dart';
 
+/// Subcoleções em `test_results/{numero_op}/`.
+const firestoreSubcollectionSeriais = 'seriais';
+const firestoreSubcollectionReprovadas = 'reprovadas';
+
+/// Legado flat — mantido para entradas antigas na fila.
 String testResultDocumentId(String numeroOp, int sequencial) =>
     '${numeroOp}_$sequencial';
 
+String lotePath(String numeroOp) => 'test_results/$numeroOp';
+
+String serialPath(String numeroOp, String serial) =>
+    'test_results/$numeroOp/$firestoreSubcollectionSeriais/$serial';
+
+String reprovadaPath(String numeroOp, int sequencial) =>
+    'test_results/$numeroOp/$firestoreSubcollectionReprovadas/$sequencial';
+
+bool isTesteAprovado(TestResultMessage test) =>
+    test.veredito.toUpperCase() == 'APROVADO';
+
+Map<String, dynamic> mapLoteDocument({
+  required BatchConfig batch,
+  required String deviceId,
+  required String status,
+  required String stationId,
+  required DateTime startedAt,
+  DateTime? endedAt,
+  int? aprovados,
+  int? reprovados,
+}) {
+  return {
+    'numero_op': batch.numeroOp,
+    'id_produto': batch.idProduto,
+    'ano': batch.ano,
+    'quantidade_total': batch.quantidadeTotal,
+    'device_id': deviceId,
+    'status': status,
+    'station_id': stationId,
+    'started_at': startedAt.toUtc().toIso8601String(),
+    if (endedAt != null) 'ended_at': endedAt.toUtc().toIso8601String(),
+    if (aprovados != null) 'aprovados': aprovados,
+    if (reprovados != null) 'reprovados': reprovados,
+  };
+}
+
+/// Merge parcial do lote após um teste (contadores/metadata).
+Map<String, dynamic> mapLoteTestPatch({
+  required String numeroOp,
+  required String stationId,
+  required TestResultMessage test,
+}) {
+  return {
+    'numero_op': numeroOp,
+    'station_id': stationId,
+    'id_produto': test.idProduto,
+    'ano': test.ano,
+    if (isTesteAprovado(test)) 'aprovados': test.aprovadosNoLote,
+  };
+}
+
+Map<String, dynamic> mapSerialDocument({
+  required String deviceId,
+  required TestResultMessage test,
+  required String serial,
+  String? operador,
+  required String stationId,
+  required DateTime timestamp,
+  bool isRetest = false,
+}) {
+  return {
+    'device_id': deviceId,
+    'numero_op': test.numeroOp,
+    'id_produto': test.idProduto,
+    'ano': test.ano,
+    'veredito': test.veredito,
+    'potencia_media': test.potenciaMedia,
+    'sequencial': test.sequencial,
+    'serial': serial,
+    if (operador != null) 'operador': operador,
+    'timestamp': timestamp.toUtc().toIso8601String(),
+    'station_id': stationId,
+    'is_retest': isRetest,
+  };
+}
+
+Map<String, dynamic> mapReprovadaDocument({
+  required String deviceId,
+  required TestResultMessage test,
+  String? operador,
+  required String stationId,
+  required DateTime timestamp,
+  bool isRetest = false,
+}) {
+  return {
+    'device_id': deviceId,
+    'numero_op': test.numeroOp,
+    'id_produto': test.idProduto,
+    'ano': test.ano,
+    'veredito': test.veredito,
+    'potencia_media': test.potenciaMedia,
+    'sequencial': test.sequencial,
+    if (operador != null) 'operador': operador,
+    'timestamp': timestamp.toUtc().toIso8601String(),
+    'station_id': stationId,
+    'is_retest': isRetest,
+  };
+}
+
+@Deprecated('Use mapSerialDocument or mapReprovadaDocument')
 Map<String, dynamic> mapTestResult({
   required String deviceId,
   required TestResultMessage test,
@@ -69,6 +174,7 @@ String _fsmToFirestore(DeviceFsmState estado) {
   }
 }
 
+@Deprecated('Use mapLoteDocument — lotes vão em test_results/{numero_op}')
 Map<String, dynamic> mapBatch({
   required BatchConfig batch,
   required String deviceId,
@@ -78,18 +184,15 @@ Map<String, dynamic> mapBatch({
   DateTime? endedAt,
   int? aprovados,
 }) {
-  return {
-    'numero_op': batch.numeroOp,
-    'id_produto': batch.idProduto,
-    'ano': batch.ano,
-    'quantidade_total': batch.quantidadeTotal,
-    'aprovados': aprovados ?? 0,
-    'device_id': deviceId,
-    'started_at': startedAt.toUtc().toIso8601String(),
-    if (endedAt != null) 'ended_at': endedAt.toUtc().toIso8601String(),
-    'status': status,
-    'station_id': stationId,
-  };
+  return mapLoteDocument(
+    batch: batch,
+    deviceId: deviceId,
+    status: status,
+    stationId: stationId,
+    startedAt: startedAt,
+    endedAt: endedAt,
+    aprovados: aprovados,
+  );
 }
 
 typedef ParsedProduct = ({
@@ -123,8 +226,6 @@ DateTime? _asDateTime(Object? v) {
 }
 
 /// Converte um documento `products` do Firestore em produto local.
-/// Função pura (sem dependência de Firebase). Retorna `null` sem `id_produto`.
-/// `calibrado_em` aceita ISO string ou DateTime (Timestamp já normalizado).
 ParsedProduct? productFromFirestore(Map<String, dynamic> data) {
   final idProduto = data['id_produto'];
   if (idProduto is! String || idProduto.isEmpty) return null;

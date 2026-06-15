@@ -8,6 +8,8 @@ import '../../core/theme/diponto_theme.dart';
 import '../../shared/widgets/desktop_form_layout.dart';
 import '../cloud/sync/sync_providers.dart';
 import '../mqtt/models/mqtt_messages.dart';
+import '../../shared/display_labels.dart';
+import '../bancadas/bancadas_provider.dart';
 import '../mqtt/mqtt_providers.dart';
 import 'power_limits.dart';
 
@@ -168,6 +170,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
   @override
   Widget build(BuildContext context) {
     final devices = ref.watch(devicesProvider);
+    final bancadas = ref.watch(bancadasMapProvider).valueOrNull ?? {};
     final deviceList = devices.values.toList();
     _selectedDeviceId ??= deviceList.isNotEmpty ? deviceList.first.deviceId : null;
 
@@ -268,7 +271,9 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
               items: deviceList
                   .map((d) => DropdownMenuItem(
                         value: d.deviceId,
-                        child: Text('${d.deviceId} (${d.estado.label})'),
+                        child: Text(
+                          '${formatBancadaLabelFromMap(d.deviceId, bancadas)} (${d.estado.label})',
+                        ),
                       ))
                   .toList(),
               onChanged: _measuring ? null : (v) => setState(() => _selectedDeviceId = v),
@@ -375,6 +380,7 @@ class _CalibrationHistoryList extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final db = ref.read(databaseProvider);
+    final bancadas = ref.watch(bancadasMapProvider).valueOrNull ?? {};
     return StreamBuilder<List<CalibrationHistoryData>>(
       stream: db.watchCalibrationHistory(idProduto),
       builder: (context, snapshot) {
@@ -401,7 +407,7 @@ class _CalibrationHistoryList extends ConsumerWidget {
                 title: Text('${c.potenciaRef.toStringAsFixed(2)} W'),
                 subtitle: Text(
                   '${c.createdAt.toLocal()}'
-                  '${c.deviceId != null ? ' — ${c.deviceId}' : ''}',
+                  '${c.deviceId != null ? ' — ${formatBancadaLabelFromMap(c.deviceId!, bancadas)}' : ''}',
                 ),
               ),
           ],

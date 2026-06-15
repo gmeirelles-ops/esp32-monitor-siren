@@ -4,54 +4,80 @@ import 'package:sirene_app/features/mqtt/models/mqtt_messages.dart';
 
 void main() {
   group('FirestoreMappers', () {
-    test('gera document id composto numero_op_sequencial', () {
-      expect(testResultDocumentId('2026001', 1), '2026001_1');
-      expect(testResultDocumentId('2026042', 15), '2026042_15');
+    const approvedTest = TestResultMessage(
+      numeroOp: '2026001',
+      idProduto: '123',
+      ano: '26',
+      veredito: 'APROVADO',
+      potenciaMedia: 20.15,
+      sequencial: 1,
+      aprovadosNoLote: 1,
+    );
+
+    test('gera caminhos hierárquicos lote/seriais/reprovadas', () {
+      expect(lotePath('2026001'), 'test_results/2026001');
+      expect(serialPath('2026001', '1232600018'),
+          'test_results/2026001/seriais/1232600018');
+      expect(reprovadaPath('2026001', 3), 'test_results/2026001/reprovadas/3');
     });
 
-    test('mapeia resultado de teste', () {
-      const test = TestResultMessage(
+    test('mapeia documento de serial aprovado', () {
+      final map = mapSerialDocument(
+        deviceId: 'aabbccddeeff',
+        test: approvedTest,
+        serial: '1232600018',
+        operador: '001 — João',
+        stationId: 'posto-01',
+        timestamp: DateTime.utc(2026, 6, 10, 14, 31),
+      );
+      expect(map['serial'], '1232600018');
+      expect(map['sequencial'], 1);
+      expect(map['station_id'], 'posto-01');
+      expect(map['is_retest'], false);
+    });
+
+    test('mapeia documento reprovado sem serial', () {
+      const reprovado = TestResultMessage(
         numeroOp: '2026001',
         idProduto: '123',
         ano: '26',
-        veredito: 'APROVADO',
-        potenciaMedia: 20.15,
-        sequencial: 1,
+        veredito: 'REPROVADO',
+        potenciaMedia: 5.0,
+        sequencial: 3,
         aprovadosNoLote: 1,
       );
-      final map = mapTestResult(
+      final map = mapReprovadaDocument(
         deviceId: 'aabbccddeeff',
-        test: test,
-        serial: '1232600018',
-        operador: 'operador.teste@diponto.com.br',
+        test: reprovado,
         stationId: 'posto-01',
         timestamp: DateTime.utc(2026, 6, 10, 14, 31),
+        isRetest: true,
+      );
+      expect(map['veredito'], 'REPROVADO');
+      expect(map.containsKey('serial'), false);
+      expect(map['is_retest'], true);
+    });
+
+    test('mapeia documento de lote', () {
+      const batch = BatchConfig(
+        numeroOp: '2026001',
+        idProduto: '123',
+        ano: '26',
+        tempoTeste: 5,
+        quantidadeTotal: 10,
+        proximoSequencial: 1,
+        potenciaMin: 18,
+        potenciaMax: 22,
+      );
+      final map = mapLoteDocument(
+        batch: batch,
+        deviceId: 'abc',
+        status: 'active',
+        stationId: 'posto-01',
+        startedAt: DateTime.utc(2026, 6, 10, 10),
       );
       expect(map['numero_op'], '2026001');
-      expect(map['sequencial'], 1);
-      expect(map['serial'], '1232600018');
-      expect(map['station_id'], 'posto-01');
-      expect(map['operador'], 'operador.teste@diponto.com.br');
-    });
-
-    test('omite operador quando ausente', () {
-      const test = TestResultMessage(
-        numeroOp: '2026001',
-        idProduto: '123',
-        ano: '26',
-        veredito: 'APROVADO',
-        potenciaMedia: 20.15,
-        sequencial: 1,
-        aprovadosNoLote: 1,
-      );
-      final map = mapTestResult(
-        deviceId: 'aabbccddeeff',
-        test: test,
-        serial: '1232600018',
-        stationId: 'posto-01',
-        timestamp: DateTime.utc(2026, 6, 10, 14, 31),
-      );
-      expect(map.containsKey('operador'), false);
+      expect(map['status'], 'active');
     });
   });
 }

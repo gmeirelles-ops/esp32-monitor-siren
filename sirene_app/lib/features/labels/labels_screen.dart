@@ -1,9 +1,16 @@
+import 'dart:io';
+
+import 'package:file_selector/file_selector.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/config/app_config.dart';
 import '../../core/database/database.dart';
 import '../../core/theme/diponto_theme.dart';
+import '../../shared/display_labels.dart';
+import '../../shared/portuguese_labels.dart';
 import '../../shared/widgets/empty_state_view.dart';
 import '../../shared/widgets/screen_app_bar.dart';
 import 'label_buffer_grouping.dart';
@@ -145,12 +152,32 @@ class LabelsScreen extends ConsumerWidget {
               ),
               Padding(
                 padding: const EdgeInsets.all(16),
-                child: ElevatedButton.icon(
-                  onPressed: entries.isEmpty
-                      ? null
-                      : () => _printPending(context, ref, entries),
-                  icon: const Icon(Icons.print),
-                  label: Text('Imprimir pendentes (${entries.length})'),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (kDebugMode) ...[
+                      OutlinedButton.icon(
+                        onPressed: () => _downloadZpl(context, ref, entries),
+                        icon: const Icon(Icons.download_outlined),
+                        label: const Text(PortugueseLabels.baixarArquivoZpl),
+                      ),
+                      const Padding(
+                        padding: EdgeInsets.only(top: 4, bottom: 8),
+                        child: Text(
+                          'Salve o .zpl e compare com docs/label-reference/ '
+                          '(ou envie pela Zebra Setup Utilities para teste).',
+                          style: TextStyle(fontSize: 12, color: Colors.grey),
+                        ),
+                      ),
+                    ],
+                    ElevatedButton.icon(
+                      onPressed: entries.isEmpty
+                          ? null
+                          : () => _printPending(context, ref, entries),
+                      icon: const Icon(Icons.print),
+                      label: Text('Imprimir pendentes (${entries.length})'),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -217,9 +244,34 @@ class LabelsScreen extends ConsumerWidget {
                                   : TextButton.icon(
                                       icon: const Icon(Icons.print, size: 18),
                                       label: const Text('Reimprimir'),
-                                      onPressed: () {
-                                        Navigator.pop(ctx);
-                                        _reprintSerial(context, ref, r.serial!);
+                                      onPressed: () async {
+                                        final serial = r.serial!;
+                                        final confirmed = await showDialog<bool>(
+                                          context: ctx,
+                                          builder: (dialogCtx) => AlertDialog(
+                                            title: const Text('Reimprimir etiqueta'),
+                                            content: Text(
+                                              'A impressora avançará uma linha inteira do rolo '
+                                              '(3 posições). O serial $serial será impresso na '
+                                              'primeira coluna; as outras duas saem em branco.',
+                                            ),
+                                            actions: [
+                                              TextButton(
+                                                onPressed: () => Navigator.pop(dialogCtx, false),
+                                                child: const Text('Cancelar'),
+                                              ),
+                                              ElevatedButton(
+                                                onPressed: () => Navigator.pop(dialogCtx, true),
+                                                child: const Text('Reimprimir'),
+                                              ),
+                                            ],
+                                          ),
+                                        );
+                                        if (confirmed != true) return;
+                                        if (ctx.mounted) Navigator.pop(ctx);
+                                        if (context.mounted) {
+                                          _reprintSerial(context, ref, serial);
+                                        }
                                       },
                                     ),
                             ),
@@ -239,11 +291,53 @@ class LabelsScreen extends ConsumerWidget {
     );
   }
 
+  Future<void> _downloadZpl(
+    BuildContext context,
+    WidgetRef ref,
+    List<LabelBufferEntry> entries,
+  ) async {
+    if (entries.isEmpty) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Não há seriais no buffer para exportar')),
+        );
+      }
+      return;
+    }
+
+    final op = entries.first.numeroOp;
+    final timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
+    final db = ref.read(databaseProvider);
+    final suggestedName = 'etiquetas_${op}_$timestamp.zpl';
+    final items = await resolveLabelZplItems(db, entries.map((e) => e.serial).toList());
+    final zpl = generateZplForItems(items);
+
+    final location = await getSaveLocation(
+      suggestedName: suggestedName,
+      acceptedTypeGroups: const [
+        XTypeGroup(label: 'ZPL', extensions: ['zpl']),
+      ],
+    );
+    if (location == null) return;
+
+    await File(location.path).writeAsString(zpl);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Arquivo salvo: ${location.path}')),
+      );
+    }
+  }
+
   Future<void> _reprintSerial(BuildContext context, WidgetRef ref, String serial) async {
     final config = ref.read(appConfigProvider);
-    final printer = LabelPrinter(host: config.printerHost, port: config.printerPort);
+    final db = ref.read(databaseProvider);
     try {
-      await printer.sendZpl(generateZplLabelRow([serial]));
+      final items = await resolveLabelZplItems(db, [serial]);
+      final item = items.first;
+      final printer = createLabelPrinterTransport(config);
+      await printer.sendZpl(
+        generateZplReprintRow(serial: item.serial, productName: item.productName),
+      );
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Etiqueta $serial reenviada à impressora')),
@@ -252,7 +346,7 @@ class LabelsScreen extends ConsumerWidget {
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erro na reimpressão: $e')),
+          SnackBar(content: Text(formatPrinterError(e, config.printerMode))),
         );
       }
     }
@@ -265,12 +359,28 @@ class LabelsScreen extends ConsumerWidget {
   ) async {
     final config = ref.read(appConfigProvider);
     final db = ref.read(databaseProvider);
-    final printer = LabelPrinter(host: config.printerHost, port: config.printerPort);
+    LabelPrinterTransport printer;
+    try {
+      printer = createLabelPrinterTransport(config);
+    } catch (e) {
+      ref.read(printFailureProvider.notifier).state =
+          formatPrinterError(e, config.printerMode);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(formatPrinterError(e, config.printerMode))),
+        );
+      }
+      return;
+    }
 
-    final printEntries = entries.map((e) => (id: e.id, serial: e.serial)).toList();
+    final items = await resolveLabelZplItems(db, entries.map((e) => e.serial).toList());
+    final printEntries = <({int id, LabelZplItem item})>[];
+    for (var i = 0; i < entries.length; i++) {
+      printEntries.add((id: entries[i].id, item: items[i]));
+    }
     final result = await printLabelBatches(
       entries: printEntries,
-      sendZpl: (serials) => printer.sendZpl(generateZplLabelRow(serials)),
+      sendZpl: (batch) => printer.sendZpl(generateZplLabelRow(batch)),
     );
 
     if (result.printedIds.isNotEmpty) {
@@ -279,10 +389,10 @@ class LabelsScreen extends ConsumerWidget {
 
     if (result.error != null) {
       ref.read(printFailureProvider.notifier).state =
-          'Erro na impressão manual: ${result.error}';
+          formatPrinterError(result.error!, config.printerMode);
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erro na impressão: ${result.error}')),
+          SnackBar(content: Text(formatPrinterError(result.error!, config.printerMode))),
         );
       }
       return;

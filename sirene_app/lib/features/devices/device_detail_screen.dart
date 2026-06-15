@@ -3,7 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/theme/diponto_theme.dart';
+import '../../shared/display_labels.dart';
+import '../../shared/portuguese_labels.dart';
 import '../../shared/widgets/diponto_app_bar.dart';
+import '../bancadas/bancadas_provider.dart';
 import '../mqtt/mqtt_providers.dart';
 
 class DeviceDetailScreen extends ConsumerWidget {
@@ -14,10 +17,11 @@ class DeviceDetailScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final device = ref.watch(devicesProvider)[deviceId];
+    final bancadas = ref.watch(bancadasMapProvider).valueOrNull ?? {};
     if (device == null) {
       return Scaffold(
-        appBar: const DipontoAppBar(title: 'Dispositivo'),
-        body: const Center(child: Text('Dispositivo não encontrado')),
+        appBar: const DipontoAppBar(title: 'Bancada'),
+        body: const Center(child: Text('Bancada não encontrada')),
       );
     }
 
@@ -26,11 +30,15 @@ class DeviceDetailScreen extends ConsumerWidget {
         : '—';
 
     return Scaffold(
-      appBar: DipontoAppBar(title: deviceId),
+      appBar: DipontoAppBar(title: formatBancadaLabelFromMap(deviceId, bancadas)),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          _InfoTile('Presença', device.isOnline ? 'Online' : 'Offline'),
+          _InfoTile(PortugueseLabels.identificadorTecnico, deviceId),
+          _InfoTile(
+            'Presença',
+            device.isOnline ? PortugueseLabels.conectada : PortugueseLabels.desconectada,
+          ),
           _InfoTile('Estado FSM', device.estado.label),
           _InfoTile('RSSI', '${device.rssi} dBm'),
           _InfoTile('Uptime', '${device.uptime}s'),

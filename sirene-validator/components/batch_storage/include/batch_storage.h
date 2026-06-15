@@ -14,6 +14,7 @@ typedef struct {
     uint32_t quantidade_total;
     uint32_t proximo_sequencial;
     uint32_t aprovados;
+    bool modo_reteste;
 } batch_context_t;
 
 bool batch_storage_save(const batch_context_t *ctx);

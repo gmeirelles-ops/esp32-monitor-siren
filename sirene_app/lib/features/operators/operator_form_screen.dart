@@ -45,7 +45,7 @@ class _OperatorFormScreenState extends ConsumerState<OperatorFormScreen> {
     final nome = _nome.text.trim();
 
     if (await db.operatorCodigoExists(codigo, excludeId: widget.existing?.id)) {
-      _showSnack('Código $codigo já cadastrado');
+      _showSnack('PIN $codigo já cadastrado');
       return;
     }
 
@@ -89,7 +89,7 @@ class _OperatorFormScreenState extends ConsumerState<OperatorFormScreen> {
             children: [
               TextFormField(
                 controller: _codigo,
-                decoration: const InputDecoration(labelText: 'Código / matrícula'),
+                decoration: const InputDecoration(labelText: 'PIN'),
                 validator: (v) => v == null || v.trim().isEmpty ? 'Obrigatório' : null,
               ),
               const SizedBox(height: 12),

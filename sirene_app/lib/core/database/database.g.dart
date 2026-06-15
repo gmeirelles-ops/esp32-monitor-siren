@@ -108,6 +108,21 @@ class $TestResultsTable extends TestResults
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _isRetestMeta = const VerificationMeta(
+    'isRetest',
+  );
+  @override
+  late final GeneratedColumn<bool> isRetest = GeneratedColumn<bool>(
+    'is_retest',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_retest" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -130,6 +145,7 @@ class $TestResultsTable extends TestResults
     aprovadosNoLote,
     serial,
     operador,
+    isRetest,
     createdAt,
   ];
   @override
@@ -213,6 +229,12 @@ class $TestResultsTable extends TestResults
         operador.isAcceptableOrUnknown(data['operador']!, _operadorMeta),
       );
     }
+    if (data.containsKey('is_retest')) {
+      context.handle(
+        _isRetestMeta,
+        isRetest.isAcceptableOrUnknown(data['is_retest']!, _isRetestMeta),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -266,6 +288,10 @@ class $TestResultsTable extends TestResults
         DriftSqlType.string,
         data['${effectivePrefix}operador'],
       ),
+      isRetest: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_retest'],
+      )!,
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
@@ -289,6 +315,7 @@ class TestResult extends DataClass implements Insertable<TestResult> {
   final int aprovadosNoLote;
   final String? serial;
   final String? operador;
+  final bool isRetest;
   final DateTime createdAt;
   const TestResult({
     required this.id,
@@ -300,6 +327,7 @@ class TestResult extends DataClass implements Insertable<TestResult> {
     required this.aprovadosNoLote,
     this.serial,
     this.operador,
+    required this.isRetest,
     required this.createdAt,
   });
   @override
@@ -318,6 +346,7 @@ class TestResult extends DataClass implements Insertable<TestResult> {
     if (!nullToAbsent || operador != null) {
       map['operador'] = Variable<String>(operador);
     }
+    map['is_retest'] = Variable<bool>(isRetest);
     map['created_at'] = Variable<DateTime>(createdAt);
     return map;
   }
@@ -337,6 +366,7 @@ class TestResult extends DataClass implements Insertable<TestResult> {
       operador: operador == null && nullToAbsent
           ? const Value.absent()
           : Value(operador),
+      isRetest: Value(isRetest),
       createdAt: Value(createdAt),
     );
   }
@@ -356,6 +386,7 @@ class TestResult extends DataClass implements Insertable<TestResult> {
       aprovadosNoLote: serializer.fromJson<int>(json['aprovadosNoLote']),
       serial: serializer.fromJson<String?>(json['serial']),
       operador: serializer.fromJson<String?>(json['operador']),
+      isRetest: serializer.fromJson<bool>(json['isRetest']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
     );
   }
@@ -372,6 +403,7 @@ class TestResult extends DataClass implements Insertable<TestResult> {
       'aprovadosNoLote': serializer.toJson<int>(aprovadosNoLote),
       'serial': serializer.toJson<String?>(serial),
       'operador': serializer.toJson<String?>(operador),
+      'isRetest': serializer.toJson<bool>(isRetest),
       'createdAt': serializer.toJson<DateTime>(createdAt),
     };
   }
@@ -386,6 +418,7 @@ class TestResult extends DataClass implements Insertable<TestResult> {
     int? aprovadosNoLote,
     Value<String?> serial = const Value.absent(),
     Value<String?> operador = const Value.absent(),
+    bool? isRetest,
     DateTime? createdAt,
   }) => TestResult(
     id: id ?? this.id,
@@ -397,6 +430,7 @@ class TestResult extends DataClass implements Insertable<TestResult> {
     aprovadosNoLote: aprovadosNoLote ?? this.aprovadosNoLote,
     serial: serial.present ? serial.value : this.serial,
     operador: operador.present ? operador.value : this.operador,
+    isRetest: isRetest ?? this.isRetest,
     createdAt: createdAt ?? this.createdAt,
   );
   TestResult copyWithCompanion(TestResultsCompanion data) {
@@ -416,6 +450,7 @@ class TestResult extends DataClass implements Insertable<TestResult> {
           : this.aprovadosNoLote,
       serial: data.serial.present ? data.serial.value : this.serial,
       operador: data.operador.present ? data.operador.value : this.operador,
+      isRetest: data.isRetest.present ? data.isRetest.value : this.isRetest,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
     );
   }
@@ -432,6 +467,7 @@ class TestResult extends DataClass implements Insertable<TestResult> {
           ..write('aprovadosNoLote: $aprovadosNoLote, ')
           ..write('serial: $serial, ')
           ..write('operador: $operador, ')
+          ..write('isRetest: $isRetest, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
         .toString();
@@ -448,6 +484,7 @@ class TestResult extends DataClass implements Insertable<TestResult> {
     aprovadosNoLote,
     serial,
     operador,
+    isRetest,
     createdAt,
   );
   @override
@@ -463,6 +500,7 @@ class TestResult extends DataClass implements Insertable<TestResult> {
           other.aprovadosNoLote == this.aprovadosNoLote &&
           other.serial == this.serial &&
           other.operador == this.operador &&
+          other.isRetest == this.isRetest &&
           other.createdAt == this.createdAt);
 }
 
@@ -476,6 +514,7 @@ class TestResultsCompanion extends UpdateCompanion<TestResult> {
   final Value<int> aprovadosNoLote;
   final Value<String?> serial;
   final Value<String?> operador;
+  final Value<bool> isRetest;
   final Value<DateTime> createdAt;
   const TestResultsCompanion({
     this.id = const Value.absent(),
@@ -487,6 +526,7 @@ class TestResultsCompanion extends UpdateCompanion<TestResult> {
     this.aprovadosNoLote = const Value.absent(),
     this.serial = const Value.absent(),
     this.operador = const Value.absent(),
+    this.isRetest = const Value.absent(),
     this.createdAt = const Value.absent(),
   });
   TestResultsCompanion.insert({
@@ -499,6 +539,7 @@ class TestResultsCompanion extends UpdateCompanion<TestResult> {
     required int aprovadosNoLote,
     this.serial = const Value.absent(),
     this.operador = const Value.absent(),
+    this.isRetest = const Value.absent(),
     required DateTime createdAt,
   }) : deviceId = Value(deviceId),
        numeroOp = Value(numeroOp),
@@ -517,6 +558,7 @@ class TestResultsCompanion extends UpdateCompanion<TestResult> {
     Expression<int>? aprovadosNoLote,
     Expression<String>? serial,
     Expression<String>? operador,
+    Expression<bool>? isRetest,
     Expression<DateTime>? createdAt,
   }) {
     return RawValuesInsertable({
@@ -529,6 +571,7 @@ class TestResultsCompanion extends UpdateCompanion<TestResult> {
       if (aprovadosNoLote != null) 'aprovados_no_lote': aprovadosNoLote,
       if (serial != null) 'serial': serial,
       if (operador != null) 'operador': operador,
+      if (isRetest != null) 'is_retest': isRetest,
       if (createdAt != null) 'created_at': createdAt,
     });
   }
@@ -543,6 +586,7 @@ class TestResultsCompanion extends UpdateCompanion<TestResult> {
     Value<int>? aprovadosNoLote,
     Value<String?>? serial,
     Value<String?>? operador,
+    Value<bool>? isRetest,
     Value<DateTime>? createdAt,
   }) {
     return TestResultsCompanion(
@@ -555,6 +599,7 @@ class TestResultsCompanion extends UpdateCompanion<TestResult> {
       aprovadosNoLote: aprovadosNoLote ?? this.aprovadosNoLote,
       serial: serial ?? this.serial,
       operador: operador ?? this.operador,
+      isRetest: isRetest ?? this.isRetest,
       createdAt: createdAt ?? this.createdAt,
     );
   }
@@ -589,6 +634,9 @@ class TestResultsCompanion extends UpdateCompanion<TestResult> {
     if (operador.present) {
       map['operador'] = Variable<String>(operador.value);
     }
+    if (isRetest.present) {
+      map['is_retest'] = Variable<bool>(isRetest.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
@@ -607,6 +655,7 @@ class TestResultsCompanion extends UpdateCompanion<TestResult> {
           ..write('aprovadosNoLote: $aprovadosNoLote, ')
           ..write('serial: $serial, ')
           ..write('operador: $operador, ')
+          ..write('isRetest: $isRetest, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
         .toString();
@@ -1553,6 +1602,17 @@ class $SyncQueueTable extends SyncQueue
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _documentPathMeta = const VerificationMeta(
+    'documentPath',
+  );
+  @override
+  late final GeneratedColumn<String> documentPath = GeneratedColumn<String>(
+    'document_path',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _payloadMeta = const VerificationMeta(
     'payload',
   );
@@ -1614,6 +1674,7 @@ class $SyncQueueTable extends SyncQueue
     id,
     collection,
     documentId,
+    documentPath,
     payload,
     operation,
     createdAt,
@@ -1650,6 +1711,15 @@ class $SyncQueueTable extends SyncQueue
       );
     } else if (isInserting) {
       context.missing(_documentIdMeta);
+    }
+    if (data.containsKey('document_path')) {
+      context.handle(
+        _documentPathMeta,
+        documentPath.isAcceptableOrUnknown(
+          data['document_path']!,
+          _documentPathMeta,
+        ),
+      );
     }
     if (data.containsKey('payload')) {
       context.handle(
@@ -1708,6 +1778,10 @@ class $SyncQueueTable extends SyncQueue
         DriftSqlType.string,
         data['${effectivePrefix}document_id'],
       )!,
+      documentPath: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}document_path'],
+      ),
       payload: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}payload'],
@@ -1741,6 +1815,7 @@ class SyncQueueData extends DataClass implements Insertable<SyncQueueData> {
   final int id;
   final String collection;
   final String documentId;
+  final String? documentPath;
   final String payload;
   final String operation;
   final DateTime createdAt;
@@ -1750,6 +1825,7 @@ class SyncQueueData extends DataClass implements Insertable<SyncQueueData> {
     required this.id,
     required this.collection,
     required this.documentId,
+    this.documentPath,
     required this.payload,
     required this.operation,
     required this.createdAt,
@@ -1762,6 +1838,9 @@ class SyncQueueData extends DataClass implements Insertable<SyncQueueData> {
     map['id'] = Variable<int>(id);
     map['collection'] = Variable<String>(collection);
     map['document_id'] = Variable<String>(documentId);
+    if (!nullToAbsent || documentPath != null) {
+      map['document_path'] = Variable<String>(documentPath);
+    }
     map['payload'] = Variable<String>(payload);
     map['operation'] = Variable<String>(operation);
     map['created_at'] = Variable<DateTime>(createdAt);
@@ -1777,6 +1856,9 @@ class SyncQueueData extends DataClass implements Insertable<SyncQueueData> {
       id: Value(id),
       collection: Value(collection),
       documentId: Value(documentId),
+      documentPath: documentPath == null && nullToAbsent
+          ? const Value.absent()
+          : Value(documentPath),
       payload: Value(payload),
       operation: Value(operation),
       createdAt: Value(createdAt),
@@ -1796,6 +1878,7 @@ class SyncQueueData extends DataClass implements Insertable<SyncQueueData> {
       id: serializer.fromJson<int>(json['id']),
       collection: serializer.fromJson<String>(json['collection']),
       documentId: serializer.fromJson<String>(json['documentId']),
+      documentPath: serializer.fromJson<String?>(json['documentPath']),
       payload: serializer.fromJson<String>(json['payload']),
       operation: serializer.fromJson<String>(json['operation']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
@@ -1810,6 +1893,7 @@ class SyncQueueData extends DataClass implements Insertable<SyncQueueData> {
       'id': serializer.toJson<int>(id),
       'collection': serializer.toJson<String>(collection),
       'documentId': serializer.toJson<String>(documentId),
+      'documentPath': serializer.toJson<String?>(documentPath),
       'payload': serializer.toJson<String>(payload),
       'operation': serializer.toJson<String>(operation),
       'createdAt': serializer.toJson<DateTime>(createdAt),
@@ -1822,6 +1906,7 @@ class SyncQueueData extends DataClass implements Insertable<SyncQueueData> {
     int? id,
     String? collection,
     String? documentId,
+    Value<String?> documentPath = const Value.absent(),
     String? payload,
     String? operation,
     DateTime? createdAt,
@@ -1831,6 +1916,7 @@ class SyncQueueData extends DataClass implements Insertable<SyncQueueData> {
     id: id ?? this.id,
     collection: collection ?? this.collection,
     documentId: documentId ?? this.documentId,
+    documentPath: documentPath.present ? documentPath.value : this.documentPath,
     payload: payload ?? this.payload,
     operation: operation ?? this.operation,
     createdAt: createdAt ?? this.createdAt,
@@ -1846,6 +1932,9 @@ class SyncQueueData extends DataClass implements Insertable<SyncQueueData> {
       documentId: data.documentId.present
           ? data.documentId.value
           : this.documentId,
+      documentPath: data.documentPath.present
+          ? data.documentPath.value
+          : this.documentPath,
       payload: data.payload.present ? data.payload.value : this.payload,
       operation: data.operation.present ? data.operation.value : this.operation,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
@@ -1860,6 +1949,7 @@ class SyncQueueData extends DataClass implements Insertable<SyncQueueData> {
           ..write('id: $id, ')
           ..write('collection: $collection, ')
           ..write('documentId: $documentId, ')
+          ..write('documentPath: $documentPath, ')
           ..write('payload: $payload, ')
           ..write('operation: $operation, ')
           ..write('createdAt: $createdAt, ')
@@ -1874,6 +1964,7 @@ class SyncQueueData extends DataClass implements Insertable<SyncQueueData> {
     id,
     collection,
     documentId,
+    documentPath,
     payload,
     operation,
     createdAt,
@@ -1887,6 +1978,7 @@ class SyncQueueData extends DataClass implements Insertable<SyncQueueData> {
           other.id == this.id &&
           other.collection == this.collection &&
           other.documentId == this.documentId &&
+          other.documentPath == this.documentPath &&
           other.payload == this.payload &&
           other.operation == this.operation &&
           other.createdAt == this.createdAt &&
@@ -1898,6 +1990,7 @@ class SyncQueueCompanion extends UpdateCompanion<SyncQueueData> {
   final Value<int> id;
   final Value<String> collection;
   final Value<String> documentId;
+  final Value<String?> documentPath;
   final Value<String> payload;
   final Value<String> operation;
   final Value<DateTime> createdAt;
@@ -1907,6 +2000,7 @@ class SyncQueueCompanion extends UpdateCompanion<SyncQueueData> {
     this.id = const Value.absent(),
     this.collection = const Value.absent(),
     this.documentId = const Value.absent(),
+    this.documentPath = const Value.absent(),
     this.payload = const Value.absent(),
     this.operation = const Value.absent(),
     this.createdAt = const Value.absent(),
@@ -1917,6 +2011,7 @@ class SyncQueueCompanion extends UpdateCompanion<SyncQueueData> {
     this.id = const Value.absent(),
     required String collection,
     required String documentId,
+    this.documentPath = const Value.absent(),
     required String payload,
     required String operation,
     required DateTime createdAt,
@@ -1931,6 +2026,7 @@ class SyncQueueCompanion extends UpdateCompanion<SyncQueueData> {
     Expression<int>? id,
     Expression<String>? collection,
     Expression<String>? documentId,
+    Expression<String>? documentPath,
     Expression<String>? payload,
     Expression<String>? operation,
     Expression<DateTime>? createdAt,
@@ -1941,6 +2037,7 @@ class SyncQueueCompanion extends UpdateCompanion<SyncQueueData> {
       if (id != null) 'id': id,
       if (collection != null) 'collection': collection,
       if (documentId != null) 'document_id': documentId,
+      if (documentPath != null) 'document_path': documentPath,
       if (payload != null) 'payload': payload,
       if (operation != null) 'operation': operation,
       if (createdAt != null) 'created_at': createdAt,
@@ -1953,6 +2050,7 @@ class SyncQueueCompanion extends UpdateCompanion<SyncQueueData> {
     Value<int>? id,
     Value<String>? collection,
     Value<String>? documentId,
+    Value<String?>? documentPath,
     Value<String>? payload,
     Value<String>? operation,
     Value<DateTime>? createdAt,
@@ -1963,6 +2061,7 @@ class SyncQueueCompanion extends UpdateCompanion<SyncQueueData> {
       id: id ?? this.id,
       collection: collection ?? this.collection,
       documentId: documentId ?? this.documentId,
+      documentPath: documentPath ?? this.documentPath,
       payload: payload ?? this.payload,
       operation: operation ?? this.operation,
       createdAt: createdAt ?? this.createdAt,
@@ -1982,6 +2081,9 @@ class SyncQueueCompanion extends UpdateCompanion<SyncQueueData> {
     }
     if (documentId.present) {
       map['document_id'] = Variable<String>(documentId.value);
+    }
+    if (documentPath.present) {
+      map['document_path'] = Variable<String>(documentPath.value);
     }
     if (payload.present) {
       map['payload'] = Variable<String>(payload.value);
@@ -2007,6 +2109,7 @@ class SyncQueueCompanion extends UpdateCompanion<SyncQueueData> {
           ..write('id: $id, ')
           ..write('collection: $collection, ')
           ..write('documentId: $documentId, ')
+          ..write('documentPath: $documentPath, ')
           ..write('payload: $payload, ')
           ..write('operation: $operation, ')
           ..write('createdAt: $createdAt, ')
@@ -3604,6 +3707,260 @@ class OperatorsCompanion extends UpdateCompanion<Operator> {
   }
 }
 
+class $BancadasTable extends Bancadas with TableInfo<$BancadasTable, Bancada> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $BancadasTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _numeroMeta = const VerificationMeta('numero');
+  @override
+  late final GeneratedColumn<int> numero = GeneratedColumn<int>(
+    'numero',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _deviceIdMeta = const VerificationMeta(
+    'deviceId',
+  );
+  @override
+  late final GeneratedColumn<String> deviceId = GeneratedColumn<String>(
+    'device_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [numero, deviceId, createdAt];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'bancadas';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<Bancada> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('numero')) {
+      context.handle(
+        _numeroMeta,
+        numero.isAcceptableOrUnknown(data['numero']!, _numeroMeta),
+      );
+    }
+    if (data.containsKey('device_id')) {
+      context.handle(
+        _deviceIdMeta,
+        deviceId.isAcceptableOrUnknown(data['device_id']!, _deviceIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_deviceIdMeta);
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {numero};
+  @override
+  Bancada map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return Bancada(
+      numero: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}numero'],
+      )!,
+      deviceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}device_id'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+    );
+  }
+
+  @override
+  $BancadasTable createAlias(String alias) {
+    return $BancadasTable(attachedDatabase, alias);
+  }
+}
+
+class Bancada extends DataClass implements Insertable<Bancada> {
+  final int numero;
+  final String deviceId;
+  final DateTime createdAt;
+  const Bancada({
+    required this.numero,
+    required this.deviceId,
+    required this.createdAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['numero'] = Variable<int>(numero);
+    map['device_id'] = Variable<String>(deviceId);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    return map;
+  }
+
+  BancadasCompanion toCompanion(bool nullToAbsent) {
+    return BancadasCompanion(
+      numero: Value(numero),
+      deviceId: Value(deviceId),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory Bancada.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return Bancada(
+      numero: serializer.fromJson<int>(json['numero']),
+      deviceId: serializer.fromJson<String>(json['deviceId']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'numero': serializer.toJson<int>(numero),
+      'deviceId': serializer.toJson<String>(deviceId),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  Bancada copyWith({int? numero, String? deviceId, DateTime? createdAt}) =>
+      Bancada(
+        numero: numero ?? this.numero,
+        deviceId: deviceId ?? this.deviceId,
+        createdAt: createdAt ?? this.createdAt,
+      );
+  Bancada copyWithCompanion(BancadasCompanion data) {
+    return Bancada(
+      numero: data.numero.present ? data.numero.value : this.numero,
+      deviceId: data.deviceId.present ? data.deviceId.value : this.deviceId,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('Bancada(')
+          ..write('numero: $numero, ')
+          ..write('deviceId: $deviceId, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(numero, deviceId, createdAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is Bancada &&
+          other.numero == this.numero &&
+          other.deviceId == this.deviceId &&
+          other.createdAt == this.createdAt);
+}
+
+class BancadasCompanion extends UpdateCompanion<Bancada> {
+  final Value<int> numero;
+  final Value<String> deviceId;
+  final Value<DateTime> createdAt;
+  const BancadasCompanion({
+    this.numero = const Value.absent(),
+    this.deviceId = const Value.absent(),
+    this.createdAt = const Value.absent(),
+  });
+  BancadasCompanion.insert({
+    this.numero = const Value.absent(),
+    required String deviceId,
+    required DateTime createdAt,
+  }) : deviceId = Value(deviceId),
+       createdAt = Value(createdAt);
+  static Insertable<Bancada> custom({
+    Expression<int>? numero,
+    Expression<String>? deviceId,
+    Expression<DateTime>? createdAt,
+  }) {
+    return RawValuesInsertable({
+      if (numero != null) 'numero': numero,
+      if (deviceId != null) 'device_id': deviceId,
+      if (createdAt != null) 'created_at': createdAt,
+    });
+  }
+
+  BancadasCompanion copyWith({
+    Value<int>? numero,
+    Value<String>? deviceId,
+    Value<DateTime>? createdAt,
+  }) {
+    return BancadasCompanion(
+      numero: numero ?? this.numero,
+      deviceId: deviceId ?? this.deviceId,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (numero.present) {
+      map['numero'] = Variable<int>(numero.value);
+    }
+    if (deviceId.present) {
+      map['device_id'] = Variable<String>(deviceId.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('BancadasCompanion(')
+          ..write('numero: $numero, ')
+          ..write('deviceId: $deviceId, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -3618,6 +3975,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
       $CalibrationHistoryTable(this);
   late final $OpLocksTable opLocks = $OpLocksTable(this);
   late final $OperatorsTable operators = $OperatorsTable(this);
+  late final $BancadasTable bancadas = $BancadasTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -3632,6 +3990,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     calibrationHistory,
     opLocks,
     operators,
+    bancadas,
   ];
 }
 
@@ -3646,6 +4005,7 @@ typedef $$TestResultsTableCreateCompanionBuilder =
       required int aprovadosNoLote,
       Value<String?> serial,
       Value<String?> operador,
+      Value<bool> isRetest,
       required DateTime createdAt,
     });
 typedef $$TestResultsTableUpdateCompanionBuilder =
@@ -3659,6 +4019,7 @@ typedef $$TestResultsTableUpdateCompanionBuilder =
       Value<int> aprovadosNoLote,
       Value<String?> serial,
       Value<String?> operador,
+      Value<bool> isRetest,
       Value<DateTime> createdAt,
     });
 
@@ -3713,6 +4074,11 @@ class $$TestResultsTableFilterComposer
 
   ColumnFilters<String> get operador => $composableBuilder(
     column: $table.operador,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isRetest => $composableBuilder(
+    column: $table.isRetest,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -3776,6 +4142,11 @@ class $$TestResultsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<bool> get isRetest => $composableBuilder(
+    column: $table.isRetest,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -3824,6 +4195,9 @@ class $$TestResultsTableAnnotationComposer
   GeneratedColumn<String> get operador =>
       $composableBuilder(column: $table.operador, builder: (column) => column);
 
+  GeneratedColumn<bool> get isRetest =>
+      $composableBuilder(column: $table.isRetest, builder: (column) => column);
+
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
 }
@@ -3868,6 +4242,7 @@ class $$TestResultsTableTableManager
                 Value<int> aprovadosNoLote = const Value.absent(),
                 Value<String?> serial = const Value.absent(),
                 Value<String?> operador = const Value.absent(),
+                Value<bool> isRetest = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
               }) => TestResultsCompanion(
                 id: id,
@@ -3879,6 +4254,7 @@ class $$TestResultsTableTableManager
                 aprovadosNoLote: aprovadosNoLote,
                 serial: serial,
                 operador: operador,
+                isRetest: isRetest,
                 createdAt: createdAt,
               ),
           createCompanionCallback:
@@ -3892,6 +4268,7 @@ class $$TestResultsTableTableManager
                 required int aprovadosNoLote,
                 Value<String?> serial = const Value.absent(),
                 Value<String?> operador = const Value.absent(),
+                Value<bool> isRetest = const Value.absent(),
                 required DateTime createdAt,
               }) => TestResultsCompanion.insert(
                 id: id,
@@ -3903,6 +4280,7 @@ class $$TestResultsTableTableManager
                 aprovadosNoLote: aprovadosNoLote,
                 serial: serial,
                 operador: operador,
+                isRetest: isRetest,
                 createdAt: createdAt,
               ),
           withReferenceMapper: (p0) => p0
@@ -4407,6 +4785,7 @@ typedef $$SyncQueueTableCreateCompanionBuilder =
       Value<int> id,
       required String collection,
       required String documentId,
+      Value<String?> documentPath,
       required String payload,
       required String operation,
       required DateTime createdAt,
@@ -4418,6 +4797,7 @@ typedef $$SyncQueueTableUpdateCompanionBuilder =
       Value<int> id,
       Value<String> collection,
       Value<String> documentId,
+      Value<String?> documentPath,
       Value<String> payload,
       Value<String> operation,
       Value<DateTime> createdAt,
@@ -4446,6 +4826,11 @@ class $$SyncQueueTableFilterComposer
 
   ColumnFilters<String> get documentId => $composableBuilder(
     column: $table.documentId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get documentPath => $composableBuilder(
+    column: $table.documentPath,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -4499,6 +4884,11 @@ class $$SyncQueueTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get documentPath => $composableBuilder(
+    column: $table.documentPath,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get payload => $composableBuilder(
     column: $table.payload,
     builder: (column) => ColumnOrderings(column),
@@ -4544,6 +4934,11 @@ class $$SyncQueueTableAnnotationComposer
 
   GeneratedColumn<String> get documentId => $composableBuilder(
     column: $table.documentId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get documentPath => $composableBuilder(
+    column: $table.documentPath,
     builder: (column) => column,
   );
 
@@ -4597,6 +4992,7 @@ class $$SyncQueueTableTableManager
                 Value<int> id = const Value.absent(),
                 Value<String> collection = const Value.absent(),
                 Value<String> documentId = const Value.absent(),
+                Value<String?> documentPath = const Value.absent(),
                 Value<String> payload = const Value.absent(),
                 Value<String> operation = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
@@ -4606,6 +5002,7 @@ class $$SyncQueueTableTableManager
                 id: id,
                 collection: collection,
                 documentId: documentId,
+                documentPath: documentPath,
                 payload: payload,
                 operation: operation,
                 createdAt: createdAt,
@@ -4617,6 +5014,7 @@ class $$SyncQueueTableTableManager
                 Value<int> id = const Value.absent(),
                 required String collection,
                 required String documentId,
+                Value<String?> documentPath = const Value.absent(),
                 required String payload,
                 required String operation,
                 required DateTime createdAt,
@@ -4626,6 +5024,7 @@ class $$SyncQueueTableTableManager
                 id: id,
                 collection: collection,
                 documentId: documentId,
+                documentPath: documentPath,
                 payload: payload,
                 operation: operation,
                 createdAt: createdAt,
@@ -5572,6 +5971,156 @@ typedef $$OperatorsTableProcessedTableManager =
       Operator,
       PrefetchHooks Function()
     >;
+typedef $$BancadasTableCreateCompanionBuilder =
+    BancadasCompanion Function({
+      Value<int> numero,
+      required String deviceId,
+      required DateTime createdAt,
+    });
+typedef $$BancadasTableUpdateCompanionBuilder =
+    BancadasCompanion Function({
+      Value<int> numero,
+      Value<String> deviceId,
+      Value<DateTime> createdAt,
+    });
+
+class $$BancadasTableFilterComposer
+    extends Composer<_$AppDatabase, $BancadasTable> {
+  $$BancadasTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get numero => $composableBuilder(
+    column: $table.numero,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get deviceId => $composableBuilder(
+    column: $table.deviceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$BancadasTableOrderingComposer
+    extends Composer<_$AppDatabase, $BancadasTable> {
+  $$BancadasTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get numero => $composableBuilder(
+    column: $table.numero,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get deviceId => $composableBuilder(
+    column: $table.deviceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$BancadasTableAnnotationComposer
+    extends Composer<_$AppDatabase, $BancadasTable> {
+  $$BancadasTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get numero =>
+      $composableBuilder(column: $table.numero, builder: (column) => column);
+
+  GeneratedColumn<String> get deviceId =>
+      $composableBuilder(column: $table.deviceId, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+}
+
+class $$BancadasTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $BancadasTable,
+          Bancada,
+          $$BancadasTableFilterComposer,
+          $$BancadasTableOrderingComposer,
+          $$BancadasTableAnnotationComposer,
+          $$BancadasTableCreateCompanionBuilder,
+          $$BancadasTableUpdateCompanionBuilder,
+          (Bancada, BaseReferences<_$AppDatabase, $BancadasTable, Bancada>),
+          Bancada,
+          PrefetchHooks Function()
+        > {
+  $$BancadasTableTableManager(_$AppDatabase db, $BancadasTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$BancadasTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$BancadasTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$BancadasTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> numero = const Value.absent(),
+                Value<String> deviceId = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+              }) => BancadasCompanion(
+                numero: numero,
+                deviceId: deviceId,
+                createdAt: createdAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> numero = const Value.absent(),
+                required String deviceId,
+                required DateTime createdAt,
+              }) => BancadasCompanion.insert(
+                numero: numero,
+                deviceId: deviceId,
+                createdAt: createdAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$BancadasTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $BancadasTable,
+      Bancada,
+      $$BancadasTableFilterComposer,
+      $$BancadasTableOrderingComposer,
+      $$BancadasTableAnnotationComposer,
+      $$BancadasTableCreateCompanionBuilder,
+      $$BancadasTableUpdateCompanionBuilder,
+      (Bancada, BaseReferences<_$AppDatabase, $BancadasTable, Bancada>),
+      Bancada,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -5594,4 +6143,6 @@ class $AppDatabaseManager {
       $$OpLocksTableTableManager(_db, _db.opLocks);
   $$OperatorsTableTableManager get operators =>
       $$OperatorsTableTableManager(_db, _db.operators);
+  $$BancadasTableTableManager get bancadas =>
+      $$BancadasTableTableManager(_db, _db.bancadas);
 }

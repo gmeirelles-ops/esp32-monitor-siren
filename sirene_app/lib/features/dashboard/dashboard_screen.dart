@@ -3,11 +3,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/database/database.dart';
 import '../../core/theme/diponto_theme.dart';
+import '../../shared/display_labels.dart';
+import '../../shared/portuguese_labels.dart';
 import '../../shared/widgets/desktop_form_layout.dart';
 import '../../shared/widgets/empty_state_view.dart';
 import '../../shared/widgets/form_section_card.dart';
 import '../../shared/widgets/screen_app_bar.dart';
 import '../../shared/widgets/simple_bar_chart.dart';
+import '../bancadas/bancadas_provider.dart';
+import '../mqtt/mqtt_providers.dart';
+import '../products/products_provider.dart';
 import 'dashboard_providers.dart';
 
 class DashboardScreen extends ConsumerWidget {
@@ -17,6 +22,7 @@ class DashboardScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final filters = ref.watch(dashboardFiltersProvider);
     final dashboardAsync = ref.watch(dashboardDataProvider);
+    final bancadas = ref.watch(bancadasMapProvider).valueOrNull ?? {};
 
     return Scaffold(
       appBar: screenAppBar(context, title: 'Painel'),
@@ -30,7 +36,11 @@ class DashboardScreen extends ConsumerWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  _FiltersSection(filters: filters, options: data.filterOptions),
+                  _FiltersSection(
+                    filters: filters,
+                    options: data.filterOptions,
+                    bancadas: bancadas,
+                  ),
                   const SizedBox(height: 16),
                   if (data.summary.total == 0)
                     Padding(
@@ -67,7 +77,7 @@ class DashboardScreen extends ConsumerWidget {
                     ),
                     const SizedBox(height: 16),
                     FormSectionCard(
-                      title: 'Yield por dia (%)',
+                      title: PortugueseLabels.rendimentoPorDia,
                       child: SimpleBarChart(
                         bars: [
                           for (final d in data.throughput)
@@ -95,7 +105,7 @@ class DashboardScreen extends ConsumerWidget {
                                   title: Text('OP ${batch.numeroOp}'),
                                   subtitle: Text(
                                     '${batch.aprovados} aprovados · ${batch.reprovados} reprovados · '
-                                    'yield ${batch.yieldPct.toStringAsFixed(1)}%',
+                                    'rendimento ${batch.yieldPct.toStringAsFixed(1)}%',
                                   ),
                                   trailing: Text(
                                     '${batch.total} testes',
@@ -147,7 +157,9 @@ class DashboardScreen extends ConsumerWidget {
                                     color: DipontoColors.error,
                                   ),
                                   title: Text(a.falha),
-                                  subtitle: Text('${a.deviceId} — ${a.createdAt.toLocal()}'),
+                                  subtitle: Text(
+                                    '${formatBancadaLabelFromMap(a.deviceId, bancadas)} — ${a.createdAt.toLocal()}',
+                                  ),
                                 ),
                             ],
                           ),
@@ -171,14 +183,23 @@ class DashboardScreen extends ConsumerWidget {
 }
 
 class _FiltersSection extends ConsumerWidget {
-  const _FiltersSection({required this.filters, required this.options});
+  const _FiltersSection({
+    required this.filters,
+    required this.options,
+    required this.bancadas,
+  });
 
   final DashboardFilters filters;
   final DashboardFilterOptions options;
+  final Map<String, int> bancadas;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final notifier = ref.read(dashboardFiltersProvider.notifier);
+    final catalog = ref.watch(productsStreamProvider).maybeWhen(
+          data: productCatalogById,
+          orElse: () => <String, Product>{},
+        );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -210,14 +231,16 @@ class _FiltersSection extends ConsumerWidget {
               label: 'Produto',
               value: filters.idProduto,
               items: options.products,
+              itemLabel: (id) => formatProductLabel(id, catalog: catalog),
               onChanged: (v) => notifier.state = v == null
                   ? filters.copyWith(clearIdProduto: true)
                   : filters.copyWith(idProduto: v),
             ),
             _FilterDropdown(
-              label: 'Dispositivo',
+              label: 'Bancada',
               value: filters.deviceId,
               items: options.devices,
+              itemLabel: (id) => formatBancadaLabelFromMap(id, bancadas),
               onChanged: (v) => notifier.state = v == null
                   ? filters.copyWith(clearDeviceId: true)
                   : filters.copyWith(deviceId: v),
@@ -241,12 +264,14 @@ class _FilterDropdown extends StatelessWidget {
     required this.value,
     required this.items,
     required this.onChanged,
+    this.itemLabel,
   });
 
   final String label;
   final String? value;
   final List<String> items;
   final ValueChanged<String?> onChanged;
+  final String Function(String item)? itemLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -262,7 +287,10 @@ class _FilterDropdown extends StatelessWidget {
         items: [
           const DropdownMenuItem<String?>(value: null, child: Text('Todos')),
           for (final item in items)
-            DropdownMenuItem<String?>(value: item, child: Text(item)),
+            DropdownMenuItem<String?>(
+              value: item,
+              child: Text(itemLabel?.call(item) ?? item),
+            ),
         ],
         onChanged: onChanged,
       ),
@@ -289,7 +317,7 @@ class _MetricsRow extends StatelessWidget {
           icon: Icons.fact_check_outlined,
         ),
         _MetricCard(
-          label: 'Yield',
+          label: PortugueseLabels.rendimento,
           value: '${summary.yieldPct.toStringAsFixed(1)}%',
           icon: Icons.trending_up,
           color: DipontoColors.success,

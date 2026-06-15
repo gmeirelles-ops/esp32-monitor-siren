@@ -34,6 +34,9 @@ bool pure_fsm_can_accept_ota(pure_state_t state);
 
 bool pure_batch_quota_reached(uint32_t aprovados, uint32_t quantidade_total);
 
+/// Aprovação em modo reteste não consome cota nem sequencial.
+bool pure_batch_approval_updates_counters(bool modo_reteste, bool approved);
+
 typedef struct {
     char numero_op[16];
     char id_produto[4];

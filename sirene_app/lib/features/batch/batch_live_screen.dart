@@ -6,10 +6,13 @@ import 'package:intl/intl.dart';
 import '../../core/database/database.dart';
 import '../../core/database/veredito.dart';
 import '../../core/theme/diponto_theme.dart';
+import '../../shared/display_labels.dart';
+import '../../shared/portuguese_labels.dart';
 import '../../shared/widgets/desktop_form_layout.dart';
 import '../../shared/widgets/form_section_card.dart';
 import '../../shared/widgets/global_app_bar_actions.dart';
 import '../../shared/widgets/simple_bar_chart.dart';
+import '../bancadas/bancadas_provider.dart';
 import '../cloud/auth/auth_providers.dart';
 import '../mqtt/models/mqtt_messages.dart';
 import '../mqtt/mqtt_providers.dart';
@@ -34,6 +37,7 @@ class BatchLiveScreen extends ConsumerStatefulWidget {
 class _BatchLiveScreenState extends ConsumerState<BatchLiveScreen> {
   bool _ending = false;
   bool _simulating = false;
+  bool _syncingRetest = false;
 
   Future<void> _endBatch() async {
     final confirm = await showDialog<bool>(
@@ -83,15 +87,33 @@ class _BatchLiveScreenState extends ConsumerState<BatchLiveScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
+  Future<void> _toggleRetest(bool value) async {
+    setState(() => _syncingRetest = true);
+    try {
+      final rejection =
+          await ref.read(devicesProvider.notifier).syncRetestMode(widget.deviceId, value);
+      if (!mounted) return;
+      if (rejection != null) {
+        _showSnack('Não foi possível alterar reteste: $rejection');
+      }
+    } catch (e) {
+      _showSnack('Erro: $e');
+    } finally {
+      if (mounted) setState(() => _syncingRetest = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final device = ref.watch(devicesProvider)[widget.deviceId];
+    final bancadas = ref.watch(bancadasMapProvider).valueOrNull ?? {};
     final batch = device?.activeBatch;
     final estado = device?.estado ?? DeviceFsmState.unknown;
     final testsAsync = ref.watch(batchLiveTestsProvider(widget.numeroOp));
     final metricsAsync = ref.watch(batchLiveMetricsProvider(widget.numeroOp));
     final labelCountAsync = ref.watch(labelBufferCountProvider);
     final devUsed = ref.watch(batchDevSimulatorUsedProvider);
+    final retestMode = ref.watch(retestModeProvider);
     final activeOp = ref.watch(activeOperatorProvider).valueOrNull;
     final operador = activeOp != null
         ? AppDatabase.operatorLabel(activeOp)
@@ -102,6 +124,17 @@ class _BatchLiveScreenState extends ConsumerState<BatchLiveScreen> {
     ref.listen(latestRejectionProvider, (prev, next) {
       if (next != null && next.deviceId == widget.deviceId) {
         _showSnack('Rejeição: ${next.rejection.motivo}');
+      }
+    });
+
+    ref.listen(autoBatchEndedProvider, (prev, next) {
+      if (next != null &&
+          next.deviceId == widget.deviceId &&
+          next.numeroOp == widget.numeroOp &&
+          mounted) {
+        _showSnack('Lote encerrado automaticamente — meta atingida');
+        Navigator.of(context).pop();
+        ref.read(autoBatchEndedProvider.notifier).state = null;
       }
     });
 
@@ -137,6 +170,35 @@ class _BatchLiveScreenState extends ConsumerState<BatchLiveScreen> {
                       subtitle: Text('Testes simulados usam potências fictícias'),
                     ),
                   ),
+                if (retestMode)
+                  Card(
+                    color: Colors.blue.withValues(alpha: 0.12),
+                    child: const ListTile(
+                      leading: Icon(Icons.replay, color: Colors.lightBlueAccent),
+                      title: Text('Modo reteste'),
+                      subtitle: Text('Testes não consomem serial nem cota do lote'),
+                    ),
+                  ),
+                if (batch != null)
+                  Card(
+                    child: CheckboxListTile(
+                      value: retestMode,
+                      onChanged: estado == DeviceFsmState.testing || _syncingRetest
+                          ? null
+                          : (v) => _toggleRetest(v ?? false),
+                      title: const Text('Reteste'),
+                      subtitle: const Text(
+                        'Repetir teste sem gerar serial nem consumir meta',
+                      ),
+                      secondary: _syncingRetest
+                          ? const SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.replay_outlined),
+                    ),
+                  ),
                 FormSectionCard(
                   title: 'Contexto',
                   child: Column(
@@ -144,7 +206,10 @@ class _BatchLiveScreenState extends ConsumerState<BatchLiveScreen> {
                     children: [
                       _InfoRow('OP', widget.numeroOp),
                       _InfoRow('Produto', productName ?? '—'),
-                      _InfoRow('Dispositivo', widget.deviceId),
+                      _InfoRow(
+                        'Bancada',
+                        formatBancadaLabelFromMap(widget.deviceId, bancadas),
+                      ),
                       _InfoRow('Operador', operador),
                       _InfoRow('Estado', estado.label),
                       if (batch != null) ...[
@@ -208,11 +273,11 @@ class _BatchLiveScreenState extends ConsumerState<BatchLiveScreen> {
                                 color: DipontoColors.error,
                               ),
                               _MetricChip(
-                                label: 'Total testado',
+                                label: PortugueseLabels.totalTestadas,
                                 value: '${metrics.total}',
                               ),
                               _MetricChip(
-                                label: 'Yield',
+                                label: PortugueseLabels.rendimento,
                                 value: '${metrics.yieldPct.toStringAsFixed(1)}%',
                                 color: DipontoColors.primaryLight,
                               ),
@@ -231,11 +296,6 @@ class _BatchLiveScreenState extends ConsumerState<BatchLiveScreen> {
                               backgroundColor: DipontoColors.surfaceVariant,
                             ),
                             Text('${metrics.aprovados} / $meta aprovados'),
-                            if (metrics.aprovados >= meta)
-                              const Text(
-                                'Meta atingida — considere encerrar o lote',
-                                style: TextStyle(color: DipontoColors.primaryLight),
-                              ),
                           ],
                         ],
                       ),
@@ -397,7 +457,7 @@ class _BatchLiveScreenState extends ConsumerState<BatchLiveScreen> {
                               height: 20,
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
-                          : const Text('Encerrar lote (END_BATCH)'),
+                          : const Text(PortugueseLabels.encerrarLote),
                     ),
                   ],
                 ),

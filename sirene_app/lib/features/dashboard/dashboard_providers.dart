@@ -83,7 +83,7 @@ final dashboardDataProvider = FutureProvider<DashboardData>((ref) async {
   final filterOptions = DashboardFilterOptions(
     ops: await db.distinctOps(),
     products: await db.distinctProducts(),
-    devices: await db.distinctDevices(),
+    devices: await db.deviceIdsOrderedByBancada(),
   );
 
   return DashboardData(

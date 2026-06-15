@@ -10,17 +10,21 @@ typedef FirestoreWriter = Future<void> Function(
   String collection,
   String documentId,
   Map<String, dynamic> data,
-  String operation,
-);
+  String operation, {
+  String? documentPath,
+});
 
 Future<void> writeToFirestore(
   FirebaseFirestore firestore,
   String collection,
   String documentId,
   Map<String, dynamic> data,
-  String operation,
-) async {
-  final doc = firestore.collection(collection).doc(documentId);
+  String operation, {
+  String? documentPath,
+}) async {
+  final doc = documentPath != null && documentPath.isNotEmpty
+      ? firestore.doc(documentPath)
+      : firestore.collection(collection).doc(documentId);
   final converted = _convertTimestamps(data);
   if (operation == 'merge') {
     await doc.set(converted, SetOptions(merge: true));
@@ -91,8 +95,15 @@ class SyncQueueProcessor {
         if (item.attempts >= maxAttempts) continue;
         try {
           final data = jsonDecode(item.payload) as Map<String, dynamic>;
+          final path = item.documentPath;
           if (_writer != null) {
-            await _writer(item.collection, item.documentId, data, item.operation);
+            await _writer(
+              item.collection,
+              item.documentId,
+              data,
+              item.operation,
+              documentPath: path,
+            );
           } else {
             await writeToFirestore(
               _firestore!,
@@ -100,6 +111,7 @@ class SyncQueueProcessor {
               item.documentId,
               data,
               item.operation,
+              documentPath: path,
             );
           }
           await _db.markSynced(item.id);

@@ -3,16 +3,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/database/database.dart';
 import '../../core/theme/diponto_theme.dart';
-import '../../shared/widgets/active_operator_chip.dart';
+import '../../shared/display_labels.dart';
+import '../../shared/portuguese_labels.dart';
 import '../../shared/widgets/desktop_form_layout.dart';
 import '../../shared/widgets/screen_app_bar.dart';
 import '../../shared/widgets/empty_state_view.dart';
 import '../../shared/widgets/form_section_card.dart';
 import '../../shared/widgets/responsive_field_row.dart';
+import '../bancadas/bancadas_provider.dart';
 import '../mqtt/models/mqtt_messages.dart';
 import '../mqtt/mqtt_providers.dart';
-import '../operators/operator_selector_sheet.dart';
-import '../operators/operators_provider.dart';
 import '../products/products_provider.dart';
 import 'batch_live_screen.dart';
 
@@ -103,12 +103,6 @@ class _BatchScreenState extends ConsumerState<BatchScreen> {
   }
 
   Future<void> _sendSetBatch(Product product) async {
-    final activeOp = await ref.read(activeOperatorProvider.future);
-    if (activeOp == null) {
-      _showSnack('Selecione o operador do turno antes de configurar o lote');
-      return;
-    }
-
     final deviceId = _selectedDeviceId;
     if (deviceId == null) {
       _showSnack('Selecione um dispositivo');
@@ -147,8 +141,15 @@ class _BatchScreenState extends ConsumerState<BatchScreen> {
   @override
   Widget build(BuildContext context) {
     final devices = ref.watch(devicesProvider);
+    final bancadas = ref.watch(bancadasMapProvider).valueOrNull ?? {};
     final productsAsync = ref.watch(productsStreamProvider);
-    final deviceList = devices.values.toList();
+    final deviceList = devices.values.toList()
+      ..sort((a, b) {
+        final na = bancadas[a.deviceId] ?? 999999;
+        final nb = bancadas[b.deviceId] ?? 999999;
+        if (na != nb) return na.compareTo(nb);
+        return a.deviceId.compareTo(b.deviceId);
+      });
     _selectedDeviceId ??= ref.watch(selectedDeviceIdProvider) ??
         (deviceList.isNotEmpty ? deviceList.first.deviceId : null);
 
@@ -198,31 +199,6 @@ class _BatchScreenState extends ConsumerState<BatchScreen> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     FormSectionCard(
-                      title: 'Turno',
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Operador responsável pelos testes deste turno.',
-                            style: TextStyle(color: Colors.grey, fontSize: 13),
-                          ),
-                          const SizedBox(height: 8),
-                          Align(
-                            alignment: Alignment.centerLeft,
-                            child: ActiveOperatorChip(
-                              compact: false,
-                              key: ValueKey(_selectedDeviceId),
-                            ),
-                          ),
-                          TextButton.icon(
-                            onPressed: () => showOperatorSelector(context, ref),
-                            icon: const Icon(Icons.swap_horiz),
-                            label: const Text('Trocar operador'),
-                          ),
-                        ],
-                      ),
-                    ),
-                    FormSectionCard(
                       title: 'Bancada',
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -232,13 +208,13 @@ class _BatchScreenState extends ConsumerState<BatchScreen> {
                           else
                             DropdownButtonFormField<String>(
                               initialValue: _selectedDeviceId,
-                              decoration: const InputDecoration(labelText: 'Dispositivo'),
+                              decoration: const InputDecoration(labelText: 'Bancada'),
                               selectedItemBuilder: (context) => [
                                 for (final d in deviceList)
                                   Align(
                                     alignment: Alignment.centerLeft,
                                     child: Text(
-                                      d.deviceId,
+                                      formatBancadaLabelFromMap(d.deviceId, bancadas),
                                       overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
@@ -258,7 +234,7 @@ class _BatchScreenState extends ConsumerState<BatchScreen> {
                                                 : DipontoColors.error,
                                           ),
                                           const SizedBox(width: 8),
-                                          Text(d.deviceId),
+                                          Text(formatBancadaLabelFromMap(d.deviceId, bancadas)),
                                         ],
                                       ),
                                     ),

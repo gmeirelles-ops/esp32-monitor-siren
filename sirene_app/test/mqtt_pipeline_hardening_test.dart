@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sirene_app/features/labels/label_print_logic.dart';
+import 'package:sirene_app/features/labels/zpl_generator.dart';
 import 'package:sirene_app/features/mqtt/message_pump.dart';
 
 void main() {
@@ -35,19 +36,22 @@ void main() {
   });
 
   group('printLabelBatches', () {
+    LabelZplItem item(int id, String serial) =>
+        LabelZplItem(serial: serial, productName: 'DP1000 220V');
+
     test('remove apenas ids dos blocos impressos com sucesso', () async {
       final entries = [
-        (id: 1, serial: '1111111111'),
-        (id: 2, serial: '2222222222'),
-        (id: 3, serial: '3333333333'),
-        (id: 4, serial: '4444444444'),
-        (id: 5, serial: '5555555555'),
+        (id: 1, item: item(1, '1111111111')),
+        (id: 2, item: item(2, '2222222222')),
+        (id: 3, item: item(3, '3333333333')),
+        (id: 4, item: item(4, '4444444444')),
+        (id: 5, item: item(5, '5555555555')),
       ];
 
-      final printed = <List<String>>[];
+      final printed = <List<LabelZplItem>>[];
       final result = await printLabelBatches(
         entries: entries,
-        sendZpl: (serials) async => printed.add(serials),
+        sendZpl: (batch) async => printed.add(batch),
       );
 
       expect(result.error, isNull);
@@ -60,10 +64,10 @@ void main() {
     test('falha parcial preserva blocos não enviados', () async {
       var batch = 0;
       final entries = [
-        (id: 1, serial: '1111111111'),
-        (id: 2, serial: '2222222222'),
-        (id: 3, serial: '3333333333'),
-        (id: 4, serial: '4444444444'),
+        (id: 1, item: item(1, '1111111111')),
+        (id: 2, item: item(2, '2222222222')),
+        (id: 3, item: item(3, '3333333333')),
+        (id: 4, item: item(4, '4444444444')),
       ];
 
       final result = await printLabelBatches(

@@ -22,11 +22,12 @@ class BatchMetrics {
 }
 
 BatchMetrics computeBatchMetrics(Iterable<TestResult> rows) {
+  final production = rows.where((r) => !r.isRetest);
   var aprovados = 0;
-  for (final r in rows) {
+  for (final r in production) {
     if (isApprovedVeredito(r.veredito)) aprovados++;
   }
-  final total = rows.length;
+  final total = production.length;
   return BatchMetrics(
     total: total,
     aprovados: aprovados,

@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:sqlite3_flutter_libs/sqlite3_flutter_libs.dart';
 
 import 'batch_metrics.dart';
+import 'traceability.dart';
 import 'veredito.dart';
 
 part 'database.g.dart';
@@ -21,6 +22,7 @@ class TestResults extends Table {
   IntColumn get aprovadosNoLote => integer()();
   TextColumn get serial => text().nullable()();
   TextColumn get operador => text().nullable()();
+  BoolColumn get isRetest => boolean().withDefault(const Constant(false))();
   DateTimeColumn get createdAt => dateTime()();
 }
 
@@ -50,6 +52,7 @@ class SyncQueue extends Table {
   IntColumn get id => integer().autoIncrement()();
   TextColumn get collection => text()();
   TextColumn get documentId => text()();
+  TextColumn get documentPath => text().nullable()();
   TextColumn get payload => text()();
   TextColumn get operation => text()();
   DateTimeColumn get createdAt => dateTime()();
@@ -99,6 +102,12 @@ class Operators extends Table {
   DateTimeColumn get createdAt => dateTime()();
 }
 
+class Bancadas extends Table {
+  IntColumn get numero => integer().autoIncrement()();
+  TextColumn get deviceId => text().unique()();
+  DateTimeColumn get createdAt => dateTime()();
+}
+
 @DriftDatabase(
   tables: [
     TestResults,
@@ -110,6 +119,7 @@ class Operators extends Table {
     CalibrationHistory,
     OpLocks,
     Operators,
+    Bancadas,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -118,7 +128,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 9;
+  int get schemaVersion => 12;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -160,8 +170,89 @@ class AppDatabase extends _$AppDatabase {
           if (from < 9) {
             await m.createTable(operators);
           }
+          if (from < 10) {
+            await m.addColumn(testResults, testResults.isRetest);
+          }
+          if (from < 11) {
+            await m.createTable(bancadas);
+            await _backfillBancadas();
+          }
+          if (from < 12) {
+            await m.addColumn(syncQueue, syncQueue.documentPath);
+          }
         },
       );
+
+  Future<void> _backfillBancadas() async {
+    final existing = await select(bancadas).get();
+    if (existing.isNotEmpty) return;
+
+    final rows = await customSelect(
+      'SELECT device_id, MIN(created_at) AS first_at '
+      'FROM test_results GROUP BY device_id ORDER BY first_at',
+      readsFrom: {testResults},
+    ).get();
+
+    for (final row in rows) {
+      await into(bancadas).insert(
+        BancadasCompanion.insert(
+          deviceId: row.read<String>('device_id'),
+          createdAt: row.read<DateTime>('first_at'),
+        ),
+      );
+    }
+  }
+
+  /// Preenche `bancadas` a partir do histórico de testes (usado na migração e testes).
+  Future<void> backfillBancadasFromHistory() => _backfillBancadas();
+
+  /// Garante registro de bancada e retorna o número sequencial (1, 2, 3…).
+  Future<int> ensureBancada(String deviceId) async {
+    final existing = await (select(bancadas)
+          ..where((b) => b.deviceId.equals(deviceId)))
+        .getSingleOrNull();
+    if (existing != null) return existing.numero;
+
+    return into(bancadas).insert(
+      BancadasCompanion.insert(
+        deviceId: deviceId,
+        createdAt: DateTime.now(),
+      ),
+    );
+  }
+
+  Future<Bancada?> getBancadaByDevice(String deviceId) {
+    return (select(bancadas)..where((b) => b.deviceId.equals(deviceId)))
+        .getSingleOrNull();
+  }
+
+  Future<Map<String, int>> getBancadaNumeros() async {
+    final rows = await select(bancadas).get();
+    return {for (final r in rows) r.deviceId: r.numero};
+  }
+
+  Stream<Map<String, int>> watchBancadaNumeros() {
+    return select(bancadas).watch().map(
+          (rows) => {for (final r in rows) r.deviceId: r.numero},
+        );
+  }
+
+  Future<List<Bancada>> getAllBancadasOrdered() {
+    return (select(bancadas)..orderBy([(b) => OrderingTerm.asc(b.numero)])).get();
+  }
+
+  Stream<List<Bancada>> watchAllBancadasOrdered() {
+    return (select(bancadas)..orderBy([(b) => OrderingTerm.asc(b.numero)])).watch();
+  }
+
+  /// IDs de dispositivo ordenados pelo número da bancada (para filtros).
+  Future<List<String>> deviceIdsOrderedByBancada() async {
+    final rows = await getAllBancadasOrdered();
+    if (rows.isNotEmpty) {
+      return rows.map((b) => b.deviceId).toList();
+    }
+    return distinctDevices();
+  }
 
   /// Popula `SerialCounters` a partir do histórico de seriais aprovados.
   /// O serial tem o formato produto(3)+ano(2)+sequencial(4)+dígito(1).
@@ -211,6 +302,54 @@ class AppDatabase extends _$AppDatabase {
         .get();
   }
 
+  Future<List<String>> searchSerialPrefixes(String prefix, {int limit = 50}) async {
+    final trimmed = prefix.trim();
+    if (trimmed.isEmpty) return [];
+
+    final rows = await (select(testResults)
+          ..where((t) => t.serial.isNotNull() & t.serial.like('$trimmed%'))
+          ..orderBy([(t) => OrderingTerm.desc(t.createdAt)]))
+        .get();
+
+    final seen = <String>{};
+    final result = <String>[];
+    for (final row in rows) {
+      final serial = row.serial;
+      if (serial == null || seen.contains(serial)) continue;
+      seen.add(serial);
+      result.add(serial);
+      if (result.length >= limit) break;
+    }
+    return result;
+  }
+
+  Future<SirenTraceability?> getTraceabilityBySerial(String serial) async {
+    final trimmed = serial.trim();
+    if (trimmed.isEmpty) return null;
+
+    final attempts = await (select(testResults)
+          ..where((t) => t.serial.equals(trimmed))
+          ..orderBy([(t) => OrderingTerm.asc(t.createdAt)]))
+        .get();
+    if (attempts.isEmpty) return null;
+
+    Product? product;
+    if (trimmed.length >= 3) {
+      product = await getProduct(trimmed.substring(0, 3));
+    }
+
+    final pendingLabel = await (select(labelBufferEntries)
+          ..where((t) => t.serial.equals(trimmed)))
+        .getSingleOrNull();
+
+    return SirenTraceability(
+      serial: trimmed,
+      attempts: attempts,
+      product: product,
+      pendingLabel: pendingLabel,
+    );
+  }
+
   Future<int> insertTestResult({
     required String deviceId,
     required String numeroOp,
@@ -220,6 +359,7 @@ class AppDatabase extends _$AppDatabase {
     required int aprovadosNoLote,
     String? serial,
     String? operador,
+    bool isRetest = false,
   }) {
     return into(testResults).insert(
       TestResultsCompanion.insert(
@@ -231,6 +371,7 @@ class AppDatabase extends _$AppDatabase {
         aprovadosNoLote: aprovadosNoLote,
         serial: Value(serial),
         operador: Value(operador),
+        isRetest: Value(isRetest),
         createdAt: DateTime.now(),
       ),
     );
@@ -364,11 +505,13 @@ class AppDatabase extends _$AppDatabase {
     required String documentId,
     required String payload,
     required String operation,
+    String? documentPath,
   }) {
     return into(syncQueue).insert(
       SyncQueueCompanion.insert(
         collection: collection,
         documentId: documentId,
+        documentPath: Value(documentPath),
         payload: payload,
         operation: operation,
         createdAt: DateTime.now(),
@@ -676,6 +819,74 @@ class AppDatabase extends _$AppDatabase {
     return result;
   }
 
+  Future<List<BatchReportSummary>> batchReportSummaries({
+    DateTime? since,
+    String? idProduto,
+    String? deviceId,
+    String? opContains,
+  }) async {
+    var rows = await testResultsFiltered(
+      since: since,
+      idProduto: idProduto,
+      deviceId: deviceId,
+    );
+    if (opContains != null && opContains.trim().isNotEmpty) {
+      final q = opContains.trim().toUpperCase();
+      rows = rows.where((r) => r.numeroOp.toUpperCase().contains(q)).toList();
+    }
+
+    final byOp = <String, List<TestResult>>{};
+    for (final r in rows) {
+      byOp.putIfAbsent(r.numeroOp, () => []).add(r);
+    }
+
+    final result = <BatchReportSummary>[];
+    for (final entry in byOp.entries) {
+      final tests = entry.value..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+      var aprovados = 0;
+      for (final t in tests) {
+        if (isApprovedVeredito(t.veredito)) aprovados++;
+      }
+      result.add(
+        BatchReportSummary(
+          numeroOp: entry.key,
+          total: tests.length,
+          aprovados: aprovados,
+          firstTestAt: tests.first.createdAt,
+          lastTestAt: tests.last.createdAt,
+        ),
+      );
+    }
+    result.sort((a, b) {
+      final aDate = a.lastTestAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+      final bDate = b.lastTestAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+      return bDate.compareTo(aDate);
+    });
+    return result;
+  }
+
+  Future<List<TestResult>> testsForOp(
+    String numeroOp, {
+    DateTime? since,
+    String? idProduto,
+    String? deviceId,
+    bool? approvedOnly,
+  }) async {
+    var rows = await testResultsFiltered(
+      since: since,
+      numeroOp: numeroOp,
+      idProduto: idProduto,
+      deviceId: deviceId,
+    );
+    if (approvedOnly != null) {
+      rows = rows
+          .where((r) => approvedOnly ? isApprovedVeredito(r.veredito) : !isApprovedVeredito(r.veredito))
+          .toList();
+    }
+    rows.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    return rows;
+  }
+
   Future<List<DailyThroughput>> throughputByDay({
     required DateTime since,
     required int days,
@@ -863,6 +1074,19 @@ class BatchProductionSummary {
   int get reprovados => total - aprovados;
 
   double get yieldPct => total == 0 ? 0 : (aprovados / total) * 100;
+}
+
+class BatchReportSummary extends BatchProductionSummary {
+  const BatchReportSummary({
+    required super.numeroOp,
+    required super.total,
+    required super.aprovados,
+    this.firstTestAt,
+    this.lastTestAt,
+  });
+
+  final DateTime? firstTestAt;
+  final DateTime? lastTestAt;
 }
 
 LazyDatabase _openConnection() {

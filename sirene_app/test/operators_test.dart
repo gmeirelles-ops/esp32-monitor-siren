@@ -104,15 +104,14 @@ void main() {
     expect(rows.single.operador, '77 — Carlos');
   });
 
-  test('AppConfig persiste activeOperatorId', () async {
+  test('AppConfig clearActiveOperatorId remove sessão', () async {
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();
     final config = AppConfig(prefs);
 
-    expect(config.activeOperatorId, isNull);
     await config.setActiveOperatorId(7);
     expect(config.activeOperatorId, 7);
-    await config.setActiveOperatorId(null);
+    await config.clearActiveOperatorId();
     expect(config.activeOperatorId, isNull);
   });
 }

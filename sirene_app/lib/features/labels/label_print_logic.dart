@@ -1,8 +1,9 @@
+import 'zpl_generator.dart';
+
 /// Imprime entradas em blocos de até 3 e retorna os ids efetivamente impressos.
-/// Em falha parcial, retorna apenas os ids dos blocos enviados antes do erro.
 Future<({List<int> printedIds, Object? error})> printLabelBatches({
-  required List<({int id, String serial})> entries,
-  required Future<void> Function(List<String> serials) sendZpl,
+  required List<({int id, LabelZplItem item})> entries,
+  required Future<void> Function(List<LabelZplItem> items) sendZpl,
   int batchSize = 3,
 }) async {
   final printedIds = <int>[];
@@ -12,7 +13,7 @@ Future<({List<int> printedIds, Object? error})> printLabelBatches({
     final end = (index + batchSize).clamp(0, entries.length);
     final batch = entries.sublist(index, end);
     try {
-      await sendZpl(batch.map((e) => e.serial).toList());
+      await sendZpl(batch.map((e) => e.item).toList());
       printedIds.addAll(batch.map((e) => e.id));
       index = end;
     } catch (e) {

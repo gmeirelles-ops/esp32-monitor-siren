@@ -142,9 +142,11 @@ static void run_test_cycle(uint32_t duration_sec)
     uint32_t sequencial_usado = s_batch.proximo_sequencial;
 
     if (approved) {
-        s_batch.aprovados++;
-        s_batch.proximo_sequencial++;
-        batch_storage_save(&s_batch);
+        if (!s_batch.modo_reteste) {
+            s_batch.aprovados++;
+            s_batch.proximo_sequencial++;
+            batch_storage_save(&s_batch);
+        }
         led_feedback_signal(FEEDBACK_APPROVED);
     } else {
         led_feedback_signal(FEEDBACK_REJECTED);
@@ -152,7 +154,8 @@ static void run_test_cycle(uint32_t duration_sec)
 
     publish_test_result(approved, result.average_w, sequencial_usado);
 
-    if (approved && pure_batch_quota_reached(s_batch.aprovados, s_batch.quantidade_total)) {
+    if (approved && !s_batch.modo_reteste &&
+        pure_batch_quota_reached(s_batch.aprovados, s_batch.quantidade_total)) {
         handle_end_batch_with_reason("cota_atingida");
     } else {
         state_machine_set(STATE_BATCH_READY);
@@ -216,8 +219,15 @@ static bool parse_set_batch(cJSON *root)
     bool same_op = s_batch.active && pure_batch_same_op(s_batch.numero_op, in.numero_op);
     uint32_t preserved_aprovados = same_op ? s_batch.aprovados : 0;
     uint32_t preserved_sequencial = same_op ? s_batch.proximo_sequencial : in.proximo_sequencial;
+    bool preserved_reteste = same_op ? s_batch.modo_reteste : false;
     if (same_op && in.proximo_sequencial > preserved_sequencial) {
         preserved_sequencial = in.proximo_sequencial;
+    }
+
+    item = cJSON_GetObjectItem(root, "modo_reteste");
+    bool modo_reteste = preserved_reteste;
+    if (cJSON_IsBool(item)) {
+        modo_reteste = cJSON_IsTrue(item);
     }
 
     strcpy(s_batch.numero_op, in.numero_op);
@@ -229,6 +239,7 @@ static bool parse_set_batch(cJSON *root)
     s_batch.quantidade_total = in.quantidade_total;
     s_batch.proximo_sequencial = preserved_sequencial;
     s_batch.aprovados = preserved_aprovados;
+    s_batch.modo_reteste = modo_reteste;
     s_batch.active = true;
 
     batch_storage_save(&s_batch);

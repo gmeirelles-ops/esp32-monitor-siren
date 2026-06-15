@@ -33,7 +33,7 @@ void main() {
       await db.close();
     });
 
-    test('enfileira e drena com writer mock', () async {
+    test('enfileira aprovado em seriais e drena com document_path', () async {
       final written = <String>[];
       final sync = FirestoreSyncService(
         db: db,
@@ -49,21 +49,59 @@ void main() {
         sequencial: 2,
         aprovadosNoLote: 2,
       );
-      await sync.enqueueTestResult(deviceId: 'abc', test: test);
+      await sync.enqueueTestResult(
+        deviceId: 'abc',
+        test: test,
+        serial: '12326000028',
+      );
 
-      expect(await db.countPending(), 1);
+      expect(await db.countPending(), 2);
 
       final processor = SyncQueueProcessor(
         db: db,
         syncService: sync,
-        writer: (collection, docId, data, operation) async {
-          written.add('$collection/$docId/$operation');
+        writer: (collection, docId, data, operation, {documentPath}) async {
+          written.add('${documentPath ?? '$collection/$docId'}/$operation');
         },
       );
       await processor.processQueue();
 
-      expect(written, ['test_results/2026001_2/set']);
+      expect(written, [
+        'test_results/2026001/merge',
+        'test_results/2026001/seriais/12326000028/set',
+      ]);
       expect(await db.countPending(), 0);
+    });
+
+    test('enfileira reprovado em reprovadas', () async {
+      final written = <String>[];
+      final sync = FirestoreSyncService(
+        db: db,
+        isSyncEnabled: () => true,
+        stationId: () => 'posto-test',
+      );
+      const test = TestResultMessage(
+        numeroOp: '2026001',
+        idProduto: '123',
+        ano: '26',
+        veredito: 'REPROVADO',
+        potenciaMedia: 5.0,
+        sequencial: 3,
+        aprovadosNoLote: 1,
+      );
+      await sync.enqueueTestResult(deviceId: 'abc', test: test);
+
+      final processor = SyncQueueProcessor(
+        db: db,
+        syncService: sync,
+        writer: (collection, docId, data, operation, {documentPath}) async {
+          written.add(documentPath ?? '$collection/$docId');
+        },
+      );
+      await processor.processQueue();
+
+      expect(written, contains('test_results/2026001'));
+      expect(written, contains('test_results/2026001/reprovadas/3'));
     });
 
     test('resetSyncAttempts move item de dead-letter para pending', () async {

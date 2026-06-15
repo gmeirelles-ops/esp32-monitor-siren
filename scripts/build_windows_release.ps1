@@ -1,20 +1,12 @@
 #Requires -Version 5.1
 $ErrorActionPreference = "Stop"
 
-$RepoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
-$AppDir = Join-Path $RepoRoot "sirene_app"
-$DistRoot = Join-Path $RepoRoot "dist"
-$TemplatesDir = Join-Path $PSScriptRoot "windows-portable"
-$ReleaseDir = Join-Path $AppDir "build\windows\x64\runner\Release"
+. (Join-Path $PSScriptRoot "windows_build_common.ps1")
 
-function Get-AppVersion {
-    $pubspecPath = Join-Path $AppDir "pubspec.yaml"
-    $line = Get-Content $pubspecPath | Where-Object { $_ -match '^\s*version:\s*' } | Select-Object -First 1
-    if ($line -match 'version:\s*([\d.]+)') {
-        return $Matches[1]
-    }
-    throw "Nao foi possivel ler version de pubspec.yaml"
-}
+Assert-WindowsBuildEnvironment
+
+$DistRoot = Join-Path (Get-RepoRoot) "dist"
+$TemplatesDir = Join-Path $PSScriptRoot "windows-portable"
 
 function Test-PackageLayout {
     param([string]$PackageDir)
@@ -31,42 +23,15 @@ function Test-PackageLayout {
     }
 }
 
-if ($PSVersionTable.PSPlatform -and $PSVersionTable.PSPlatform -ne "Win32NT") {
-    throw "Este script deve ser executado no Windows. Use GitHub Actions (workflow_dispatch) ou uma maquina Windows."
-}
-
-if (-not (Get-Command flutter -ErrorAction SilentlyContinue)) {
-    throw "Flutter nao encontrado no PATH. Instale o Flutter SDK e o workload C++ do Visual Studio."
-}
-
-$version = Get-AppVersion
+$version = Get-SireneAppVersion
 $packageName = "DipontoSireneValidator-$version-win64"
 $packageDir = Join-Path $DistRoot $packageName
 $zipPath = Join-Path $DistRoot "$packageName.zip"
 
-Write-Host "==> Diponto Sirene Validator — build Windows $version"
+Write-Host "==> Diponto Sirene Validator - build Windows $version"
 
-Push-Location $AppDir
-try {
-    Write-Host "==> flutter pub get"
-    flutter pub get
-    if ($LASTEXITCODE -ne 0) { throw "flutter pub get falhou" }
-
-    Write-Host "==> dart run build_runner build"
-    dart run build_runner build --delete-conflicting-outputs
-    if ($LASTEXITCODE -ne 0) { throw "build_runner falhou" }
-
-    Write-Host "==> flutter build windows --release"
-    flutter build windows --release
-    if ($LASTEXITCODE -ne 0) { throw "flutter build windows falhou" }
-}
-finally {
-    Pop-Location
-}
-
-if (-not (Test-Path $ReleaseDir)) {
-    throw "Saida de build nao encontrada: $ReleaseDir"
-}
+Invoke-SireneFlutterWindowsBuild
+$ReleaseDir = Get-SireneReleaseDir
 
 if (Test-Path $packageDir) {
     Remove-Item $packageDir -Recurse -Force

@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../shared/display_labels.dart';
+import '../../shared/portuguese_labels.dart';
 import '../../core/theme/diponto_theme.dart';
 import '../../shared/widgets/empty_state_view.dart';
 import '../mqtt/models/mqtt_messages.dart';
 import '../mqtt/mqtt_providers.dart';
+import '../bancadas/bancadas_provider.dart';
 import '../provisioning/provisioning_wizard.dart';
 import '../../shared/widgets/diponto_app_bar.dart';
 import 'device_detail_screen.dart';
@@ -15,10 +18,16 @@ class DevicesScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final devices = ref.watch(devicesProvider);
+    final bancadas = ref.watch(bancadasMapProvider).valueOrNull ?? {};
     final mqttState = ref.watch(mqttConnectionStateProvider).value ??
         AppMqttConnectionState.disconnected;
     final sorted = devices.values.toList()
-      ..sort((a, b) => a.deviceId.compareTo(b.deviceId));
+      ..sort((a, b) {
+        final na = bancadas[a.deviceId] ?? 999999;
+        final nb = bancadas[b.deviceId] ?? 999999;
+        if (na != nb) return na.compareTo(nb);
+        return a.deviceId.compareTo(b.deviceId);
+      });
 
     final (emptyTitle, emptySubtitle, showProgress) = switch (mqttState) {
       AppMqttConnectionState.connected => (
@@ -41,7 +50,7 @@ class DevicesScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: DipontoAppBar(
-        title: 'Dispositivos',
+        title: PortugueseLabels.navBancadas,
         actions: [
           IconButton(
             tooltip: 'Provisionamento Wi-Fi',
@@ -66,7 +75,7 @@ class DevicesScreen extends ConsumerWidget {
               itemCount: sorted.length,
               itemBuilder: (context, index) {
                 final device = sorted[index];
-                return _DeviceCard(device: device);
+                return _DeviceCard(device: device, bancadas: bancadas);
               },
             ),
     );
@@ -74,9 +83,10 @@ class DevicesScreen extends ConsumerWidget {
 }
 
 class _DeviceCard extends ConsumerWidget {
-  const _DeviceCard({required this.device});
+  const _DeviceCard({required this.device, required this.bancadas});
 
   final DeviceInfo device;
+  final Map<String, int> bancadas;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -94,7 +104,7 @@ class _DeviceCard extends ConsumerWidget {
             size: 20,
           ),
         ),
-        title: Text(device.deviceId, style: const TextStyle(fontFamily: 'monospace')),
+        title: Text(formatBancadaLabelFromMap(device.deviceId, bancadas)),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

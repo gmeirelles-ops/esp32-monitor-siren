@@ -3,15 +3,15 @@
 #include <stdint.h>
 
 /* GPIO map — ajuste conforme o hardware da placa */
-#define GPIO_RELAY            26
-#define GPIO_BUTTON           0
+#define GPIO_RELAY            4
+#define GPIO_BUTTON           5
 #define GPIO_LED_STATUS       25
 #define GPIO_BUZZER           33
 
 /* UART PZEM-004T */
 #define PZEM_UART_NUM         UART_NUM_2
-#define PZEM_TX_PIN           17
-#define PZEM_RX_PIN           16
+#define PZEM_TX_PIN           27
+#define PZEM_RX_PIN           26
 #define PZEM_BAUD_RATE        9600
 #define PZEM_SLAVE_ADDR       0xF8
 

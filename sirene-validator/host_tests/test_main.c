@@ -7,6 +7,7 @@ int test_serial(void);
 int test_url(void);
 int test_batch_quota(void);
 int test_batch_validation(void);
+int test_batch_retest(void);
 
 int main(void)
 {
@@ -18,6 +19,7 @@ int main(void)
     failures += test_url();
     failures += test_batch_quota();
     failures += test_batch_validation();
+    failures += test_batch_retest();
     if (failures == 0) {
         printf("ALL TESTS PASSED\n");
         return 0;

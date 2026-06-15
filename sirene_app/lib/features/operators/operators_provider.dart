@@ -26,6 +26,10 @@ Future<void> setActiveOperator(WidgetRef ref, int? operatorId) async {
   ref.invalidate(activeOperatorProvider);
 }
 
+Future<void> clearOperatorSession(WidgetRef ref) async {
+  await setActiveOperator(ref, null);
+}
+
 /// Rótulo para test_results: operador local ou fallback Firebase.
 Future<String?> resolveOperadorLabel(Ref ref) async {
   final active = await ref.read(activeOperatorProvider.future);

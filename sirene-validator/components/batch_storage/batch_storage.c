@@ -28,6 +28,7 @@ bool batch_storage_save(const batch_context_t *ctx)
     nvs_set_u32(handle, "qtd_total", ctx->quantidade_total);
     nvs_set_u32(handle, "sequencial", ctx->proximo_sequencial);
     nvs_set_u32(handle, "aprovados", ctx->aprovados);
+    nvs_set_u8(handle, "modo_reteste", ctx->modo_reteste ? 1 : 0);
     err = nvs_commit(handle);
     nvs_close(handle);
     return err == ESP_OK;
@@ -62,6 +63,10 @@ bool batch_storage_load(batch_context_t *ctx)
     nvs_get_u32(handle, "qtd_total", &ctx->quantidade_total);
     nvs_get_u32(handle, "sequencial", &ctx->proximo_sequencial);
     nvs_get_u32(handle, "aprovados", &ctx->aprovados);
+    uint8_t modo_reteste = 0;
+    if (nvs_get_u8(handle, "modo_reteste", &modo_reteste) == ESP_OK) {
+        ctx->modo_reteste = modo_reteste != 0;
+    }
     ctx->active = true;
     nvs_close(handle);
     return true;

@@ -45,6 +45,23 @@ void main() {
       expect(metricsA.yieldPct, 50);
       expect(metricsA.pendentes(5), 4);
     });
+
+    test('exclui testes marcados como reteste', () async {
+      await addResult('APROVADO', op: 'OP-R');
+      await db.insertTestResult(
+        deviceId: 'dev1',
+        numeroOp: 'OP-R',
+        veredito: 'APROVADO',
+        potenciaMedia: 20,
+        sequencial: 2,
+        aprovadosNoLote: 0,
+        isRetest: true,
+      );
+
+      final metrics = await db.getBatchMetrics('OP-R');
+      expect(metrics.total, 1);
+      expect(metrics.aprovados, 1);
+    });
   });
 
   group('computeBatchMetrics', () {

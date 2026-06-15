@@ -149,6 +149,7 @@ class BatchConfig {
     required this.potenciaMax,
     required this.quantidadeTotal,
     required this.proximoSequencial,
+    this.modoReteste = false,
   });
 
   final String numeroOp;
@@ -159,6 +160,7 @@ class BatchConfig {
   final double potenciaMax;
   final int quantidadeTotal;
   final int proximoSequencial;
+  final bool modoReteste;
 
   Map<String, dynamic> toSetBatchJson() => {
     'cmd': 'SET_BATCH',
@@ -170,9 +172,10 @@ class BatchConfig {
     'potencia_max': potenciaMax,
     'quantidade_total': quantidadeTotal,
     'proximo_sequencial': proximoSequencial,
+    'modo_reteste': modoReteste,
   };
 
-  BatchConfig copyWith({int? proximoSequencial}) {
+  BatchConfig copyWith({int? proximoSequencial, bool? modoReteste}) {
     return BatchConfig(
       numeroOp: numeroOp,
       idProduto: idProduto,
@@ -182,6 +185,7 @@ class BatchConfig {
       potenciaMax: potenciaMax,
       quantidadeTotal: quantidadeTotal,
       proximoSequencial: proximoSequencial ?? this.proximoSequencial,
+      modoReteste: modoReteste ?? this.modoReteste,
     );
   }
 }

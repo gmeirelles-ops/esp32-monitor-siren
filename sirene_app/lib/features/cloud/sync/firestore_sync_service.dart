@@ -28,27 +28,77 @@ class FirestoreSyncService {
 
   bool get isActive => _isSyncEnabled();
 
+  Future<void> _enqueuePath({
+    required String documentPath,
+    required Map<String, dynamic> payload,
+    required String operation,
+  }) async {
+    await _db.enqueueSync(
+      collection: 'test_results',
+      documentId: documentPath.split('/').last,
+      documentPath: documentPath,
+      payload: jsonEncode(payload),
+      operation: operation,
+    );
+  }
+
   Future<void> enqueueTestResult({
     required String deviceId,
     required TestResultMessage test,
     String? serial,
     String? operador,
+    bool isRetest = false,
   }) async {
     if (!isActive) return;
-    final payload = mapTestResult(
-      deviceId: deviceId,
-      test: test,
-      serial: serial,
-      operador: operador,
-      stationId: _stationId(),
-      timestamp: DateTime.now(),
+    final stationId = _stationId();
+    final timestamp = DateTime.now();
+    final numeroOp = test.numeroOp;
+
+    await _enqueuePath(
+      documentPath: lotePath(numeroOp),
+      payload: mapLoteTestPatch(
+        numeroOp: numeroOp,
+        stationId: stationId,
+        test: test,
+      ),
+      operation: 'merge',
     );
-    await _db.enqueueSync(
-      collection: 'test_results',
-      documentId: testResultDocumentId(test.numeroOp, test.sequencial),
-      payload: jsonEncode(payload),
-      operation: 'set',
-    );
+
+    if (isRetest && isTesteAprovado(test)) {
+      return;
+    }
+
+    if (isTesteAprovado(test) && serial != null && serial.isNotEmpty) {
+      await _enqueuePath(
+        documentPath: serialPath(numeroOp, serial),
+        payload: mapSerialDocument(
+          deviceId: deviceId,
+          test: test,
+          serial: serial,
+          operador: operador,
+          stationId: stationId,
+          timestamp: timestamp,
+          isRetest: isRetest,
+        ),
+        operation: 'set',
+      );
+      return;
+    }
+
+    if (!isTesteAprovado(test)) {
+      await _enqueuePath(
+        documentPath: reprovadaPath(numeroOp, test.sequencial),
+        payload: mapReprovadaDocument(
+          deviceId: deviceId,
+          test: test,
+          operador: operador,
+          stationId: stationId,
+          timestamp: timestamp,
+          isRetest: isRetest,
+        ),
+        operation: 'set',
+      );
+    }
   }
 
   Future<void> enqueueDeviceUpdate({
@@ -113,7 +163,7 @@ class FirestoreSyncService {
     int? aprovados,
   }) async {
     if (!isActive) return;
-    final payload = mapBatch(
+    final payload = mapLoteDocument(
       batch: batch,
       deviceId: deviceId,
       status: status,
@@ -122,11 +172,10 @@ class FirestoreSyncService {
       endedAt: endedAt,
       aprovados: aprovados,
     );
-    await _db.enqueueSync(
-      collection: 'batches',
-      documentId: batch.numeroOp,
-      payload: jsonEncode(payload),
-      operation: 'set',
+    await _enqueuePath(
+      documentPath: lotePath(batch.numeroOp),
+      payload: payload,
+      operation: 'merge',
     );
   }
 

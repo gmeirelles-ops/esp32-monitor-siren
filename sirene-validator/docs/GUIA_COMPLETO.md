@@ -725,25 +725,61 @@ ESP32 ──MQTT──► Mosquitto ──► App Flutter ──► Firestore
 }
 ```
 
-#### Coleção `test_results`
+#### Coleção `test_results` (hierarquia por lote)
+
+Documento do **lote** — `test_results/{numero_op}`:
+
+```json
+{
+  "numero_op": "2026001",
+  "id_produto": "123",
+  "ano": "26",
+  "quantidade_total": 10,
+  "aprovados": 3,
+  "reprovados": 1,
+  "device_id": "aabbccddeeff",
+  "status": "active",
+  "started_at": "2026-06-10T14:00:00Z",
+  "station_id": "posto-01"
+}
+```
+
+Subcoleção **seriais** (aprovados) — `test_results/{numero_op}/seriais/{serial}`:
 
 ```json
 {
   "device_id": "aabbccddeeff",
   "numero_op": "2026001",
-  "operador_id": 42,
-  "operador_nome": "Maria Silva",
-  "veredito": "APROVADO",
-  "potencia_media": 20.15,
   "sequencial": 1,
   "serial": "1232600018",
-  "timestamp": "2026-06-10T14:31:00Z"
+  "veredito": "APROVADO",
+  "potencia_media": 20.15,
+  "operador": "001 — Maria",
+  "timestamp": "2026-06-10T14:31:00Z",
+  "station_id": "posto-01",
+  "is_retest": false
 }
 ```
 
-Chave de idempotência: `numero_op` + `sequencial` (evita duplicatas após reconexão).
+Subcoleção **reprovadas** — `test_results/{numero_op}/reprovadas/{sequencial}`:
 
-#### Coleção `batches`
+```json
+{
+  "device_id": "aabbccddeeff",
+  "numero_op": "2026001",
+  "sequencial": 3,
+  "veredito": "REPROVADO",
+  "potencia_media": 5.2,
+  "operador": "001 — Maria",
+  "timestamp": "2026-06-10T14:35:00Z",
+  "station_id": "posto-01",
+  "is_retest": false
+}
+```
+
+> Documentos flat legados `test_results/{numero_op}_{sequencial}` permanecem somente leitura. Novos syncs usam a hierarquia acima. Coleção `batches/` não recebe mais writes — metadados de lote ficam no documento raiz da OP.
+
+#### Coleção `batches` (legado)
 
 ```json
 {
@@ -766,9 +802,10 @@ Chave de idempotência: `numero_op` + `sequencial` (evita duplicatas após recon
 2. Com sync habilitado em **Configurações → Nuvem**, o app enfileira gravações em `SyncQueue` (Drift) e envia ao Firestore quando online.
 3. Login Firebase (e-mail/senha) é obrigatório para habilitar sync.
 4. Eventos sincronizados automaticamente:
-   - `tipo: "teste"` → `test_results/{numero_op}_{sequencial}` (inclui `operador_id`, `operador_nome`)
+   - `tipo: "teste"` aprovado → `test_results/{numero_op}` + `seriais/{serial}`
+   - `tipo: "teste"` reprovado → `test_results/{numero_op}` + `reprovadas/{sequencial}`
    - heartbeat / presença → `devices/{device_id}` (debounce 60 s; offline imediato)
-   - `SET_BATCH` / `END_BATCH` → `batches/{numero_op}` (inclui `operador_id`, `operador_nome`)
+   - `SET_BATCH` / `END_BATCH` → `test_results/{numero_op}` (metadados do lote)
    - cadastro/recalibração de produto → `products/{id_produto}`
    - cadastro/edição de operador → `operators/{id}`
 

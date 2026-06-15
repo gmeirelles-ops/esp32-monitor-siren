@@ -34,7 +34,23 @@ BROKER=192.168.51.87 DEVICE_ID=<mac_hex> ./scripts/bench_calibration.sh
 
 ## 3. App Flutter (Windows)
 
-### Pendrive / distribuição portátil (recomendado)
+### Instalador (recomendado para PC fixo do posto)
+
+Gera `DipontoSireneValidator-<versão>-setup.exe` (wizard em português, Menu Iniciar, desinstalador):
+
+**No Windows (dev):**
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\build_windows_installer.ps1
+```
+
+Pré-requisito adicional: [Inno Setup 6](https://jrsoftware.org/isdl.php) (`choco install innosetup`).
+
+**No PC do posto:**
+1. Execute o setup (SmartScreen pode alertar — app não assinado)
+2. Use o atalho **Diponto Sirene Validator** no Menu Iniciar
+3. Dados SQLite ficam em `%APPDATA%` (reinstalar preserva configuração local)
+
+### Pendrive / distribuição portátil
 
 Gera ZIP pronto para copiar no pendrive e testar no posto:
 
@@ -43,10 +59,19 @@ Gera ZIP pronto para copiar no pendrive e testar no posto:
 powershell -ExecutionPolicy Bypass -File scripts\build_windows_release.ps1
 ```
 
+**ZIP + instalador de uma vez:**
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\build_windows_all.ps1
+```
+
 **Sem PC Windows (GitHub Actions):**
 1. GitHub → **Actions** → workflow **CI** → **Run workflow**
-2. Ao concluir, baixe o artifact **DipontoSireneValidator-win64.zip**
-3. Copie o ZIP para o pendrive
+2. Ao concluir, baixe os artifacts:
+   - **DipontoSireneValidator-win64.zip** (pendrive)
+   - **DipontoSireneValidator-setup** (instalador `.exe`)
+3. Copie o ZIP para o pendrive ou instale o setup no PC do posto
+
+> **Build local falhou?** Se o projeto estiver em pasta com acentos (ex.: `Área de Trabalho` no OneDrive), o Flutter/MSBuild pode falhar. Clone ou copie o repositório para um caminho simples (ex.: `C:\dev\esp32-monitor-siren`) ou use `subst S: "C:\Users\...\esp32-monitor-siren"` e rode os scripts a partir de `S:\`.
 
 **No PC do posto:**
 1. Extraia o ZIP inteiro (mantenha a pasta `app\` junto do `.bat`)
@@ -80,7 +105,21 @@ Copie `build/windows/x64/runner/Release/` inteira para o posto.
 
 Configure em **Configurações**:
 - Broker MQTT (host + porta) — deve coincidir com o broker provisionado nos ESP32
-- Impressora Zebra (IP + porta 9100)
+- Impressora Zebra:
+  - **USB (recomendado):** ZT230 conectada ao PC do posto; instale o driver Zebra ZPL; selecione o nome da impressora no app
+  - **Rede (opcional):** IP + porta 9100 (cartão de rede ou print server)
+
+### Impressora ZT230 USB (sem cabo de rede)
+
+1. Conecte a ZT230 ao PC do posto via cabo USB
+2. Instale o driver **ZDesigner ZT230 ZPL** (Zebra Setup Utilities)
+3. No app: **Configurações** → Impressora → **USB (local)** → selecione a impressora → **Testar impressão**
+4. Rolo: 3 etiquetas por linha, 10×30 mm cada — layout calibrado contra [`docs/label-reference/`](../label-reference/README.md)
+5. Checklist na instalação do posto:
+   - [ ] Etiqueta de teste imprime legível
+   - [ ] Linha de 3 seriais aprovados imprime alinhada
+   - [ ] Reimpressão avulsa avisa que consome linha inteira (3 posições)
+   - [ ] Órfãs (1–2 no buffer): impressão manual pelo operador
 
 ### Firebase / Firestore (opcional — nuvem)
 
@@ -139,7 +178,7 @@ Para cada modelo de sirene:
 - [ ] Teste reprovado → sequencial não consumido
 - [ ] Reboot com lote ativo → retomada correta
 - [ ] Offline → fila MQTT do ESP32 sincroniza ao reconectar
-- [ ] (Opcional) Firestore sync → documento em `test_results` após teste com sync habilitado
+- [ ] (Opcional) Firestore sync → após teste aprovado: `test_results/{op}/seriais/{serial}`; reprovado: `test_results/{op}/reprovadas/{seq}`
 
 ### Smoke app (reatividade e sync)
 

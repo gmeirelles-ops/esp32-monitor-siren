@@ -1,0 +1,49 @@
+﻿Diponto Sirene Validator — pacote portátil Windows
+==================================================
+
+Versão do pacote: 1.0.0
+
+PRÉ-REQUISITOS
+--------------
+- Windows 10 ou 11 (64 bits)
+- Microsoft Visual C++ Redistributable (x64), se o app não iniciar:
+  https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist
+- PC na mesma rede do broker MQTT (Mosquitto)
+- Impressora Zebra ZT230 conectada por USB ao PC do posto (recomendado) ou na rede LAN
+- SmartScreen pode alertar (app não assinado): escolha "Mais informações" → "Executar mesmo assim"
+
+COMO INICIAR
+------------
+1. Extraia o ZIP inteiro para uma pasta (pendrive ou disco local).
+2. Dê duplo clique em: Iniciar Diponto Sirene Validator.bat
+   (Não copie só o .exe — a pasta app\ contém DLLs e data\ obrigatórios.)
+
+PRIMEIRA CONFIGURAÇÃO
+---------------------
+1. Abra Configurações → informe host/porta do broker MQTT.
+2. Impressora Zebra:
+   a) USB (recomendado): conecte a ZT230 ao PC, instale driver Zebra ZPL,
+      escolha "USB (local)" e selecione a impressora na lista.
+   b) Rede (opcional): IP e porta 9100 se houver cartão de rede ou print server.
+   Use "Testar impressão" para validar.
+3. Cadastros → cadastre operadores e produtos (SKU com autocalibração).
+4. Lote → selecione operador do turno → configure OP e dispositivo.
+
+DADOS LOCAIS
+------------
+Histórico de testes, catálogo e fila de sync ficam no perfil do Windows
+(%APPDATA%), não nesta pasta do pendrive. Trocar de PC não leva os dados
+automaticamente — use backup local quando disponível.
+
+SMOKE TEST (validação rápida)
+-----------------------------
+[ ] App abre na tela Lote sem erro
+[ ] Badge "MQTT OK" (ou conectando) visível na barra superior
+[ ] Configurações salva host MQTT
+[ ] Configurações → Testar impressão na ZT230 USB
+[ ] Cadastros → Operadores lista abre
+
+SUPORTE
+-------
+Documentação completa: docs/PRODUCAO.md no repositório do projeto.
+

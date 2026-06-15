@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/config/app_config.dart';
@@ -11,6 +12,7 @@ import '../../core/utils/device_stale.dart';
 import '../cloud/auth/auth_providers.dart';
 import '../cloud/sync/sync_providers.dart';
 import '../labels/label_printer.dart';
+import '../labels/label_print_logic.dart';
 import '../labels/zpl_generator.dart';
 import '../serial/itf_check_digit.dart';
 import 'message_pump.dart';
@@ -52,9 +54,14 @@ final devicesProvider =
 });
 
 class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
-  DevicesNotifier(this._ref) : super({}) {
-    _init();
+  DevicesNotifier(this._ref, {bool enableMqtt = true}) : super({}) {
+    if (enableMqtt) _init();
   }
+
+  /// Instância sem MQTT para testes de widget.
+  @visibleForTesting
+  DevicesNotifier.forTesting(this._ref, Map<String, DeviceInfo> devices)
+      : super(devices);
 
   final Ref _ref;
   StreamSubscription<(String, String)>? _sub;
@@ -62,6 +69,7 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
   final MessagePump _messagePump = MessagePump();
   final Map<String, DateTime> _batchStartedAt = {};
   final Map<String, int> _rejectionEpoch = {};
+  final Set<String> _autoEndBatchSent = {};
 
   void _init() {
     final service = _ref.read(mqttServiceProvider);
@@ -147,6 +155,9 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
       final online = payload.trim() == 'online';
       device.isOnline = online;
       device.lastSeen = now;
+      if (online) {
+        await _ref.read(databaseProvider).ensureBancada(deviceId);
+      }
       if (!online) {
         await _ref.read(firestoreSyncServiceProvider).enqueueDeviceUpdate(
           deviceId: deviceId,
@@ -168,6 +179,7 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
         device.firmwareVersion = hb.firmwareVersion;
         device.isOnline = true;
         device.lastSeen = now;
+        await _ref.read(databaseProvider).ensureBancada(deviceId);
         if (hb.estado != DeviceFsmState.hardwareFault) {
           device.lastHardwareAlert = null;
         }
@@ -226,6 +238,7 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
     String deviceId,
     TestResultMessage test, {
     String? operador,
+    bool? isRetest,
   }) async {
     final device = _getOrCreate(deviceId);
     device.lastTestResult = test;
@@ -233,8 +246,9 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
     final db = _ref.read(databaseProvider);
     final operadorFinal =
         operador ?? await resolveOperadorLabel(_ref);
+    final bool retest = isRetest ?? _ref.read(retestModeProvider);
     String? serial;
-    if (test.isApproved) {
+    if (test.isApproved && !retest) {
       final candidate = generateFullSerial(
         idProduto: test.idProduto,
         ano: test.ano,
@@ -268,15 +282,21 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
       aprovadosNoLote: test.aprovadosNoLote,
       serial: serial,
       operador: operadorFinal,
+      isRetest: retest,
     );
     await _ref.read(firestoreSyncServiceProvider).enqueueTestResult(
       deviceId: deviceId,
       test: test,
       serial: serial,
       operador: operadorFinal,
+      isRetest: retest,
     );
     _ref.read(localDataRevisionProvider.notifier).state++;
     state = {...state};
+
+    if (!retest) {
+      await _maybeAutoEndBatch(deviceId, test);
+    }
   }
 
   void _advanceBatchSequencial(String deviceId, TestResultMessage test) {
@@ -300,6 +320,7 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
     }
 
     final metrics = await _ref.read(databaseProvider).getBatchMetrics(batch.numeroOp);
+    final retest = _ref.read(retestModeProvider);
     final rng = Random();
     final approved = forceApproved ?? rng.nextBool();
     final potencia = approved
@@ -309,8 +330,12 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
             ? batch.potenciaMin - 1.5 - rng.nextDouble() * 3
             : batch.potenciaMax + 1.5 + rng.nextDouble() * 3);
 
-    final aprovadosNoLote = approved ? metrics.aprovados + 1 : metrics.aprovados;
-    final sequencial = nextBatchSequencial(batch);
+    final aprovadosNoLote = approved && !retest
+        ? metrics.aprovados + 1
+        : metrics.aprovados;
+    final sequencial = retest && approved
+        ? batch.proximoSequencial
+        : nextBatchSequencial(batch);
     final test = TestResultMessage(
       numeroOp: batch.numeroOp,
       idProduto: batch.idProduto,
@@ -323,7 +348,12 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
 
     _setDeviceEstado(deviceId, DeviceFsmState.testing);
     await Future<void>.delayed(const Duration(milliseconds: 400));
-    await processTestResult(deviceId, test, operador: devSimulatorOperador);
+    await processTestResult(
+      deviceId,
+      test,
+      operador: devSimulatorOperador,
+      isRetest: retest,
+    );
     _setDeviceEstado(deviceId, DeviceFsmState.batchReady);
     _ref.read(batchDevSimulatorUsedProvider.notifier).state = true;
   }
@@ -333,16 +363,63 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
     if (entries.length < 3 || entries.length % 3 != 0) return;
 
     final toPrint = entries.take(3).toList();
-    final serials = toPrint.map((e) => e.serial).toList();
+    final items = await resolveLabelZplItems(db, toPrint.map((e) => e.serial).toList());
     final config = _ref.read(appConfigProvider);
-    final printer = LabelPrinter(host: config.printerHost, port: config.printerPort);
+    final printer = createLabelPrinterTransport(config);
 
     try {
-      await printer.sendZpl(generateZplLabelRow(serials));
+      await printer.sendZpl(generateZplLabelRow(items));
       await db.removeLabelsFromBuffer(toPrint.map((e) => e.id).toList());
       _ref.read(printFailureProvider.notifier).state = null;
     } catch (e) {
-      _ref.read(printFailureProvider.notifier).state = 'Erro na impressão automática: $e';
+      _ref.read(printFailureProvider.notifier).state =
+          formatPrinterError(e, config.printerMode);
+    }
+  }
+
+  Future<void> _flushLabelsForOp(AppDatabase db, String numeroOp) async {
+    final entries = await db.getLabelBuffer();
+    final opEntries = entries.where((e) => e.numeroOp == numeroOp).toList();
+    if (opEntries.isEmpty) return;
+
+    final config = _ref.read(appConfigProvider);
+    final printer = createLabelPrinterTransport(config);
+    final items = await resolveLabelZplItems(db, opEntries.map((e) => e.serial).toList());
+    final printEntries = <({int id, LabelZplItem item})>[];
+    for (var i = 0; i < opEntries.length; i++) {
+      printEntries.add((id: opEntries[i].id, item: items[i]));
+    }
+    final result = await printLabelBatches(
+      entries: printEntries,
+      sendZpl: (batch) => printer.sendZpl(generateZplLabelRow(batch)),
+    );
+    if (result.printedIds.isNotEmpty) {
+      await db.removeLabelsFromBuffer(result.printedIds);
+    }
+    if (result.error != null) {
+      _ref.read(printFailureProvider.notifier).state =
+          formatPrinterError(result.error!, config.printerMode);
+    }
+  }
+
+  Future<void> _maybeAutoEndBatch(String deviceId, TestResultMessage test) async {
+    final device = state[deviceId];
+    final batch = device?.activeBatch;
+    if (batch == null || batch.numeroOp != test.numeroOp) return;
+    if (batch.quantidadeTotal <= 0) return;
+    if (test.aprovadosNoLote < batch.quantidadeTotal) return;
+    if (_autoEndBatchSent.contains(deviceId)) return;
+
+    _autoEndBatchSent.add(deviceId);
+    await _flushLabelsForOp(_ref.read(databaseProvider), batch.numeroOp);
+    final rejection = await sendEndBatch(deviceId);
+    if (rejection == null) {
+      _ref.read(autoBatchEndedProvider.notifier).state = (
+        deviceId: deviceId,
+        numeroOp: test.numeroOp,
+      );
+    } else {
+      _autoEndBatchSent.remove(deviceId);
     }
   }
 
@@ -365,9 +442,13 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
   Future<String?> sendSetBatch(String deviceId, BatchConfig batch) async {
     final service = _ref.read(mqttServiceProvider);
     await service.publishCommand(deviceId, batch.toSetBatchJson());
-    final rejection = await waitForRejection(deviceId);
+    final rejection = service.currentState == AppMqttConnectionState.connected
+        ? await waitForRejection(deviceId)
+        : null;
     if (rejection != null) return rejection;
 
+    _ref.read(retestModeProvider.notifier).state = batch.modoReteste;
+    _autoEndBatchSent.remove(deviceId);
     setActiveBatch(deviceId, batch);
     _setDeviceEstado(deviceId, DeviceFsmState.batchReady);
     final startedAt = _batchStartedAt[deviceId] ?? DateTime.now();
@@ -377,6 +458,25 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
       status: 'active',
       startedAt: startedAt,
     );
+    return null;
+  }
+
+  /// Alterna modo reteste no firmware sem alterar demais parâmetros do lote.
+  Future<String?> syncRetestMode(String deviceId, bool modoReteste) async {
+    final device = state[deviceId];
+    final batch = device?.activeBatch;
+    if (batch == null) return 'Sem lote ativo';
+
+    final updated = batch.copyWith(modoReteste: modoReteste);
+    final service = _ref.read(mqttServiceProvider);
+    await service.publishCommand(deviceId, updated.toSetBatchJson());
+    final rejection = service.currentState == AppMqttConnectionState.connected
+        ? await waitForRejection(deviceId)
+        : null;
+    if (rejection != null) return rejection;
+
+    _ref.read(retestModeProvider.notifier).state = modoReteste;
+    setActiveBatch(deviceId, updated);
     return null;
   }
 
@@ -400,9 +500,11 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
     final device = state[deviceId];
     final batch = device?.activeBatch;
     final startedAt = _batchStartedAt[deviceId];
-    await service.publishCommand(deviceId, {'cmd': 'END_BATCH'});
-    final rejection = await waitForRejection(deviceId);
-    if (rejection != null) return rejection;
+    if (service.currentState == AppMqttConnectionState.connected) {
+      await service.publishCommand(deviceId, {'cmd': 'END_BATCH'});
+      final rejection = await waitForRejection(deviceId);
+      if (rejection != null) return rejection;
+    }
 
     if (batch != null) {
       await _ref.read(databaseProvider).lockOp(batch.numeroOp);
@@ -418,6 +520,8 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
       );
     }
     _batchStartedAt.remove(deviceId);
+    _autoEndBatchSent.remove(deviceId);
+    _ref.read(retestModeProvider.notifier).state = false;
     clearActiveBatch(deviceId);
     _setDeviceEstado(deviceId, DeviceFsmState.idle);
     return null;

@@ -74,6 +74,11 @@ bool pure_batch_quota_reached(uint32_t aprovados, uint32_t quantidade_total)
     return quantidade_total > 0 && aprovados >= quantidade_total;
 }
 
+bool pure_batch_approval_updates_counters(bool modo_reteste, bool approved)
+{
+    return approved && !modo_reteste;
+}
+
 bool pure_batch_copy_str(char *dst, size_t dst_len, const char *src)
 {
     if (!dst || dst_len == 0 || !src || src[0] == '\0') {
