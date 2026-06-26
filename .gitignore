@@ -4,7 +4,8 @@ Thumbs.db
 *~
 *:Zone.Identifier
 
-# IDE (manter .vscode/ e .cursor/ versionados se o time usa)
+# IDE — preferências locais de máquina (caminhos ESP-IDF, portas COM, etc.)
+**/.vscode/settings.json
 *.swp
 *.swo
 .idea/
@@ -20,8 +21,14 @@ Thumbs.db
 **/**/doc/api/
 **/**/*.g.dart.bak
 
+# Binários gerados / empacotados (não versionar — gerar no PC com scripts)
+**/tools/windows/esptool.exe
+**/*.exe
+!scripts/**/*.ps1
+
 # ESP-IDF (sirene-validator)
 sirene-validator/build/
+sirene-validator/sirene-validator/build/
 sirene-validator/managed_components/
 sirene-validator/dependencies.lock
 sirene-validator/sdkconfig.old
