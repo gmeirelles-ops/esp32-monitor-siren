@@ -40,7 +40,9 @@ class OperatorsTab extends ConsumerWidget {
                   color: op.ativo ? DipontoColors.primary : Colors.grey,
                 ),
                 title: Text(op.nome),
-                subtitle: Text('${op.codigo}${op.ativo ? '' : ' · inativo'}'),
+                subtitle: Text(
+                  '${op.codigo}${op.ativo ? '' : ' · inativo'}${op.isGestor ? ' · gestor' : ''}',
+                ),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => _openForm(context, existing: op),
               ),

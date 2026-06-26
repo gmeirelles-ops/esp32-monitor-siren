@@ -1,6 +1,31 @@
 #Requires -Version 5.1
 # Funções compartilhadas para build Windows (portátil e instalador).
 
+$script:SubstDrive = "S:"
+$script:RepoRootCache = $null
+
+function Ensure-WindowsAsciiRepoPath {
+    if ($script:RepoRootCache) {
+        return $script:RepoRootCache
+    }
+
+    $physicalRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+    if ($PSVersionTable.PSPlatform -and $PSVersionTable.PSPlatform -ne "Win32NT") {
+        $script:RepoRootCache = $physicalRoot
+        return $script:RepoRootCache
+    }
+
+    $drive = $script:SubstDrive
+    $existing = subst 2>&1 | Select-String "^$([regex]::Escape($drive))\:"
+    if (-not $existing) {
+        Write-Host "==> Mapeando $drive -> $physicalRoot (evita falha com acentos no caminho)"
+        subst $drive $physicalRoot | Out-Null
+    }
+
+    $script:RepoRootCache = Join-Path $drive ""
+    return $script:RepoRootCache
+}
+
 function Assert-WindowsBuildEnvironment {
     if ($PSVersionTable.PSPlatform -and $PSVersionTable.PSPlatform -ne "Win32NT") {
         throw "Este script deve ser executado no Windows. Use GitHub Actions (workflow_dispatch) ou uma maquina Windows."
@@ -9,10 +34,15 @@ function Assert-WindowsBuildEnvironment {
     if (-not (Get-Command flutter -ErrorAction SilentlyContinue)) {
         throw "Flutter nao encontrado no PATH. Instale o Flutter SDK e o workload C++ do Visual Studio."
     }
+
+    Ensure-WindowsAsciiRepoPath | Out-Null
 }
 
 function Get-RepoRoot {
-    return (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+    if (-not $script:RepoRootCache) {
+        Ensure-WindowsAsciiRepoPath | Out-Null
+    }
+    return $script:RepoRootCache
 }
 
 function Get-SireneAppDir {
@@ -69,6 +99,87 @@ function Invoke-SireneFlutterWindowsBuild {
 
     if (-not (Test-Path $releaseDir)) {
         throw "Saida de build nao encontrada: $releaseDir"
+    }
+}
+
+function Copy-SireneBundledTools {
+    param([string]$AppDestDir)
+
+    $toolsSrc = Join-Path (Get-SireneAppDir) "tools\windows"
+    if (-not (Test-Path $toolsSrc)) {
+        Write-Host "    (sem tools/windows para copiar)"
+        return
+    }
+
+    $toolsDest = Join-Path $AppDestDir "tools\windows"
+    New-Item -ItemType Directory -Path $toolsDest -Force | Out-Null
+    Copy-Item -Path (Join-Path $toolsSrc "*") -Destination $toolsDest -Recurse -Force
+    Write-Host "==> Copiando tools/windows (esptool, manifest)"
+}
+
+function Test-SirenePortableLayout {
+    param([string]$PackageDir)
+
+    $exe = Join-Path $PackageDir "app\sirene_app.exe"
+    $data = Join-Path $PackageDir "app\data"
+    $readme = Join-Path $PackageDir "LEIA-ME.txt"
+    $launcher = Join-Path $PackageDir "Iniciar Diponto Sirene Validator.bat"
+
+    foreach ($path in @($exe, $data, $readme, $launcher)) {
+        if (-not (Test-Path $path)) {
+            throw "Pacote incompleto: ausente $path"
+        }
+    }
+}
+
+function Invoke-SirenePortablePackage {
+    param(
+        [switch]$SkipZip
+    )
+
+    $distRoot = Join-Path (Get-RepoRoot) "dist"
+    $templatesDir = Join-Path $PSScriptRoot "windows-portable"
+    $version = Get-SireneAppVersion
+    $packageName = "DipontoSireneValidator-$version-win64"
+    $packageDir = Join-Path $distRoot $packageName
+    $zipPath = Join-Path $distRoot "$packageName.zip"
+    $releaseDir = Get-SireneReleaseDir
+
+    if (-not (Test-Path $releaseDir)) {
+        throw "Saida de build nao encontrada: $releaseDir`nExecute antes: flutter build windows --release"
+    }
+
+    New-Item -ItemType Directory -Path $distRoot -Force | Out-Null
+
+    if (Test-Path $packageDir) {
+        Remove-Item $packageDir -Recurse -Force
+    }
+    $appDest = Join-Path $packageDir "app"
+    New-Item -ItemType Directory -Path $appDest -Force | Out-Null
+
+    Write-Host "==> Copiando Release para dist/$packageName/app"
+    Copy-Item -Path (Join-Path $releaseDir "*") -Destination $appDest -Recurse -Force
+    Copy-SireneBundledTools -AppDestDir $appDest
+
+    $readmeTemplate = Get-Content (Join-Path $templatesDir "LEIA-ME.txt") -Raw -Encoding UTF8
+    $readmeTemplate.Replace("{{VERSION}}", $version) | Set-Content (Join-Path $packageDir "LEIA-ME.txt") -Encoding UTF8
+    Copy-Item (Join-Path $templatesDir "Iniciar Diponto Sirene Validator.bat") $packageDir -Force
+
+    Write-Host "==> Verificando estrutura do pacote"
+    Test-SirenePortableLayout -PackageDir $packageDir
+
+    if (-not $SkipZip) {
+        if (Test-Path $zipPath) {
+            Remove-Item $zipPath -Force
+        }
+        Write-Host "==> Gerando ZIP"
+        Compress-Archive -Path $packageDir -DestinationPath $zipPath -Force
+    }
+
+    return [PSCustomObject]@{
+        Version    = $version
+        PackageDir = $packageDir
+        ZipPath    = $(if ($SkipZip) { $null } else { $zipPath })
     }
 }
 

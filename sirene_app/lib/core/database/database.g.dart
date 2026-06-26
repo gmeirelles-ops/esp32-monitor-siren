@@ -108,6 +108,50 @@ class $TestResultsTable extends TestResults
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _tempoTesteSecMeta = const VerificationMeta(
+    'tempoTesteSec',
+  );
+  @override
+  late final GeneratedColumn<int> tempoTesteSec = GeneratedColumn<int>(
+    'tempo_teste_sec',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _potenciaMinMeta = const VerificationMeta(
+    'potenciaMin',
+  );
+  @override
+  late final GeneratedColumn<double> potenciaMin = GeneratedColumn<double>(
+    'potencia_min',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _potenciaMaxMeta = const VerificationMeta(
+    'potenciaMax',
+  );
+  @override
+  late final GeneratedColumn<double> potenciaMax = GeneratedColumn<double>(
+    'potencia_max',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _operatorIdMeta = const VerificationMeta(
+    'operatorId',
+  );
+  @override
+  late final GeneratedColumn<int> operatorId = GeneratedColumn<int>(
+    'operator_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _isRetestMeta = const VerificationMeta(
     'isRetest',
   );
@@ -145,6 +189,10 @@ class $TestResultsTable extends TestResults
     aprovadosNoLote,
     serial,
     operador,
+    tempoTesteSec,
+    potenciaMin,
+    potenciaMax,
+    operatorId,
     isRetest,
     createdAt,
   ];
@@ -229,6 +277,39 @@ class $TestResultsTable extends TestResults
         operador.isAcceptableOrUnknown(data['operador']!, _operadorMeta),
       );
     }
+    if (data.containsKey('tempo_teste_sec')) {
+      context.handle(
+        _tempoTesteSecMeta,
+        tempoTesteSec.isAcceptableOrUnknown(
+          data['tempo_teste_sec']!,
+          _tempoTesteSecMeta,
+        ),
+      );
+    }
+    if (data.containsKey('potencia_min')) {
+      context.handle(
+        _potenciaMinMeta,
+        potenciaMin.isAcceptableOrUnknown(
+          data['potencia_min']!,
+          _potenciaMinMeta,
+        ),
+      );
+    }
+    if (data.containsKey('potencia_max')) {
+      context.handle(
+        _potenciaMaxMeta,
+        potenciaMax.isAcceptableOrUnknown(
+          data['potencia_max']!,
+          _potenciaMaxMeta,
+        ),
+      );
+    }
+    if (data.containsKey('operator_id')) {
+      context.handle(
+        _operatorIdMeta,
+        operatorId.isAcceptableOrUnknown(data['operator_id']!, _operatorIdMeta),
+      );
+    }
     if (data.containsKey('is_retest')) {
       context.handle(
         _isRetestMeta,
@@ -288,6 +369,22 @@ class $TestResultsTable extends TestResults
         DriftSqlType.string,
         data['${effectivePrefix}operador'],
       ),
+      tempoTesteSec: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}tempo_teste_sec'],
+      ),
+      potenciaMin: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}potencia_min'],
+      ),
+      potenciaMax: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}potencia_max'],
+      ),
+      operatorId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}operator_id'],
+      ),
       isRetest: attachedDatabase.typeMapping.read(
         DriftSqlType.bool,
         data['${effectivePrefix}is_retest'],
@@ -315,6 +412,10 @@ class TestResult extends DataClass implements Insertable<TestResult> {
   final int aprovadosNoLote;
   final String? serial;
   final String? operador;
+  final int? tempoTesteSec;
+  final double? potenciaMin;
+  final double? potenciaMax;
+  final int? operatorId;
   final bool isRetest;
   final DateTime createdAt;
   const TestResult({
@@ -327,6 +428,10 @@ class TestResult extends DataClass implements Insertable<TestResult> {
     required this.aprovadosNoLote,
     this.serial,
     this.operador,
+    this.tempoTesteSec,
+    this.potenciaMin,
+    this.potenciaMax,
+    this.operatorId,
     required this.isRetest,
     required this.createdAt,
   });
@@ -345,6 +450,18 @@ class TestResult extends DataClass implements Insertable<TestResult> {
     }
     if (!nullToAbsent || operador != null) {
       map['operador'] = Variable<String>(operador);
+    }
+    if (!nullToAbsent || tempoTesteSec != null) {
+      map['tempo_teste_sec'] = Variable<int>(tempoTesteSec);
+    }
+    if (!nullToAbsent || potenciaMin != null) {
+      map['potencia_min'] = Variable<double>(potenciaMin);
+    }
+    if (!nullToAbsent || potenciaMax != null) {
+      map['potencia_max'] = Variable<double>(potenciaMax);
+    }
+    if (!nullToAbsent || operatorId != null) {
+      map['operator_id'] = Variable<int>(operatorId);
     }
     map['is_retest'] = Variable<bool>(isRetest);
     map['created_at'] = Variable<DateTime>(createdAt);
@@ -366,6 +483,18 @@ class TestResult extends DataClass implements Insertable<TestResult> {
       operador: operador == null && nullToAbsent
           ? const Value.absent()
           : Value(operador),
+      tempoTesteSec: tempoTesteSec == null && nullToAbsent
+          ? const Value.absent()
+          : Value(tempoTesteSec),
+      potenciaMin: potenciaMin == null && nullToAbsent
+          ? const Value.absent()
+          : Value(potenciaMin),
+      potenciaMax: potenciaMax == null && nullToAbsent
+          ? const Value.absent()
+          : Value(potenciaMax),
+      operatorId: operatorId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(operatorId),
       isRetest: Value(isRetest),
       createdAt: Value(createdAt),
     );
@@ -386,6 +515,10 @@ class TestResult extends DataClass implements Insertable<TestResult> {
       aprovadosNoLote: serializer.fromJson<int>(json['aprovadosNoLote']),
       serial: serializer.fromJson<String?>(json['serial']),
       operador: serializer.fromJson<String?>(json['operador']),
+      tempoTesteSec: serializer.fromJson<int?>(json['tempoTesteSec']),
+      potenciaMin: serializer.fromJson<double?>(json['potenciaMin']),
+      potenciaMax: serializer.fromJson<double?>(json['potenciaMax']),
+      operatorId: serializer.fromJson<int?>(json['operatorId']),
       isRetest: serializer.fromJson<bool>(json['isRetest']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
     );
@@ -403,6 +536,10 @@ class TestResult extends DataClass implements Insertable<TestResult> {
       'aprovadosNoLote': serializer.toJson<int>(aprovadosNoLote),
       'serial': serializer.toJson<String?>(serial),
       'operador': serializer.toJson<String?>(operador),
+      'tempoTesteSec': serializer.toJson<int?>(tempoTesteSec),
+      'potenciaMin': serializer.toJson<double?>(potenciaMin),
+      'potenciaMax': serializer.toJson<double?>(potenciaMax),
+      'operatorId': serializer.toJson<int?>(operatorId),
       'isRetest': serializer.toJson<bool>(isRetest),
       'createdAt': serializer.toJson<DateTime>(createdAt),
     };
@@ -418,6 +555,10 @@ class TestResult extends DataClass implements Insertable<TestResult> {
     int? aprovadosNoLote,
     Value<String?> serial = const Value.absent(),
     Value<String?> operador = const Value.absent(),
+    Value<int?> tempoTesteSec = const Value.absent(),
+    Value<double?> potenciaMin = const Value.absent(),
+    Value<double?> potenciaMax = const Value.absent(),
+    Value<int?> operatorId = const Value.absent(),
     bool? isRetest,
     DateTime? createdAt,
   }) => TestResult(
@@ -430,6 +571,12 @@ class TestResult extends DataClass implements Insertable<TestResult> {
     aprovadosNoLote: aprovadosNoLote ?? this.aprovadosNoLote,
     serial: serial.present ? serial.value : this.serial,
     operador: operador.present ? operador.value : this.operador,
+    tempoTesteSec: tempoTesteSec.present
+        ? tempoTesteSec.value
+        : this.tempoTesteSec,
+    potenciaMin: potenciaMin.present ? potenciaMin.value : this.potenciaMin,
+    potenciaMax: potenciaMax.present ? potenciaMax.value : this.potenciaMax,
+    operatorId: operatorId.present ? operatorId.value : this.operatorId,
     isRetest: isRetest ?? this.isRetest,
     createdAt: createdAt ?? this.createdAt,
   );
@@ -450,6 +597,18 @@ class TestResult extends DataClass implements Insertable<TestResult> {
           : this.aprovadosNoLote,
       serial: data.serial.present ? data.serial.value : this.serial,
       operador: data.operador.present ? data.operador.value : this.operador,
+      tempoTesteSec: data.tempoTesteSec.present
+          ? data.tempoTesteSec.value
+          : this.tempoTesteSec,
+      potenciaMin: data.potenciaMin.present
+          ? data.potenciaMin.value
+          : this.potenciaMin,
+      potenciaMax: data.potenciaMax.present
+          ? data.potenciaMax.value
+          : this.potenciaMax,
+      operatorId: data.operatorId.present
+          ? data.operatorId.value
+          : this.operatorId,
       isRetest: data.isRetest.present ? data.isRetest.value : this.isRetest,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
     );
@@ -467,6 +626,10 @@ class TestResult extends DataClass implements Insertable<TestResult> {
           ..write('aprovadosNoLote: $aprovadosNoLote, ')
           ..write('serial: $serial, ')
           ..write('operador: $operador, ')
+          ..write('tempoTesteSec: $tempoTesteSec, ')
+          ..write('potenciaMin: $potenciaMin, ')
+          ..write('potenciaMax: $potenciaMax, ')
+          ..write('operatorId: $operatorId, ')
           ..write('isRetest: $isRetest, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
@@ -484,6 +647,10 @@ class TestResult extends DataClass implements Insertable<TestResult> {
     aprovadosNoLote,
     serial,
     operador,
+    tempoTesteSec,
+    potenciaMin,
+    potenciaMax,
+    operatorId,
     isRetest,
     createdAt,
   );
@@ -500,6 +667,10 @@ class TestResult extends DataClass implements Insertable<TestResult> {
           other.aprovadosNoLote == this.aprovadosNoLote &&
           other.serial == this.serial &&
           other.operador == this.operador &&
+          other.tempoTesteSec == this.tempoTesteSec &&
+          other.potenciaMin == this.potenciaMin &&
+          other.potenciaMax == this.potenciaMax &&
+          other.operatorId == this.operatorId &&
           other.isRetest == this.isRetest &&
           other.createdAt == this.createdAt);
 }
@@ -514,6 +685,10 @@ class TestResultsCompanion extends UpdateCompanion<TestResult> {
   final Value<int> aprovadosNoLote;
   final Value<String?> serial;
   final Value<String?> operador;
+  final Value<int?> tempoTesteSec;
+  final Value<double?> potenciaMin;
+  final Value<double?> potenciaMax;
+  final Value<int?> operatorId;
   final Value<bool> isRetest;
   final Value<DateTime> createdAt;
   const TestResultsCompanion({
@@ -526,6 +701,10 @@ class TestResultsCompanion extends UpdateCompanion<TestResult> {
     this.aprovadosNoLote = const Value.absent(),
     this.serial = const Value.absent(),
     this.operador = const Value.absent(),
+    this.tempoTesteSec = const Value.absent(),
+    this.potenciaMin = const Value.absent(),
+    this.potenciaMax = const Value.absent(),
+    this.operatorId = const Value.absent(),
     this.isRetest = const Value.absent(),
     this.createdAt = const Value.absent(),
   });
@@ -539,6 +718,10 @@ class TestResultsCompanion extends UpdateCompanion<TestResult> {
     required int aprovadosNoLote,
     this.serial = const Value.absent(),
     this.operador = const Value.absent(),
+    this.tempoTesteSec = const Value.absent(),
+    this.potenciaMin = const Value.absent(),
+    this.potenciaMax = const Value.absent(),
+    this.operatorId = const Value.absent(),
     this.isRetest = const Value.absent(),
     required DateTime createdAt,
   }) : deviceId = Value(deviceId),
@@ -558,6 +741,10 @@ class TestResultsCompanion extends UpdateCompanion<TestResult> {
     Expression<int>? aprovadosNoLote,
     Expression<String>? serial,
     Expression<String>? operador,
+    Expression<int>? tempoTesteSec,
+    Expression<double>? potenciaMin,
+    Expression<double>? potenciaMax,
+    Expression<int>? operatorId,
     Expression<bool>? isRetest,
     Expression<DateTime>? createdAt,
   }) {
@@ -571,6 +758,10 @@ class TestResultsCompanion extends UpdateCompanion<TestResult> {
       if (aprovadosNoLote != null) 'aprovados_no_lote': aprovadosNoLote,
       if (serial != null) 'serial': serial,
       if (operador != null) 'operador': operador,
+      if (tempoTesteSec != null) 'tempo_teste_sec': tempoTesteSec,
+      if (potenciaMin != null) 'potencia_min': potenciaMin,
+      if (potenciaMax != null) 'potencia_max': potenciaMax,
+      if (operatorId != null) 'operator_id': operatorId,
       if (isRetest != null) 'is_retest': isRetest,
       if (createdAt != null) 'created_at': createdAt,
     });
@@ -586,6 +777,10 @@ class TestResultsCompanion extends UpdateCompanion<TestResult> {
     Value<int>? aprovadosNoLote,
     Value<String?>? serial,
     Value<String?>? operador,
+    Value<int?>? tempoTesteSec,
+    Value<double?>? potenciaMin,
+    Value<double?>? potenciaMax,
+    Value<int?>? operatorId,
     Value<bool>? isRetest,
     Value<DateTime>? createdAt,
   }) {
@@ -599,6 +794,10 @@ class TestResultsCompanion extends UpdateCompanion<TestResult> {
       aprovadosNoLote: aprovadosNoLote ?? this.aprovadosNoLote,
       serial: serial ?? this.serial,
       operador: operador ?? this.operador,
+      tempoTesteSec: tempoTesteSec ?? this.tempoTesteSec,
+      potenciaMin: potenciaMin ?? this.potenciaMin,
+      potenciaMax: potenciaMax ?? this.potenciaMax,
+      operatorId: operatorId ?? this.operatorId,
       isRetest: isRetest ?? this.isRetest,
       createdAt: createdAt ?? this.createdAt,
     );
@@ -634,6 +833,18 @@ class TestResultsCompanion extends UpdateCompanion<TestResult> {
     if (operador.present) {
       map['operador'] = Variable<String>(operador.value);
     }
+    if (tempoTesteSec.present) {
+      map['tempo_teste_sec'] = Variable<int>(tempoTesteSec.value);
+    }
+    if (potenciaMin.present) {
+      map['potencia_min'] = Variable<double>(potenciaMin.value);
+    }
+    if (potenciaMax.present) {
+      map['potencia_max'] = Variable<double>(potenciaMax.value);
+    }
+    if (operatorId.present) {
+      map['operator_id'] = Variable<int>(operatorId.value);
+    }
     if (isRetest.present) {
       map['is_retest'] = Variable<bool>(isRetest.value);
     }
@@ -655,6 +866,10 @@ class TestResultsCompanion extends UpdateCompanion<TestResult> {
           ..write('aprovadosNoLote: $aprovadosNoLote, ')
           ..write('serial: $serial, ')
           ..write('operador: $operador, ')
+          ..write('tempoTesteSec: $tempoTesteSec, ')
+          ..write('potenciaMin: $potenciaMin, ')
+          ..write('potenciaMax: $potenciaMax, ')
+          ..write('operatorId: $operatorId, ')
           ..write('isRetest: $isRetest, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
@@ -955,6 +1170,500 @@ class LabelBufferEntriesCompanion extends UpdateCompanion<LabelBufferEntry> {
           ..write('id: $id, ')
           ..write('serial: $serial, ')
           ..write('numeroOp: $numeroOp, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $MarkQueueEntriesTable extends MarkQueueEntries
+    with TableInfo<$MarkQueueEntriesTable, MarkQueueEntry> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $MarkQueueEntriesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _serialMeta = const VerificationMeta('serial');
+  @override
+  late final GeneratedColumn<String> serial = GeneratedColumn<String>(
+    'serial',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _numeroOpMeta = const VerificationMeta(
+    'numeroOp',
+  );
+  @override
+  late final GeneratedColumn<String> numeroOp = GeneratedColumn<String>(
+    'numero_op',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _statusMeta = const VerificationMeta('status');
+  @override
+  late final GeneratedColumn<String> status = GeneratedColumn<String>(
+    'status',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('pending'),
+  );
+  static const VerificationMeta _attemptsMeta = const VerificationMeta(
+    'attempts',
+  );
+  @override
+  late final GeneratedColumn<int> attempts = GeneratedColumn<int>(
+    'attempts',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _lastErrorMeta = const VerificationMeta(
+    'lastError',
+  );
+  @override
+  late final GeneratedColumn<String> lastError = GeneratedColumn<String>(
+    'last_error',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _pinnedMeta = const VerificationMeta('pinned');
+  @override
+  late final GeneratedColumn<bool> pinned = GeneratedColumn<bool>(
+    'pinned',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("pinned" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    serial,
+    numeroOp,
+    status,
+    attempts,
+    lastError,
+    pinned,
+    createdAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'mark_queue_entries';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<MarkQueueEntry> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('serial')) {
+      context.handle(
+        _serialMeta,
+        serial.isAcceptableOrUnknown(data['serial']!, _serialMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_serialMeta);
+    }
+    if (data.containsKey('numero_op')) {
+      context.handle(
+        _numeroOpMeta,
+        numeroOp.isAcceptableOrUnknown(data['numero_op']!, _numeroOpMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_numeroOpMeta);
+    }
+    if (data.containsKey('status')) {
+      context.handle(
+        _statusMeta,
+        status.isAcceptableOrUnknown(data['status']!, _statusMeta),
+      );
+    }
+    if (data.containsKey('attempts')) {
+      context.handle(
+        _attemptsMeta,
+        attempts.isAcceptableOrUnknown(data['attempts']!, _attemptsMeta),
+      );
+    }
+    if (data.containsKey('last_error')) {
+      context.handle(
+        _lastErrorMeta,
+        lastError.isAcceptableOrUnknown(data['last_error']!, _lastErrorMeta),
+      );
+    }
+    if (data.containsKey('pinned')) {
+      context.handle(
+        _pinnedMeta,
+        pinned.isAcceptableOrUnknown(data['pinned']!, _pinnedMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  MarkQueueEntry map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return MarkQueueEntry(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      serial: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}serial'],
+      )!,
+      numeroOp: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}numero_op'],
+      )!,
+      status: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}status'],
+      )!,
+      attempts: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}attempts'],
+      )!,
+      lastError: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}last_error'],
+      ),
+      pinned: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}pinned'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+    );
+  }
+
+  @override
+  $MarkQueueEntriesTable createAlias(String alias) {
+    return $MarkQueueEntriesTable(attachedDatabase, alias);
+  }
+}
+
+class MarkQueueEntry extends DataClass implements Insertable<MarkQueueEntry> {
+  final int id;
+  final String serial;
+  final String numeroOp;
+  final String status;
+  final int attempts;
+  final String? lastError;
+  final bool pinned;
+  final DateTime createdAt;
+  const MarkQueueEntry({
+    required this.id,
+    required this.serial,
+    required this.numeroOp,
+    required this.status,
+    required this.attempts,
+    this.lastError,
+    required this.pinned,
+    required this.createdAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['serial'] = Variable<String>(serial);
+    map['numero_op'] = Variable<String>(numeroOp);
+    map['status'] = Variable<String>(status);
+    map['attempts'] = Variable<int>(attempts);
+    if (!nullToAbsent || lastError != null) {
+      map['last_error'] = Variable<String>(lastError);
+    }
+    map['pinned'] = Variable<bool>(pinned);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    return map;
+  }
+
+  MarkQueueEntriesCompanion toCompanion(bool nullToAbsent) {
+    return MarkQueueEntriesCompanion(
+      id: Value(id),
+      serial: Value(serial),
+      numeroOp: Value(numeroOp),
+      status: Value(status),
+      attempts: Value(attempts),
+      lastError: lastError == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lastError),
+      pinned: Value(pinned),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory MarkQueueEntry.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return MarkQueueEntry(
+      id: serializer.fromJson<int>(json['id']),
+      serial: serializer.fromJson<String>(json['serial']),
+      numeroOp: serializer.fromJson<String>(json['numeroOp']),
+      status: serializer.fromJson<String>(json['status']),
+      attempts: serializer.fromJson<int>(json['attempts']),
+      lastError: serializer.fromJson<String?>(json['lastError']),
+      pinned: serializer.fromJson<bool>(json['pinned']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'serial': serializer.toJson<String>(serial),
+      'numeroOp': serializer.toJson<String>(numeroOp),
+      'status': serializer.toJson<String>(status),
+      'attempts': serializer.toJson<int>(attempts),
+      'lastError': serializer.toJson<String?>(lastError),
+      'pinned': serializer.toJson<bool>(pinned),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  MarkQueueEntry copyWith({
+    int? id,
+    String? serial,
+    String? numeroOp,
+    String? status,
+    int? attempts,
+    Value<String?> lastError = const Value.absent(),
+    bool? pinned,
+    DateTime? createdAt,
+  }) => MarkQueueEntry(
+    id: id ?? this.id,
+    serial: serial ?? this.serial,
+    numeroOp: numeroOp ?? this.numeroOp,
+    status: status ?? this.status,
+    attempts: attempts ?? this.attempts,
+    lastError: lastError.present ? lastError.value : this.lastError,
+    pinned: pinned ?? this.pinned,
+    createdAt: createdAt ?? this.createdAt,
+  );
+  MarkQueueEntry copyWithCompanion(MarkQueueEntriesCompanion data) {
+    return MarkQueueEntry(
+      id: data.id.present ? data.id.value : this.id,
+      serial: data.serial.present ? data.serial.value : this.serial,
+      numeroOp: data.numeroOp.present ? data.numeroOp.value : this.numeroOp,
+      status: data.status.present ? data.status.value : this.status,
+      attempts: data.attempts.present ? data.attempts.value : this.attempts,
+      lastError: data.lastError.present ? data.lastError.value : this.lastError,
+      pinned: data.pinned.present ? data.pinned.value : this.pinned,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('MarkQueueEntry(')
+          ..write('id: $id, ')
+          ..write('serial: $serial, ')
+          ..write('numeroOp: $numeroOp, ')
+          ..write('status: $status, ')
+          ..write('attempts: $attempts, ')
+          ..write('lastError: $lastError, ')
+          ..write('pinned: $pinned, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    serial,
+    numeroOp,
+    status,
+    attempts,
+    lastError,
+    pinned,
+    createdAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is MarkQueueEntry &&
+          other.id == this.id &&
+          other.serial == this.serial &&
+          other.numeroOp == this.numeroOp &&
+          other.status == this.status &&
+          other.attempts == this.attempts &&
+          other.lastError == this.lastError &&
+          other.pinned == this.pinned &&
+          other.createdAt == this.createdAt);
+}
+
+class MarkQueueEntriesCompanion extends UpdateCompanion<MarkQueueEntry> {
+  final Value<int> id;
+  final Value<String> serial;
+  final Value<String> numeroOp;
+  final Value<String> status;
+  final Value<int> attempts;
+  final Value<String?> lastError;
+  final Value<bool> pinned;
+  final Value<DateTime> createdAt;
+  const MarkQueueEntriesCompanion({
+    this.id = const Value.absent(),
+    this.serial = const Value.absent(),
+    this.numeroOp = const Value.absent(),
+    this.status = const Value.absent(),
+    this.attempts = const Value.absent(),
+    this.lastError = const Value.absent(),
+    this.pinned = const Value.absent(),
+    this.createdAt = const Value.absent(),
+  });
+  MarkQueueEntriesCompanion.insert({
+    this.id = const Value.absent(),
+    required String serial,
+    required String numeroOp,
+    this.status = const Value.absent(),
+    this.attempts = const Value.absent(),
+    this.lastError = const Value.absent(),
+    this.pinned = const Value.absent(),
+    required DateTime createdAt,
+  }) : serial = Value(serial),
+       numeroOp = Value(numeroOp),
+       createdAt = Value(createdAt);
+  static Insertable<MarkQueueEntry> custom({
+    Expression<int>? id,
+    Expression<String>? serial,
+    Expression<String>? numeroOp,
+    Expression<String>? status,
+    Expression<int>? attempts,
+    Expression<String>? lastError,
+    Expression<bool>? pinned,
+    Expression<DateTime>? createdAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (serial != null) 'serial': serial,
+      if (numeroOp != null) 'numero_op': numeroOp,
+      if (status != null) 'status': status,
+      if (attempts != null) 'attempts': attempts,
+      if (lastError != null) 'last_error': lastError,
+      if (pinned != null) 'pinned': pinned,
+      if (createdAt != null) 'created_at': createdAt,
+    });
+  }
+
+  MarkQueueEntriesCompanion copyWith({
+    Value<int>? id,
+    Value<String>? serial,
+    Value<String>? numeroOp,
+    Value<String>? status,
+    Value<int>? attempts,
+    Value<String?>? lastError,
+    Value<bool>? pinned,
+    Value<DateTime>? createdAt,
+  }) {
+    return MarkQueueEntriesCompanion(
+      id: id ?? this.id,
+      serial: serial ?? this.serial,
+      numeroOp: numeroOp ?? this.numeroOp,
+      status: status ?? this.status,
+      attempts: attempts ?? this.attempts,
+      lastError: lastError ?? this.lastError,
+      pinned: pinned ?? this.pinned,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (serial.present) {
+      map['serial'] = Variable<String>(serial.value);
+    }
+    if (numeroOp.present) {
+      map['numero_op'] = Variable<String>(numeroOp.value);
+    }
+    if (status.present) {
+      map['status'] = Variable<String>(status.value);
+    }
+    if (attempts.present) {
+      map['attempts'] = Variable<int>(attempts.value);
+    }
+    if (lastError.present) {
+      map['last_error'] = Variable<String>(lastError.value);
+    }
+    if (pinned.present) {
+      map['pinned'] = Variable<bool>(pinned.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('MarkQueueEntriesCompanion(')
+          ..write('id: $id, ')
+          ..write('serial: $serial, ')
+          ..write('numeroOp: $numeroOp, ')
+          ..write('status: $status, ')
+          ..write('attempts: $attempts, ')
+          ..write('lastError: $lastError, ')
+          ..write('pinned: $pinned, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
         .toString();
@@ -3416,6 +4125,19 @@ class $OperatorsTable extends Operators
     ),
     defaultValue: const Constant(true),
   );
+  static const VerificationMeta _isGestorMeta = const VerificationMeta('isGestor');
+  @override
+  late final GeneratedColumn<bool> isGestor = GeneratedColumn<bool>(
+    'is_gestor',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_gestor" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -3427,8 +4149,27 @@ class $OperatorsTable extends Operators
     type: DriftSqlType.dateTime,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
   @override
-  List<GeneratedColumn> get $columns => [id, codigo, nome, ativo, createdAt];
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    codigo,
+    nome,
+    ativo,
+    isGestor,
+    createdAt,
+    updatedAt,
+  ];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
@@ -3466,6 +4207,12 @@ class $OperatorsTable extends Operators
         ativo.isAcceptableOrUnknown(data['ativo']!, _ativoMeta),
       );
     }
+    if (data.containsKey('is_gestor')) {
+      context.handle(
+        _isGestorMeta,
+        isGestor.isAcceptableOrUnknown(data['is_gestor']!, _isGestorMeta),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -3473,6 +4220,12 @@ class $OperatorsTable extends Operators
       );
     } else if (isInserting) {
       context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
     }
     return context;
   }
@@ -3499,10 +4252,18 @@ class $OperatorsTable extends Operators
         DriftSqlType.bool,
         data['${effectivePrefix}ativo'],
       )!,
+      isGestor: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_gestor'],
+      )!,
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
       )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      ),
     );
   }
 
@@ -3517,13 +4278,17 @@ class Operator extends DataClass implements Insertable<Operator> {
   final String codigo;
   final String nome;
   final bool ativo;
+  final bool isGestor;
   final DateTime createdAt;
+  final DateTime? updatedAt;
   const Operator({
     required this.id,
     required this.codigo,
     required this.nome,
     required this.ativo,
+    required this.isGestor,
     required this.createdAt,
+    this.updatedAt,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -3532,7 +4297,11 @@ class Operator extends DataClass implements Insertable<Operator> {
     map['codigo'] = Variable<String>(codigo);
     map['nome'] = Variable<String>(nome);
     map['ativo'] = Variable<bool>(ativo);
+    map['is_gestor'] = Variable<bool>(isGestor);
     map['created_at'] = Variable<DateTime>(createdAt);
+    if (!nullToAbsent || updatedAt != null) {
+      map['updated_at'] = Variable<DateTime>(updatedAt);
+    }
     return map;
   }
 
@@ -3542,7 +4311,11 @@ class Operator extends DataClass implements Insertable<Operator> {
       codigo: Value(codigo),
       nome: Value(nome),
       ativo: Value(ativo),
+      isGestor: Value(isGestor),
       createdAt: Value(createdAt),
+      updatedAt: updatedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(updatedAt),
     );
   }
 
@@ -3556,7 +4329,9 @@ class Operator extends DataClass implements Insertable<Operator> {
       codigo: serializer.fromJson<String>(json['codigo']),
       nome: serializer.fromJson<String>(json['nome']),
       ativo: serializer.fromJson<bool>(json['ativo']),
+      isGestor: serializer.fromJson<bool>(json['isGestor']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime?>(json['updatedAt']),
     );
   }
   @override
@@ -3567,7 +4342,9 @@ class Operator extends DataClass implements Insertable<Operator> {
       'codigo': serializer.toJson<String>(codigo),
       'nome': serializer.toJson<String>(nome),
       'ativo': serializer.toJson<bool>(ativo),
+      'isGestor': serializer.toJson<bool>(isGestor),
       'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime?>(updatedAt),
     };
   }
 
@@ -3576,13 +4353,17 @@ class Operator extends DataClass implements Insertable<Operator> {
     String? codigo,
     String? nome,
     bool? ativo,
+    bool? isGestor,
     DateTime? createdAt,
+    Value<DateTime?> updatedAt = const Value.absent(),
   }) => Operator(
     id: id ?? this.id,
     codigo: codigo ?? this.codigo,
     nome: nome ?? this.nome,
     ativo: ativo ?? this.ativo,
+    isGestor: isGestor ?? this.isGestor,
     createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt.present ? updatedAt.value : this.updatedAt,
   );
   Operator copyWithCompanion(OperatorsCompanion data) {
     return Operator(
@@ -3590,7 +4371,9 @@ class Operator extends DataClass implements Insertable<Operator> {
       codigo: data.codigo.present ? data.codigo.value : this.codigo,
       nome: data.nome.present ? data.nome.value : this.nome,
       ativo: data.ativo.present ? data.ativo.value : this.ativo,
+      isGestor: data.isGestor.present ? data.isGestor.value : this.isGestor,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
     );
   }
 
@@ -3601,13 +4384,16 @@ class Operator extends DataClass implements Insertable<Operator> {
           ..write('codigo: $codigo, ')
           ..write('nome: $nome, ')
           ..write('ativo: $ativo, ')
-          ..write('createdAt: $createdAt')
+          ..write('isGestor: $isGestor, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(id, codigo, nome, ativo, createdAt);
+  int get hashCode =>
+      Object.hash(id, codigo, nome, ativo, isGestor, createdAt, updatedAt);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -3616,7 +4402,9 @@ class Operator extends DataClass implements Insertable<Operator> {
           other.codigo == this.codigo &&
           other.nome == this.nome &&
           other.ativo == this.ativo &&
-          other.createdAt == this.createdAt);
+          other.isGestor == this.isGestor &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt);
 }
 
 class OperatorsCompanion extends UpdateCompanion<Operator> {
@@ -3624,20 +4412,26 @@ class OperatorsCompanion extends UpdateCompanion<Operator> {
   final Value<String> codigo;
   final Value<String> nome;
   final Value<bool> ativo;
+  final Value<bool> isGestor;
   final Value<DateTime> createdAt;
+  final Value<DateTime?> updatedAt;
   const OperatorsCompanion({
     this.id = const Value.absent(),
     this.codigo = const Value.absent(),
     this.nome = const Value.absent(),
     this.ativo = const Value.absent(),
+    this.isGestor = const Value.absent(),
     this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
   });
   OperatorsCompanion.insert({
     this.id = const Value.absent(),
     required String codigo,
     required String nome,
     this.ativo = const Value.absent(),
+    this.isGestor = const Value.absent(),
     required DateTime createdAt,
+    this.updatedAt = const Value.absent(),
   }) : codigo = Value(codigo),
        nome = Value(nome),
        createdAt = Value(createdAt);
@@ -3646,14 +4440,18 @@ class OperatorsCompanion extends UpdateCompanion<Operator> {
     Expression<String>? codigo,
     Expression<String>? nome,
     Expression<bool>? ativo,
+    Expression<bool>? isGestor,
     Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
       if (codigo != null) 'codigo': codigo,
       if (nome != null) 'nome': nome,
       if (ativo != null) 'ativo': ativo,
+      if (isGestor != null) 'is_gestor': isGestor,
       if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
     });
   }
 
@@ -3662,14 +4460,18 @@ class OperatorsCompanion extends UpdateCompanion<Operator> {
     Value<String>? codigo,
     Value<String>? nome,
     Value<bool>? ativo,
+    Value<bool>? isGestor,
     Value<DateTime>? createdAt,
+    Value<DateTime?>? updatedAt,
   }) {
     return OperatorsCompanion(
       id: id ?? this.id,
       codigo: codigo ?? this.codigo,
       nome: nome ?? this.nome,
       ativo: ativo ?? this.ativo,
+      isGestor: isGestor ?? this.isGestor,
       createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
     );
   }
 
@@ -3688,8 +4490,14 @@ class OperatorsCompanion extends UpdateCompanion<Operator> {
     if (ativo.present) {
       map['ativo'] = Variable<bool>(ativo.value);
     }
+    if (isGestor.present) {
+      map['is_gestor'] = Variable<bool>(isGestor.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
     }
     return map;
   }
@@ -3701,7 +4509,9 @@ class OperatorsCompanion extends UpdateCompanion<Operator> {
           ..write('codigo: $codigo, ')
           ..write('nome: $nome, ')
           ..write('ativo: $ativo, ')
-          ..write('createdAt: $createdAt')
+          ..write('isGestor: $isGestor, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
           ..write(')'))
         .toString();
   }
@@ -3961,12 +4771,414 @@ class BancadasCompanion extends UpdateCompanion<Bancada> {
   }
 }
 
+class $RemarkLogsTable extends RemarkLogs
+    with TableInfo<$RemarkLogsTable, RemarkLog> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $RemarkLogsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _serialMeta = const VerificationMeta('serial');
+  @override
+  late final GeneratedColumn<String> serial = GeneratedColumn<String>(
+    'serial',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _numeroOpMeta = const VerificationMeta(
+    'numeroOp',
+  );
+  @override
+  late final GeneratedColumn<String> numeroOp = GeneratedColumn<String>(
+    'numero_op',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _modeMeta = const VerificationMeta('mode');
+  @override
+  late final GeneratedColumn<String> mode = GeneratedColumn<String>(
+    'mode',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _operatorIdMeta = const VerificationMeta(
+    'operatorId',
+  );
+  @override
+  late final GeneratedColumn<int> operatorId = GeneratedColumn<int>(
+    'operator_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    serial,
+    numeroOp,
+    mode,
+    operatorId,
+    createdAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'remark_logs';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<RemarkLog> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('serial')) {
+      context.handle(
+        _serialMeta,
+        serial.isAcceptableOrUnknown(data['serial']!, _serialMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_serialMeta);
+    }
+    if (data.containsKey('numero_op')) {
+      context.handle(
+        _numeroOpMeta,
+        numeroOp.isAcceptableOrUnknown(data['numero_op']!, _numeroOpMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_numeroOpMeta);
+    }
+    if (data.containsKey('mode')) {
+      context.handle(
+        _modeMeta,
+        mode.isAcceptableOrUnknown(data['mode']!, _modeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_modeMeta);
+    }
+    if (data.containsKey('operator_id')) {
+      context.handle(
+        _operatorIdMeta,
+        operatorId.isAcceptableOrUnknown(data['operator_id']!, _operatorIdMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  RemarkLog map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return RemarkLog(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      serial: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}serial'],
+      )!,
+      numeroOp: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}numero_op'],
+      )!,
+      mode: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}mode'],
+      )!,
+      operatorId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}operator_id'],
+      ),
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+    );
+  }
+
+  @override
+  $RemarkLogsTable createAlias(String alias) {
+    return $RemarkLogsTable(attachedDatabase, alias);
+  }
+}
+
+class RemarkLog extends DataClass implements Insertable<RemarkLog> {
+  final int id;
+  final String serial;
+  final String numeroOp;
+  final String mode;
+  final int? operatorId;
+  final DateTime createdAt;
+  const RemarkLog({
+    required this.id,
+    required this.serial,
+    required this.numeroOp,
+    required this.mode,
+    this.operatorId,
+    required this.createdAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['serial'] = Variable<String>(serial);
+    map['numero_op'] = Variable<String>(numeroOp);
+    map['mode'] = Variable<String>(mode);
+    if (!nullToAbsent || operatorId != null) {
+      map['operator_id'] = Variable<int>(operatorId);
+    }
+    map['created_at'] = Variable<DateTime>(createdAt);
+    return map;
+  }
+
+  RemarkLogsCompanion toCompanion(bool nullToAbsent) {
+    return RemarkLogsCompanion(
+      id: Value(id),
+      serial: Value(serial),
+      numeroOp: Value(numeroOp),
+      mode: Value(mode),
+      operatorId: operatorId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(operatorId),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory RemarkLog.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return RemarkLog(
+      id: serializer.fromJson<int>(json['id']),
+      serial: serializer.fromJson<String>(json['serial']),
+      numeroOp: serializer.fromJson<String>(json['numeroOp']),
+      mode: serializer.fromJson<String>(json['mode']),
+      operatorId: serializer.fromJson<int?>(json['operatorId']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'serial': serializer.toJson<String>(serial),
+      'numeroOp': serializer.toJson<String>(numeroOp),
+      'mode': serializer.toJson<String>(mode),
+      'operatorId': serializer.toJson<int?>(operatorId),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  RemarkLog copyWith({
+    int? id,
+    String? serial,
+    String? numeroOp,
+    String? mode,
+    Value<int?> operatorId = const Value.absent(),
+    DateTime? createdAt,
+  }) => RemarkLog(
+    id: id ?? this.id,
+    serial: serial ?? this.serial,
+    numeroOp: numeroOp ?? this.numeroOp,
+    mode: mode ?? this.mode,
+    operatorId: operatorId.present ? operatorId.value : this.operatorId,
+    createdAt: createdAt ?? this.createdAt,
+  );
+  RemarkLog copyWithCompanion(RemarkLogsCompanion data) {
+    return RemarkLog(
+      id: data.id.present ? data.id.value : this.id,
+      serial: data.serial.present ? data.serial.value : this.serial,
+      numeroOp: data.numeroOp.present ? data.numeroOp.value : this.numeroOp,
+      mode: data.mode.present ? data.mode.value : this.mode,
+      operatorId: data.operatorId.present
+          ? data.operatorId.value
+          : this.operatorId,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('RemarkLog(')
+          ..write('id: $id, ')
+          ..write('serial: $serial, ')
+          ..write('numeroOp: $numeroOp, ')
+          ..write('mode: $mode, ')
+          ..write('operatorId: $operatorId, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(id, serial, numeroOp, mode, operatorId, createdAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is RemarkLog &&
+          other.id == this.id &&
+          other.serial == this.serial &&
+          other.numeroOp == this.numeroOp &&
+          other.mode == this.mode &&
+          other.operatorId == this.operatorId &&
+          other.createdAt == this.createdAt);
+}
+
+class RemarkLogsCompanion extends UpdateCompanion<RemarkLog> {
+  final Value<int> id;
+  final Value<String> serial;
+  final Value<String> numeroOp;
+  final Value<String> mode;
+  final Value<int?> operatorId;
+  final Value<DateTime> createdAt;
+  const RemarkLogsCompanion({
+    this.id = const Value.absent(),
+    this.serial = const Value.absent(),
+    this.numeroOp = const Value.absent(),
+    this.mode = const Value.absent(),
+    this.operatorId = const Value.absent(),
+    this.createdAt = const Value.absent(),
+  });
+  RemarkLogsCompanion.insert({
+    this.id = const Value.absent(),
+    required String serial,
+    required String numeroOp,
+    required String mode,
+    this.operatorId = const Value.absent(),
+    required DateTime createdAt,
+  }) : serial = Value(serial),
+       numeroOp = Value(numeroOp),
+       mode = Value(mode),
+       createdAt = Value(createdAt);
+  static Insertable<RemarkLog> custom({
+    Expression<int>? id,
+    Expression<String>? serial,
+    Expression<String>? numeroOp,
+    Expression<String>? mode,
+    Expression<int>? operatorId,
+    Expression<DateTime>? createdAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (serial != null) 'serial': serial,
+      if (numeroOp != null) 'numero_op': numeroOp,
+      if (mode != null) 'mode': mode,
+      if (operatorId != null) 'operator_id': operatorId,
+      if (createdAt != null) 'created_at': createdAt,
+    });
+  }
+
+  RemarkLogsCompanion copyWith({
+    Value<int>? id,
+    Value<String>? serial,
+    Value<String>? numeroOp,
+    Value<String>? mode,
+    Value<int?>? operatorId,
+    Value<DateTime>? createdAt,
+  }) {
+    return RemarkLogsCompanion(
+      id: id ?? this.id,
+      serial: serial ?? this.serial,
+      numeroOp: numeroOp ?? this.numeroOp,
+      mode: mode ?? this.mode,
+      operatorId: operatorId ?? this.operatorId,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (serial.present) {
+      map['serial'] = Variable<String>(serial.value);
+    }
+    if (numeroOp.present) {
+      map['numero_op'] = Variable<String>(numeroOp.value);
+    }
+    if (mode.present) {
+      map['mode'] = Variable<String>(mode.value);
+    }
+    if (operatorId.present) {
+      map['operator_id'] = Variable<int>(operatorId.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('RemarkLogsCompanion(')
+          ..write('id: $id, ')
+          ..write('serial: $serial, ')
+          ..write('numeroOp: $numeroOp, ')
+          ..write('mode: $mode, ')
+          ..write('operatorId: $operatorId, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
   late final $TestResultsTable testResults = $TestResultsTable(this);
   late final $LabelBufferEntriesTable labelBufferEntries =
       $LabelBufferEntriesTable(this);
+  late final $MarkQueueEntriesTable markQueueEntries = $MarkQueueEntriesTable(
+    this,
+  );
   late final $ProductsTable products = $ProductsTable(this);
   late final $SyncQueueTable syncQueue = $SyncQueueTable(this);
   late final $SerialCountersTable serialCounters = $SerialCountersTable(this);
@@ -3976,6 +5188,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $OpLocksTable opLocks = $OpLocksTable(this);
   late final $OperatorsTable operators = $OperatorsTable(this);
   late final $BancadasTable bancadas = $BancadasTable(this);
+  late final $RemarkLogsTable remarkLogs = $RemarkLogsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -3983,6 +5196,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   List<DatabaseSchemaEntity> get allSchemaEntities => [
     testResults,
     labelBufferEntries,
+    markQueueEntries,
     products,
     syncQueue,
     serialCounters,
@@ -3991,6 +5205,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     opLocks,
     operators,
     bancadas,
+    remarkLogs,
   ];
 }
 
@@ -4005,6 +5220,10 @@ typedef $$TestResultsTableCreateCompanionBuilder =
       required int aprovadosNoLote,
       Value<String?> serial,
       Value<String?> operador,
+      Value<int?> tempoTesteSec,
+      Value<double?> potenciaMin,
+      Value<double?> potenciaMax,
+      Value<int?> operatorId,
       Value<bool> isRetest,
       required DateTime createdAt,
     });
@@ -4019,6 +5238,10 @@ typedef $$TestResultsTableUpdateCompanionBuilder =
       Value<int> aprovadosNoLote,
       Value<String?> serial,
       Value<String?> operador,
+      Value<int?> tempoTesteSec,
+      Value<double?> potenciaMin,
+      Value<double?> potenciaMax,
+      Value<int?> operatorId,
       Value<bool> isRetest,
       Value<DateTime> createdAt,
     });
@@ -4074,6 +5297,26 @@ class $$TestResultsTableFilterComposer
 
   ColumnFilters<String> get operador => $composableBuilder(
     column: $table.operador,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get tempoTesteSec => $composableBuilder(
+    column: $table.tempoTesteSec,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get potenciaMin => $composableBuilder(
+    column: $table.potenciaMin,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get potenciaMax => $composableBuilder(
+    column: $table.potenciaMax,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get operatorId => $composableBuilder(
+    column: $table.operatorId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -4142,6 +5385,26 @@ class $$TestResultsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get tempoTesteSec => $composableBuilder(
+    column: $table.tempoTesteSec,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get potenciaMin => $composableBuilder(
+    column: $table.potenciaMin,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get potenciaMax => $composableBuilder(
+    column: $table.potenciaMax,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get operatorId => $composableBuilder(
+    column: $table.operatorId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<bool> get isRetest => $composableBuilder(
     column: $table.isRetest,
     builder: (column) => ColumnOrderings(column),
@@ -4195,6 +5458,26 @@ class $$TestResultsTableAnnotationComposer
   GeneratedColumn<String> get operador =>
       $composableBuilder(column: $table.operador, builder: (column) => column);
 
+  GeneratedColumn<int> get tempoTesteSec => $composableBuilder(
+    column: $table.tempoTesteSec,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get potenciaMin => $composableBuilder(
+    column: $table.potenciaMin,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get potenciaMax => $composableBuilder(
+    column: $table.potenciaMax,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get operatorId => $composableBuilder(
+    column: $table.operatorId,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<bool> get isRetest =>
       $composableBuilder(column: $table.isRetest, builder: (column) => column);
 
@@ -4242,6 +5525,10 @@ class $$TestResultsTableTableManager
                 Value<int> aprovadosNoLote = const Value.absent(),
                 Value<String?> serial = const Value.absent(),
                 Value<String?> operador = const Value.absent(),
+                Value<int?> tempoTesteSec = const Value.absent(),
+                Value<double?> potenciaMin = const Value.absent(),
+                Value<double?> potenciaMax = const Value.absent(),
+                Value<int?> operatorId = const Value.absent(),
                 Value<bool> isRetest = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
               }) => TestResultsCompanion(
@@ -4254,6 +5541,10 @@ class $$TestResultsTableTableManager
                 aprovadosNoLote: aprovadosNoLote,
                 serial: serial,
                 operador: operador,
+                tempoTesteSec: tempoTesteSec,
+                potenciaMin: potenciaMin,
+                potenciaMax: potenciaMax,
+                operatorId: operatorId,
                 isRetest: isRetest,
                 createdAt: createdAt,
               ),
@@ -4268,6 +5559,10 @@ class $$TestResultsTableTableManager
                 required int aprovadosNoLote,
                 Value<String?> serial = const Value.absent(),
                 Value<String?> operador = const Value.absent(),
+                Value<int?> tempoTesteSec = const Value.absent(),
+                Value<double?> potenciaMin = const Value.absent(),
+                Value<double?> potenciaMax = const Value.absent(),
+                Value<int?> operatorId = const Value.absent(),
                 Value<bool> isRetest = const Value.absent(),
                 required DateTime createdAt,
               }) => TestResultsCompanion.insert(
@@ -4280,6 +5575,10 @@ class $$TestResultsTableTableManager
                 aprovadosNoLote: aprovadosNoLote,
                 serial: serial,
                 operador: operador,
+                tempoTesteSec: tempoTesteSec,
+                potenciaMin: potenciaMin,
+                potenciaMax: potenciaMax,
+                operatorId: operatorId,
                 isRetest: isRetest,
                 createdAt: createdAt,
               ),
@@ -4494,6 +5793,263 @@ typedef $$LabelBufferEntriesTableProcessedTableManager =
         >,
       ),
       LabelBufferEntry,
+      PrefetchHooks Function()
+    >;
+typedef $$MarkQueueEntriesTableCreateCompanionBuilder =
+    MarkQueueEntriesCompanion Function({
+      Value<int> id,
+      required String serial,
+      required String numeroOp,
+      Value<String> status,
+      Value<int> attempts,
+      Value<String?> lastError,
+      Value<bool> pinned,
+      required DateTime createdAt,
+    });
+typedef $$MarkQueueEntriesTableUpdateCompanionBuilder =
+    MarkQueueEntriesCompanion Function({
+      Value<int> id,
+      Value<String> serial,
+      Value<String> numeroOp,
+      Value<String> status,
+      Value<int> attempts,
+      Value<String?> lastError,
+      Value<bool> pinned,
+      Value<DateTime> createdAt,
+    });
+
+class $$MarkQueueEntriesTableFilterComposer
+    extends Composer<_$AppDatabase, $MarkQueueEntriesTable> {
+  $$MarkQueueEntriesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get serial => $composableBuilder(
+    column: $table.serial,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get numeroOp => $composableBuilder(
+    column: $table.numeroOp,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get attempts => $composableBuilder(
+    column: $table.attempts,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get lastError => $composableBuilder(
+    column: $table.lastError,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get pinned => $composableBuilder(
+    column: $table.pinned,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$MarkQueueEntriesTableOrderingComposer
+    extends Composer<_$AppDatabase, $MarkQueueEntriesTable> {
+  $$MarkQueueEntriesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get serial => $composableBuilder(
+    column: $table.serial,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get numeroOp => $composableBuilder(
+    column: $table.numeroOp,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get attempts => $composableBuilder(
+    column: $table.attempts,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get lastError => $composableBuilder(
+    column: $table.lastError,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get pinned => $composableBuilder(
+    column: $table.pinned,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$MarkQueueEntriesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $MarkQueueEntriesTable> {
+  $$MarkQueueEntriesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get serial =>
+      $composableBuilder(column: $table.serial, builder: (column) => column);
+
+  GeneratedColumn<String> get numeroOp =>
+      $composableBuilder(column: $table.numeroOp, builder: (column) => column);
+
+  GeneratedColumn<String> get status =>
+      $composableBuilder(column: $table.status, builder: (column) => column);
+
+  GeneratedColumn<int> get attempts =>
+      $composableBuilder(column: $table.attempts, builder: (column) => column);
+
+  GeneratedColumn<String> get lastError =>
+      $composableBuilder(column: $table.lastError, builder: (column) => column);
+
+  GeneratedColumn<bool> get pinned =>
+      $composableBuilder(column: $table.pinned, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+}
+
+class $$MarkQueueEntriesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $MarkQueueEntriesTable,
+          MarkQueueEntry,
+          $$MarkQueueEntriesTableFilterComposer,
+          $$MarkQueueEntriesTableOrderingComposer,
+          $$MarkQueueEntriesTableAnnotationComposer,
+          $$MarkQueueEntriesTableCreateCompanionBuilder,
+          $$MarkQueueEntriesTableUpdateCompanionBuilder,
+          (
+            MarkQueueEntry,
+            BaseReferences<
+              _$AppDatabase,
+              $MarkQueueEntriesTable,
+              MarkQueueEntry
+            >,
+          ),
+          MarkQueueEntry,
+          PrefetchHooks Function()
+        > {
+  $$MarkQueueEntriesTableTableManager(
+    _$AppDatabase db,
+    $MarkQueueEntriesTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$MarkQueueEntriesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$MarkQueueEntriesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$MarkQueueEntriesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<String> serial = const Value.absent(),
+                Value<String> numeroOp = const Value.absent(),
+                Value<String> status = const Value.absent(),
+                Value<int> attempts = const Value.absent(),
+                Value<String?> lastError = const Value.absent(),
+                Value<bool> pinned = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+              }) => MarkQueueEntriesCompanion(
+                id: id,
+                serial: serial,
+                numeroOp: numeroOp,
+                status: status,
+                attempts: attempts,
+                lastError: lastError,
+                pinned: pinned,
+                createdAt: createdAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required String serial,
+                required String numeroOp,
+                Value<String> status = const Value.absent(),
+                Value<int> attempts = const Value.absent(),
+                Value<String?> lastError = const Value.absent(),
+                Value<bool> pinned = const Value.absent(),
+                required DateTime createdAt,
+              }) => MarkQueueEntriesCompanion.insert(
+                id: id,
+                serial: serial,
+                numeroOp: numeroOp,
+                status: status,
+                attempts: attempts,
+                lastError: lastError,
+                pinned: pinned,
+                createdAt: createdAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$MarkQueueEntriesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $MarkQueueEntriesTable,
+      MarkQueueEntry,
+      $$MarkQueueEntriesTableFilterComposer,
+      $$MarkQueueEntriesTableOrderingComposer,
+      $$MarkQueueEntriesTableAnnotationComposer,
+      $$MarkQueueEntriesTableCreateCompanionBuilder,
+      $$MarkQueueEntriesTableUpdateCompanionBuilder,
+      (
+        MarkQueueEntry,
+        BaseReferences<_$AppDatabase, $MarkQueueEntriesTable, MarkQueueEntry>,
+      ),
+      MarkQueueEntry,
       PrefetchHooks Function()
     >;
 typedef $$ProductsTableCreateCompanionBuilder =
@@ -5789,7 +7345,9 @@ typedef $$OperatorsTableCreateCompanionBuilder =
       required String codigo,
       required String nome,
       Value<bool> ativo,
+      Value<bool> isGestor,
       required DateTime createdAt,
+      Value<DateTime?> updatedAt,
     });
 typedef $$OperatorsTableUpdateCompanionBuilder =
     OperatorsCompanion Function({
@@ -5797,7 +7355,9 @@ typedef $$OperatorsTableUpdateCompanionBuilder =
       Value<String> codigo,
       Value<String> nome,
       Value<bool> ativo,
+      Value<bool> isGestor,
       Value<DateTime> createdAt,
+      Value<DateTime?> updatedAt,
     });
 
 class $$OperatorsTableFilterComposer
@@ -5829,8 +7389,18 @@ class $$OperatorsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<bool> get isGestor => $composableBuilder(
+    column: $table.isGestor,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -5864,8 +7434,18 @@ class $$OperatorsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<bool> get isGestor => $composableBuilder(
+    column: $table.isGestor,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
     builder: (column) => ColumnOrderings(column),
   );
 }
@@ -5891,8 +7471,14 @@ class $$OperatorsTableAnnotationComposer
   GeneratedColumn<bool> get ativo =>
       $composableBuilder(column: $table.ativo, builder: (column) => column);
 
+  GeneratedColumn<bool> get isGestor =>
+      $composableBuilder(column: $table.isGestor, builder: (column) => column);
+
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
 }
 
 class $$OperatorsTableTableManager
@@ -5927,13 +7513,17 @@ class $$OperatorsTableTableManager
                 Value<String> codigo = const Value.absent(),
                 Value<String> nome = const Value.absent(),
                 Value<bool> ativo = const Value.absent(),
+                Value<bool> isGestor = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime?> updatedAt = const Value.absent(),
               }) => OperatorsCompanion(
                 id: id,
                 codigo: codigo,
                 nome: nome,
                 ativo: ativo,
+                isGestor: isGestor,
                 createdAt: createdAt,
+                updatedAt: updatedAt,
               ),
           createCompanionCallback:
               ({
@@ -5941,13 +7531,17 @@ class $$OperatorsTableTableManager
                 required String codigo,
                 required String nome,
                 Value<bool> ativo = const Value.absent(),
+                Value<bool> isGestor = const Value.absent(),
                 required DateTime createdAt,
+                Value<DateTime?> updatedAt = const Value.absent(),
               }) => OperatorsCompanion.insert(
                 id: id,
                 codigo: codigo,
                 nome: nome,
                 ativo: ativo,
+                isGestor: isGestor,
                 createdAt: createdAt,
+                updatedAt: updatedAt,
               ),
           withReferenceMapper: (p0) => p0
               .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
@@ -6121,6 +7715,218 @@ typedef $$BancadasTableProcessedTableManager =
       Bancada,
       PrefetchHooks Function()
     >;
+typedef $$RemarkLogsTableCreateCompanionBuilder =
+    RemarkLogsCompanion Function({
+      Value<int> id,
+      required String serial,
+      required String numeroOp,
+      required String mode,
+      Value<int?> operatorId,
+      required DateTime createdAt,
+    });
+typedef $$RemarkLogsTableUpdateCompanionBuilder =
+    RemarkLogsCompanion Function({
+      Value<int> id,
+      Value<String> serial,
+      Value<String> numeroOp,
+      Value<String> mode,
+      Value<int?> operatorId,
+      Value<DateTime> createdAt,
+    });
+
+class $$RemarkLogsTableFilterComposer
+    extends Composer<_$AppDatabase, $RemarkLogsTable> {
+  $$RemarkLogsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get serial => $composableBuilder(
+    column: $table.serial,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get numeroOp => $composableBuilder(
+    column: $table.numeroOp,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get mode => $composableBuilder(
+    column: $table.mode,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get operatorId => $composableBuilder(
+    column: $table.operatorId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$RemarkLogsTableOrderingComposer
+    extends Composer<_$AppDatabase, $RemarkLogsTable> {
+  $$RemarkLogsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get serial => $composableBuilder(
+    column: $table.serial,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get numeroOp => $composableBuilder(
+    column: $table.numeroOp,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get mode => $composableBuilder(
+    column: $table.mode,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get operatorId => $composableBuilder(
+    column: $table.operatorId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$RemarkLogsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $RemarkLogsTable> {
+  $$RemarkLogsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get serial =>
+      $composableBuilder(column: $table.serial, builder: (column) => column);
+
+  GeneratedColumn<String> get numeroOp =>
+      $composableBuilder(column: $table.numeroOp, builder: (column) => column);
+
+  GeneratedColumn<String> get mode =>
+      $composableBuilder(column: $table.mode, builder: (column) => column);
+
+  GeneratedColumn<int> get operatorId => $composableBuilder(
+    column: $table.operatorId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+}
+
+class $$RemarkLogsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $RemarkLogsTable,
+          RemarkLog,
+          $$RemarkLogsTableFilterComposer,
+          $$RemarkLogsTableOrderingComposer,
+          $$RemarkLogsTableAnnotationComposer,
+          $$RemarkLogsTableCreateCompanionBuilder,
+          $$RemarkLogsTableUpdateCompanionBuilder,
+          (
+            RemarkLog,
+            BaseReferences<_$AppDatabase, $RemarkLogsTable, RemarkLog>,
+          ),
+          RemarkLog,
+          PrefetchHooks Function()
+        > {
+  $$RemarkLogsTableTableManager(_$AppDatabase db, $RemarkLogsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$RemarkLogsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$RemarkLogsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$RemarkLogsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<String> serial = const Value.absent(),
+                Value<String> numeroOp = const Value.absent(),
+                Value<String> mode = const Value.absent(),
+                Value<int?> operatorId = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+              }) => RemarkLogsCompanion(
+                id: id,
+                serial: serial,
+                numeroOp: numeroOp,
+                mode: mode,
+                operatorId: operatorId,
+                createdAt: createdAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required String serial,
+                required String numeroOp,
+                required String mode,
+                Value<int?> operatorId = const Value.absent(),
+                required DateTime createdAt,
+              }) => RemarkLogsCompanion.insert(
+                id: id,
+                serial: serial,
+                numeroOp: numeroOp,
+                mode: mode,
+                operatorId: operatorId,
+                createdAt: createdAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$RemarkLogsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $RemarkLogsTable,
+      RemarkLog,
+      $$RemarkLogsTableFilterComposer,
+      $$RemarkLogsTableOrderingComposer,
+      $$RemarkLogsTableAnnotationComposer,
+      $$RemarkLogsTableCreateCompanionBuilder,
+      $$RemarkLogsTableUpdateCompanionBuilder,
+      (RemarkLog, BaseReferences<_$AppDatabase, $RemarkLogsTable, RemarkLog>),
+      RemarkLog,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -6129,6 +7935,8 @@ class $AppDatabaseManager {
       $$TestResultsTableTableManager(_db, _db.testResults);
   $$LabelBufferEntriesTableTableManager get labelBufferEntries =>
       $$LabelBufferEntriesTableTableManager(_db, _db.labelBufferEntries);
+  $$MarkQueueEntriesTableTableManager get markQueueEntries =>
+      $$MarkQueueEntriesTableTableManager(_db, _db.markQueueEntries);
   $$ProductsTableTableManager get products =>
       $$ProductsTableTableManager(_db, _db.products);
   $$SyncQueueTableTableManager get syncQueue =>
@@ -6145,4 +7953,6 @@ class $AppDatabaseManager {
       $$OperatorsTableTableManager(_db, _db.operators);
   $$BancadasTableTableManager get bancadas =>
       $$BancadasTableTableManager(_db, _db.bancadas);
+  $$RemarkLogsTableTableManager get remarkLogs =>
+      $$RemarkLogsTableTableManager(_db, _db.remarkLogs);
 }

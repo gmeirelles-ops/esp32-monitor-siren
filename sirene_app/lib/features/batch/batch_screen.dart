@@ -2,19 +2,21 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/database/database.dart';
+import '../../core/providers/core_providers.dart';
 import '../../core/theme/diponto_theme.dart';
 import '../../shared/display_labels.dart';
-import '../../shared/portuguese_labels.dart';
 import '../../shared/widgets/desktop_form_layout.dart';
 import '../../shared/widgets/screen_app_bar.dart';
 import '../../shared/widgets/empty_state_view.dart';
 import '../../shared/widgets/form_section_card.dart';
-import '../../shared/widgets/responsive_field_row.dart';
 import '../bancadas/bancadas_provider.dart';
 import '../mqtt/models/mqtt_messages.dart';
 import '../mqtt/mqtt_providers.dart';
 import '../products/products_provider.dart';
+import '../setup/posto_setup_screen.dart';
 import 'batch_live_screen.dart';
+import 'batch_serial_logic.dart';
+import 'batch_today_providers.dart';
 
 class BatchScreen extends ConsumerStatefulWidget {
   const BatchScreen({super.key});
@@ -26,50 +28,16 @@ class BatchScreen extends ConsumerStatefulWidget {
 class _BatchScreenState extends ConsumerState<BatchScreen> {
   final _formKey = GlobalKey<FormState>();
   final _numeroOp = TextEditingController();
-  final _ano = TextEditingController(text: '26');
   final _quantidadeTotal = TextEditingController(text: '10');
-  final _proximoSequencial = TextEditingController(text: '1');
 
   bool _sending = false;
-  String? _selectedDeviceId;
   String? _selectedProductId;
-
-  int? _lastKnownSeq;
-  SerialReconciliation? _reconciliation;
-  String? _serialInfoKey;
 
   @override
   void dispose() {
     _numeroOp.dispose();
-    _ano.dispose();
     _quantidadeTotal.dispose();
-    _proximoSequencial.dispose();
     super.dispose();
-  }
-
-  Future<void> _loadSerialInfo(String idProduto, String ano) async {
-    final key = '$idProduto|$ano';
-    if (key == _serialInfoKey) return;
-    _serialInfoKey = key;
-
-    final db = ref.read(databaseProvider);
-    final last = await db.getLastSequencial(idProduto, ano);
-    final recon = await db.reconcileSerials(idProduto, ano);
-    if (!mounted) return;
-    setState(() {
-      _lastKnownSeq = last;
-      _reconciliation = recon;
-      _proximoSequencial.text = '${(last ?? 0) + 1}';
-    });
-  }
-
-  void _onProductOrYearChanged() {
-    final id = _selectedProductId;
-    final ano = _ano.text.trim();
-    if (id != null && ano.length == 2) {
-      _serialInfoKey = null;
-      _loadSerialInfo(id, ano);
-    }
   }
 
   Product? _selectedProduct(List<Product> products) {
@@ -80,18 +48,8 @@ class _BatchScreenState extends ConsumerState<BatchScreen> {
     return null;
   }
 
-  BatchConfig? _buildBatch(Product product) {
-    if (!_formKey.currentState!.validate()) return null;
-    return BatchConfig(
-      numeroOp: _numeroOp.text.trim(),
-      idProduto: product.idProduto,
-      ano: _ano.text.trim(),
-      tempoTeste: product.tempoTesteSec,
-      potenciaMin: product.potenciaMin,
-      potenciaMax: product.potenciaMax,
-      quantidadeTotal: int.parse(_quantidadeTotal.text),
-      proximoSequencial: int.parse(_proximoSequencial.text),
-    );
+  bool _validateForm(Product product) {
+    return _formKey.currentState!.validate();
   }
 
   void _openLiveDashboard(String deviceId, String numeroOp) {
@@ -102,16 +60,49 @@ class _BatchScreenState extends ConsumerState<BatchScreen> {
     );
   }
 
+  void _openPostoSetup() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const PostoSetupScreen()),
+    );
+  }
+
+  void _openSettings() {
+    // Shell index 5 = Configurações — navegação interna não disponível aqui;
+    // operador usa menu lateral. SnackBar orienta.
+    _showSnack('Abra Configurações → Manutenção do posto para alterar a bancada');
+  }
+
   Future<void> _sendSetBatch(Product product) async {
-    final deviceId = _selectedDeviceId;
-    if (deviceId == null) {
-      _showSnack('Selecione um dispositivo');
+    if (!ref.read(bancadaSetupCompleteProvider)) {
+      _showSnack('Configure a bancada do posto antes de iniciar o lote');
+      _openPostoSetup();
       return;
     }
-    final batch = _buildBatch(product);
-    if (batch == null) return;
 
-    if (await ref.read(databaseProvider).isOpLocked(batch.numeroOp)) {
+    final deviceId = ref.read(selectedDeviceIdProvider) ?? ref.read(appConfigProvider).selectedDeviceId;
+    if (deviceId == null) {
+      _showSnack('Nenhuma bancada vinculada a este posto');
+      _openPostoSetup();
+      return;
+    }
+    if (!_validateForm(product)) return;
+
+    final ano = resolveBatchYear();
+    final db = ref.read(databaseProvider);
+    final proximoSequencial = await resolveProximoSequencial(db, product.idProduto, ano);
+
+    final batch = BatchConfig(
+      numeroOp: _numeroOp.text.trim(),
+      idProduto: product.idProduto,
+      ano: ano,
+      tempoTeste: product.tempoTesteSec,
+      potenciaMin: product.potenciaMin,
+      potenciaMax: product.potenciaMax,
+      quantidadeTotal: int.parse(_quantidadeTotal.text),
+      proximoSequencial: proximoSequencial,
+    );
+
+    if (await db.isOpLocked(batch.numeroOp)) {
       if (!mounted) return;
       _showSnack('OP ${batch.numeroOp} já encerrada — use uma nova OP');
       return;
@@ -143,30 +134,15 @@ class _BatchScreenState extends ConsumerState<BatchScreen> {
     final devices = ref.watch(devicesProvider);
     final bancadas = ref.watch(bancadasMapProvider).valueOrNull ?? {};
     final productsAsync = ref.watch(productsStreamProvider);
-    final deviceList = devices.values.toList()
-      ..sort((a, b) {
-        final na = bancadas[a.deviceId] ?? 999999;
-        final nb = bancadas[b.deviceId] ?? 999999;
-        if (na != nb) return na.compareTo(nb);
-        return a.deviceId.compareTo(b.deviceId);
-      });
-    _selectedDeviceId ??= ref.watch(selectedDeviceIdProvider) ??
-        (deviceList.isNotEmpty ? deviceList.first.deviceId : null);
-
-    final device = _selectedDeviceId != null ? devices[_selectedDeviceId] : null;
+    final bancadaReady = ref.watch(bancadaSetupCompleteProvider);
+    final todayAsync = ref.watch(batchTodaySummaryProvider);
+    final deviceId = ref.watch(selectedDeviceIdProvider) ?? ref.watch(appConfigProvider).selectedDeviceId;
+    final device = deviceId != null ? devices[deviceId] : null;
     final activeBatch = device?.activeBatch;
 
     ref.listen(latestRejectionProvider, (prev, next) {
       if (next != null) {
         _showSnack('Rejeição (${next.deviceId}): ${next.rejection.motivo}');
-      }
-    });
-
-    ref.listen(duplicateSerialProvider, (prev, next) {
-      if (next != null) {
-        _showSnack('Serial duplicado bloqueado: ${next.serial} — etiqueta não emitida');
-        _serialInfoKey = null;
-        _onProductOrYearChanged();
       }
     });
 
@@ -188,10 +164,6 @@ class _BatchScreenState extends ConsumerState<BatchScreen> {
           _selectedProductId ??= products.first.idProduto;
           final product = _selectedProduct(products);
 
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            _onProductOrYearChanged();
-          });
-
           return ListView(
             children: [
               DesktopFormLayout(
@@ -199,54 +171,57 @@ class _BatchScreenState extends ConsumerState<BatchScreen> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     FormSectionCard(
+                      title: 'Turno',
+                      child: todayAsync.when(
+                        loading: () => const Text('Carregando…'),
+                        error: (_, __) => const Text('—'),
+                        data: (summary) => Text(
+                          'Testes hoje: ${summary.total} '
+                          '(${summary.aprovados} aprovados, ${summary.reprovados} reprovados)',
+                          style: const TextStyle(fontWeight: FontWeight.w500),
+                        ),
+                      ),
+                    ),
+                    FormSectionCard(
                       title: 'Bancada',
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          if (deviceList.isEmpty)
-                            const Text('Nenhum dispositivo detectado ainda.')
-                          else
-                            DropdownButtonFormField<String>(
-                              initialValue: _selectedDeviceId,
-                              decoration: const InputDecoration(labelText: 'Bancada'),
-                              selectedItemBuilder: (context) => [
-                                for (final d in deviceList)
-                                  Align(
-                                    alignment: Alignment.centerLeft,
-                                    child: Text(
-                                      formatBancadaLabelFromMap(d.deviceId, bancadas),
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
+                          if (!bancadaReady || deviceId == null)
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                const Text(
+                                  'Nenhuma bancada vinculada a este posto.',
+                                  style: TextStyle(color: Colors.orangeAccent),
+                                ),
+                                const SizedBox(height: 8),
+                                ElevatedButton(
+                                  onPressed: _openPostoSetup,
+                                  child: const Text('Configurar bancada'),
+                                ),
                               ],
-                              items: deviceList
-                                  .map(
-                                    (d) => DropdownMenuItem(
-                                      value: d.deviceId,
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Icon(
-                                            Icons.circle,
-                                            size: 10,
-                                            color: d.isOnline
-                                                ? DipontoColors.success
-                                                : DipontoColors.error,
-                                          ),
-                                          const SizedBox(width: 8),
-                                          Text(formatBancadaLabelFromMap(d.deviceId, bancadas)),
-                                        ],
-                                      ),
-                                    ),
-                                  )
-                                  .toList(),
-                              onChanged: (v) {
-                                setState(() => _selectedDeviceId = v);
-                                ref.read(selectedDeviceIdProvider.notifier).state = v;
-                                ref.read(appConfigProvider).setSelectedDeviceId(v);
-                              },
+                            )
+                          else
+                            ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              leading: Icon(
+                                Icons.circle,
+                                size: 12,
+                                color: device?.isOnline == true
+                                    ? DipontoColors.success
+                                    : DipontoColors.error,
+                              ),
+                              title: Text(formatBancadaLabelFromMap(deviceId, bancadas)),
+                              subtitle: Text(
+                                device?.isOnline == true ? 'Conectada' : 'Offline',
+                              ),
+                              trailing: TextButton(
+                                onPressed: _openSettings,
+                                child: const Text('Alterar em Configurações'),
+                              ),
                             ),
-                          if (activeBatch != null && _selectedDeviceId != null) ...[
+                          if (activeBatch != null && deviceId != null) ...[
                             const SizedBox(height: 12),
                             Card(
                               color: DipontoColors.primary.withValues(alpha: 0.12),
@@ -258,8 +233,7 @@ class _BatchScreenState extends ConsumerState<BatchScreen> {
                                 title: const Text('Lote em andamento'),
                                 subtitle: Text('OP ${activeBatch.numeroOp}'),
                                 trailing: const Icon(Icons.chevron_right),
-                                onTap: () =>
-                                    _openLiveDashboard(_selectedDeviceId!, activeBatch.numeroOp),
+                                onTap: () => _openLiveDashboard(deviceId, activeBatch.numeroOp),
                               ),
                             ),
                           ],
@@ -283,10 +257,7 @@ class _BatchScreenState extends ConsumerState<BatchScreen> {
                                     ),
                                   )
                                   .toList(),
-                              onChanged: (v) {
-                                setState(() => _selectedProductId = v);
-                                _onProductOrYearChanged();
-                              },
+                              onChanged: (v) => setState(() => _selectedProductId = v),
                             ),
                             if (product != null) ...[
                               const SizedBox(height: 8),
@@ -306,38 +277,11 @@ class _BatchScreenState extends ConsumerState<BatchScreen> {
                               validator: (v) => v == null || v.isEmpty ? 'Obrigatório' : null,
                             ),
                             const SizedBox(height: 8),
-                            ResponsiveFieldRow(
-                              flexes: const [2, 3, 3],
-                              children: [
-                                TextFormField(
-                                  controller: _ano,
-                                  decoration: const InputDecoration(labelText: 'Ano (2 dígitos)'),
-                                  validator: (v) =>
-                                      v == null || v.length != 2 ? '2 dígitos' : null,
-                                  keyboardType: TextInputType.number,
-                                  onChanged: (_) => _onProductOrYearChanged(),
-                                ),
-                                TextFormField(
-                                  controller: _quantidadeTotal,
-                                  decoration: const InputDecoration(labelText: 'Quantidade total'),
-                                  keyboardType: TextInputType.number,
-                                ),
-                                TextFormField(
-                                  controller: _proximoSequencial,
-                                  decoration: InputDecoration(
-                                    labelText: 'Próximo sequencial',
-                                    helperText: _lastKnownSeq != null
-                                        ? 'Último usado: $_lastKnownSeq'
-                                        : 'Sem histórico',
-                                  ),
-                                  keyboardType: TextInputType.number,
-                                ),
-                              ],
+                            TextFormField(
+                              controller: _quantidadeTotal,
+                              decoration: const InputDecoration(labelText: 'Quantidade total'),
+                              keyboardType: TextInputType.number,
                             ),
-                            if (_reconciliation != null && !_reconciliation!.isIntact) ...[
-                              const SizedBox(height: 8),
-                              _ReconciliationPanel(reconciliation: _reconciliation!),
-                            ],
                           ],
                         ),
                       ),
@@ -347,15 +291,16 @@ class _BatchScreenState extends ConsumerState<BatchScreen> {
                       child: Align(
                         alignment: Alignment.centerLeft,
                         child: ElevatedButton(
-                          onPressed:
-                              _sending || product == null ? null : () => _sendSetBatch(product),
+                          onPressed: _sending || product == null || !bancadaReady || deviceId == null
+                              ? null
+                              : () => _sendSetBatch(product),
                           child: _sending
                               ? const SizedBox(
                                   width: 20,
                                   height: 20,
                                   child: CircularProgressIndicator(strokeWidth: 2),
                                 )
-                              : const Text('Configurar lote (SET_BATCH)'),
+                              : const Text('INICIAR'),
                         ),
                       ),
                     ),
@@ -365,44 +310,6 @@ class _BatchScreenState extends ConsumerState<BatchScreen> {
             ],
           );
         },
-      ),
-    );
-  }
-}
-
-class _ReconciliationPanel extends StatelessWidget {
-  const _ReconciliationPanel({required this.reconciliation});
-
-  final SerialReconciliation reconciliation;
-
-  String _fmt(List<int> seqs) => seqs.map((s) => s.toString().padLeft(4, '0')).join(', ');
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      color: DipontoColors.error.withValues(alpha: 0.12),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Row(
-              children: [
-                Icon(Icons.report_problem, color: DipontoColors.error, size: 18),
-                SizedBox(width: 8),
-                Text(
-                  'Reconciliação de série',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            if (reconciliation.gaps.isNotEmpty)
-              Text('Sequenciais faltando: ${_fmt(reconciliation.gaps)}'),
-            if (reconciliation.duplicates.isNotEmpty)
-              Text('Sequenciais duplicados: ${_fmt(reconciliation.duplicates)}'),
-          ],
-        ),
       ),
     );
   }

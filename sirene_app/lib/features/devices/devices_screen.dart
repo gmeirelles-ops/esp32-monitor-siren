@@ -19,8 +19,10 @@ class DevicesScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final devices = ref.watch(devicesProvider);
     final bancadas = ref.watch(bancadasMapProvider).valueOrNull ?? {};
-    final mqttState = ref.watch(mqttConnectionStateProvider).value ??
-        AppMqttConnectionState.disconnected;
+    final mqttState = resolveMqttConnectionDisplayState(
+      ref.watch(mqttConnectionStateProvider),
+      ref.read(mqttServiceProvider).currentState,
+    );
     final sorted = devices.values.toList()
       ..sort((a, b) {
         final na = bancadas[a.deviceId] ?? 999999;

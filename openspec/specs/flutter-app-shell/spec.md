@@ -15,11 +15,15 @@ O app Flutter SHALL aplicar uma paleta de cores amber como identidade visual pri
 - **THEN** AppBar, botões primários, FAB e indicadores ativos exibem a cor amber da marca
 
 ### Requirement: Navegação principal do app
-O app SHALL oferecer navegação entre as seções: Dispositivos, Lote, Produtos, Etiquetas, Configurações e Admin.
+O app SHALL oferecer navegação entre as seções: Lote, Painel, Relatório, Etiquetas (ou Gravação em modo laser), Cadastros e Configurações, acessível somente após autenticação do operador na tela de login.
 
-#### Scenario: Acesso às seções
-- **WHEN** o operador abre o app
-- **THEN** uma barra de navegação permite alternar entre Dispositivos, Lote, Produtos, Etiquetas, Configurações e Admin
+#### Scenario: Acesso às seções após login
+- **WHEN** o operador autenticado abre o app
+- **THEN** uma barra de navegação permite alternar entre Lote, Painel, Relatório, Etiquetas/Gravação, Cadastros e Configurações
+
+#### Scenario: Shell bloqueado sem login
+- **WHEN** não há operador autenticado
+- **THEN** o shell principal e sua navegação não são acessíveis
 
 ### Requirement: Configuração global do broker MQTT
 O app SHALL permitir configurar e persistir o endereço do broker MQTT (host e porta) nas Configurações.
@@ -55,15 +59,15 @@ O app SHALL incluir nas Configurações uma seção "Nuvem" com: toggle de sincr
 - **THEN** a seção Nuvem lista cada falha com erro e oferece ação de retry
 
 ### Requirement: Fluxo de login integrado à navegação
-O app SHALL apresentar tela de login Firebase quando o operador tentar habilitar sincronização sem sessão ativa, mantendo acesso às demais seções sem autenticação.
+O app SHALL manter login Firebase opcional nas Configurações → Nuvem para sincronização, independente do login de operador local obrigatório na entrada.
 
-#### Scenario: Uso local sem login
-- **WHEN** o operador utiliza Dispositivos, Lote e Produtos sem estar autenticado
+#### Scenario: Uso local após login de operador
+- **WHEN** o operador autenticado utiliza Lote, Painel e Etiquetas sem sessão Firebase
 - **THEN** todas as funcionalidades locais (MQTT, SQLite, etiquetas) permanecem acessíveis
 
-#### Scenario: Login solicitado para nuvem
-- **WHEN** o operador tenta habilitar sincronização sem sessão
-- **THEN** o app navega para a tela de login antes de ativar o toggle
+#### Scenario: Login Firebase para nuvem
+- **WHEN** o operador tenta habilitar sincronização sem sessão Firebase
+- **THEN** o app navega para a tela de login Firebase antes de ativar o toggle
 
 ### Requirement: Toggle de sync desabilitado por padrão
 Em instalação nova, o toggle de sincronização Firestore SHALL iniciar desabilitado até que o operador autenticado o habilite explicitamente.
@@ -124,13 +128,39 @@ O app SHALL exibir o indicador de status da conexão MQTT (`ConnectionStatusBadg
 - **THEN** o badge reflete o estado desconectado em qualquer tela principal
 
 ### Requirement: Limpeza de sessão de operador ao encerrar o app
-O app SHALL registrar observador de ciclo de vida e limpar `activeOperatorId` quando o processo for encerrado ou a janela fechada (`AppLifecycleState.detached`, e estados equivalentes de encerramento na plataforma desktop).
+O app SHALL limpar a sessão de operador em memória quando o processo for encerrado. Na próxima abertura, o operador SHALL autenticar-se novamente na tela de login.
 
 #### Scenario: Fechar janela no desktop
 - **WHEN** o operador fecha a janela principal do app no Windows/Linux/macOS
-- **THEN** `activeOperatorId` é removido do armazenamento local antes do término do processo
+- **THEN** a sessão de operador em memória é descartada
 
 #### Scenario: Próxima abertura exige login
 - **WHEN** o app é iniciado após encerramento completo do processo anterior
-- **THEN** `activeOperatorId` é nulo e a tela de login é exibida
+- **THEN** a tela de login é exibida e nenhum operador permanece autenticado
+
+### Requirement: Gate de setup de bancada após login
+O app SHALL verificar se a bancada do posto está configurada após autenticação do operador e SHALL impedir acesso ao shell principal até concluir o setup quando necessário.
+
+#### Scenario: Posto sem bancada configurada
+- **WHEN** o operador autentica-se e `bancada_setup_complete` é falso
+- **THEN** o app exibe `PostoSetupScreen` em vez do shell principal
+
+#### Scenario: Posto com bancada já vinculada
+- **WHEN** o operador autentica-se e `bancada_setup_complete` é verdadeiro
+- **THEN** o app navega diretamente ao shell principal
+
+#### Scenario: Migração de instalações existentes
+- **WHEN** o app atualiza em posto que já possui `selected_device_id` persistido
+- **THEN** `bancada_setup_complete` é definido como verdadeiro automaticamente na primeira execução pós-atualização
+
+### Requirement: Seção Manutenção do posto em Configurações
+O app SHALL incluir seção "Manutenção do posto" em Configurações com vínculo de bancada, atalho de provisionamento Wi-Fi e reset geral.
+
+#### Scenario: Alterar bancada em Configurações
+- **WHEN** o supervisor acessa Configurações → Manutenção do posto → Bancada
+- **THEN** pode selecionar outro dispositivo detectado e salvar o novo vínculo
+
+#### Scenario: Reset geral acessível
+- **WHEN** o supervisor abre Configurações → Manutenção do posto
+- **THEN** o botão "Reset geral do posto" está visível com estilo destrutivo
 

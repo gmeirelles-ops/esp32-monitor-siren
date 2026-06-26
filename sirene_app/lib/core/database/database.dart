@@ -22,6 +22,10 @@ class TestResults extends Table {
   IntColumn get aprovadosNoLote => integer()();
   TextColumn get serial => text().nullable()();
   TextColumn get operador => text().nullable()();
+  IntColumn get tempoTesteSec => integer().nullable()();
+  RealColumn get potenciaMin => real().nullable()();
+  RealColumn get potenciaMax => real().nullable()();
+  IntColumn get operatorId => integer().nullable()();
   BoolColumn get isRetest => boolean().withDefault(const Constant(false))();
   DateTimeColumn get createdAt => dateTime()();
 }
@@ -30,6 +34,17 @@ class LabelBufferEntries extends Table {
   IntColumn get id => integer().autoIncrement()();
   TextColumn get serial => text()();
   TextColumn get numeroOp => text()();
+  DateTimeColumn get createdAt => dateTime()();
+}
+
+class MarkQueueEntries extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get serial => text()();
+  TextColumn get numeroOp => text()();
+  TextColumn get status => text().withDefault(const Constant('pending'))();
+  IntColumn get attempts => integer().withDefault(const Constant(0))();
+  TextColumn get lastError => text().nullable()();
+  BoolColumn get pinned => boolean().withDefault(const Constant(false))();
   DateTimeColumn get createdAt => dateTime()();
 }
 
@@ -99,6 +114,17 @@ class Operators extends Table {
   TextColumn get codigo => text().unique()();
   TextColumn get nome => text()();
   BoolColumn get ativo => boolean().withDefault(const Constant(true))();
+  BoolColumn get isGestor => boolean().withDefault(const Constant(false))();
+  DateTimeColumn get createdAt => dateTime()();
+  DateTimeColumn get updatedAt => dateTime().nullable()();
+}
+
+class RemarkLogs extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get serial => text()();
+  TextColumn get numeroOp => text()();
+  TextColumn get mode => text()();
+  IntColumn get operatorId => integer().nullable()();
   DateTimeColumn get createdAt => dateTime()();
 }
 
@@ -112,6 +138,7 @@ class Bancadas extends Table {
   tables: [
     TestResults,
     LabelBufferEntries,
+    MarkQueueEntries,
     Products,
     SyncQueue,
     SerialCounters,
@@ -120,6 +147,7 @@ class Bancadas extends Table {
     OpLocks,
     Operators,
     Bancadas,
+    RemarkLogs,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -127,8 +155,13 @@ class AppDatabase extends _$AppDatabase {
 
   AppDatabase.forTesting(super.executor);
 
+  static Future<File> dbFile() async {
+    final dir = await getApplicationDocumentsDirectory();
+    return File(p.join(dir.path, 'sirene_app.sqlite'));
+  }
+
   @override
-  int get schemaVersion => 12;
+  int get schemaVersion => 15;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -179,6 +212,20 @@ class AppDatabase extends _$AppDatabase {
           }
           if (from < 12) {
             await m.addColumn(syncQueue, syncQueue.documentPath);
+          }
+          if (from < 13) {
+            await m.createTable(markQueueEntries);
+          }
+          if (from < 14) {
+            await m.addColumn(testResults, testResults.tempoTesteSec);
+            await m.addColumn(testResults, testResults.potenciaMin);
+            await m.addColumn(testResults, testResults.potenciaMax);
+            await m.addColumn(testResults, testResults.operatorId);
+            await m.addColumn(operators, operators.updatedAt);
+            await m.createTable(remarkLogs);
+          }
+          if (from < 15) {
+            await m.addColumn(operators, operators.isGestor);
           }
         },
       );
@@ -359,6 +406,10 @@ class AppDatabase extends _$AppDatabase {
     required int aprovadosNoLote,
     String? serial,
     String? operador,
+    int? tempoTesteSec,
+    double? potenciaMin,
+    double? potenciaMax,
+    int? operatorId,
     bool isRetest = false,
   }) {
     return into(testResults).insert(
@@ -371,7 +422,28 @@ class AppDatabase extends _$AppDatabase {
         aprovadosNoLote: aprovadosNoLote,
         serial: Value(serial),
         operador: Value(operador),
+        tempoTesteSec: Value(tempoTesteSec),
+        potenciaMin: Value(potenciaMin),
+        potenciaMax: Value(potenciaMax),
+        operatorId: Value(operatorId),
         isRetest: Value(isRetest),
+        createdAt: DateTime.now(),
+      ),
+    );
+  }
+
+  Future<int> insertRemarkLog({
+    required String serial,
+    required String numeroOp,
+    required String mode,
+    int? operatorId,
+  }) {
+    return into(remarkLogs).insert(
+      RemarkLogsCompanion.insert(
+        serial: serial,
+        numeroOp: numeroOp,
+        mode: mode,
+        operatorId: Value(operatorId),
         createdAt: DateTime.now(),
       ),
     );
@@ -437,6 +509,85 @@ class AppDatabase extends _$AppDatabase {
     final query = selectOnly(labelBufferEntries)..addColumns([count]);
     final row = await query.getSingle();
     return row.read(count) ?? 0;
+  }
+
+  Future<int> addToMarkQueue({
+    required String serial,
+    required String numeroOp,
+    bool pinned = false,
+  }) {
+    return into(markQueueEntries).insert(
+      MarkQueueEntriesCompanion.insert(
+        serial: serial,
+        numeroOp: numeroOp,
+        pinned: Value(pinned),
+        createdAt: DateTime.now(),
+      ),
+    );
+  }
+
+  Future<MarkQueueEntry?> peekNextPendingMark() {
+    return (select(markQueueEntries)
+          ..where((t) => t.status.equals('pending'))
+          ..orderBy([
+            (t) => OrderingTerm.desc(t.pinned),
+            (t) => OrderingTerm.asc(t.createdAt),
+          ])
+          ..limit(1))
+        .getSingleOrNull();
+  }
+
+  Future<void> markQueueDelivered(int id) async {
+    await (update(markQueueEntries)..where((t) => t.id.equals(id))).write(
+      MarkQueueEntriesCompanion(
+        status: const Value('delivered'),
+      ),
+    );
+  }
+
+  Future<void> markQueueFailed(int id, String error) async {
+    final row = await (select(markQueueEntries)..where((t) => t.id.equals(id)))
+        .getSingleOrNull();
+    if (row == null) return;
+    await (update(markQueueEntries)..where((t) => t.id.equals(id))).write(
+      MarkQueueEntriesCompanion(
+        status: const Value('failed'),
+        attempts: Value(row.attempts + 1),
+        lastError: Value(error),
+      ),
+    );
+  }
+
+  Future<List<MarkQueueEntry>> getPendingMarkQueue() {
+    return (select(markQueueEntries)
+          ..where((t) => t.status.equals('pending'))
+          ..orderBy([
+            (t) => OrderingTerm.desc(t.pinned),
+            (t) => OrderingTerm.asc(t.createdAt),
+          ]))
+        .get();
+  }
+
+  Stream<List<MarkQueueEntry>> watchPendingMarkQueue() {
+    return (select(markQueueEntries)
+          ..where((t) => t.status.equals('pending'))
+          ..orderBy([
+            (t) => OrderingTerm.desc(t.pinned),
+            (t) => OrderingTerm.asc(t.createdAt),
+          ]))
+        .watch();
+  }
+
+  Stream<int> watchPendingMarkQueueCount() {
+    final count = countAll();
+    final query = selectOnly(markQueueEntries)
+      ..addColumns([count])
+      ..where(markQueueEntries.status.equals('pending'));
+    return query.watch().map((rows) => rows.first.read(count) ?? 0);
+  }
+
+  Future<void> removeMarkQueueEntry(int id) async {
+    await (delete(markQueueEntries)..where((t) => t.id.equals(id))).go();
   }
 
   Stream<List<Product>> watchProducts() {
@@ -669,13 +820,18 @@ class AppDatabase extends _$AppDatabase {
     required String codigo,
     required String nome,
     bool ativo = true,
+    bool isGestor = false,
+    DateTime? updatedAt,
   }) {
+    final now = DateTime.now();
     return into(operators).insert(
       OperatorsCompanion.insert(
         codigo: codigo.trim(),
         nome: nome.trim(),
         ativo: Value(ativo),
-        createdAt: DateTime.now(),
+        isGestor: Value(isGestor),
+        createdAt: now,
+        updatedAt: Value(updatedAt ?? now),
       ),
     );
   }
@@ -685,13 +841,51 @@ class AppDatabase extends _$AppDatabase {
     required String codigo,
     required String nome,
     required bool ativo,
+    bool? isGestor,
+    DateTime? updatedAt,
   }) {
     return (update(operators)..where((t) => t.id.equals(id))).write(
       OperatorsCompanion(
         codigo: Value(codigo.trim()),
         nome: Value(nome.trim()),
         ativo: Value(ativo),
+        isGestor: isGestor == null ? const Value.absent() : Value(isGestor),
+        updatedAt: Value(updatedAt ?? DateTime.now()),
       ),
+    );
+  }
+
+  Future<List<Operator>> getAllOperators() {
+    return (select(operators)..orderBy([(t) => OrderingTerm.asc(t.nome)])).get();
+  }
+
+  Future<void> upsertOperatorFromCloud({
+    required String codigo,
+    required String nome,
+    required bool ativo,
+    bool isGestor = false,
+    required DateTime updatedAt,
+  }) async {
+    final existing = await (select(operators)
+          ..where((t) => t.codigo.equals(codigo.trim())))
+        .getSingleOrNull();
+    if (existing != null) {
+      await updateOperator(
+        id: existing.id,
+        codigo: codigo,
+        nome: nome,
+        ativo: ativo,
+        isGestor: isGestor,
+        updatedAt: updatedAt,
+      );
+      return;
+    }
+    await insertOperator(
+      codigo: codigo,
+      nome: nome,
+      ativo: ativo,
+      isGestor: isGestor,
+      updatedAt: updatedAt,
     );
   }
 
@@ -798,12 +992,16 @@ class AppDatabase extends _$AppDatabase {
       idProduto: idProduto,
       deviceId: deviceId,
     );
-    final byOp = <String, ({int total, int aprovados})>{};
+    final byOp = <String, ({int total, int aprovados, DateTime? lastAt})>{};
     for (final r in rows) {
-      final current = byOp[r.numeroOp] ?? (total: 0, aprovados: 0);
+      final current = byOp[r.numeroOp] ?? (total: 0, aprovados: 0, lastAt: null);
+      final lastAt = current.lastAt == null || r.createdAt.isAfter(current.lastAt!)
+          ? r.createdAt
+          : current.lastAt;
       byOp[r.numeroOp] = (
         total: current.total + 1,
         aprovados: current.aprovados + (isApprovedVeredito(r.veredito) ? 1 : 0),
+        lastAt: lastAt,
       );
     }
     final result = byOp.entries
@@ -812,6 +1010,7 @@ class AppDatabase extends _$AppDatabase {
             numeroOp: e.key,
             total: e.value.total,
             aprovados: e.value.aprovados,
+            lastTestAt: e.value.lastAt,
           ),
         )
         .toList()
@@ -1065,11 +1264,13 @@ class BatchProductionSummary {
     required this.numeroOp,
     required this.total,
     required this.aprovados,
+    this.lastTestAt,
   });
 
   final String numeroOp;
   final int total;
   final int aprovados;
+  final DateTime? lastTestAt;
 
   int get reprovados => total - aprovados;
 
@@ -1094,8 +1295,7 @@ LazyDatabase _openConnection() {
     if (Platform.isAndroid) {
       await applyWorkaroundToOpenSqlite3OnOldAndroidVersions();
     }
-    final dir = await getApplicationDocumentsDirectory();
-    final file = File(p.join(dir.path, 'sirene_app.sqlite'));
+    final file = await AppDatabase.dbFile();
     return NativeDatabase.createInBackground(file);
   });
 }

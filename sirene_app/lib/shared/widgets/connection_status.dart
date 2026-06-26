@@ -10,8 +10,10 @@ class ConnectionStatusBadge extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(mqttConnectionStateProvider).value ??
-        AppMqttConnectionState.disconnected;
+    final state = resolveMqttConnectionDisplayState(
+      ref.watch(mqttConnectionStateProvider),
+      ref.read(mqttServiceProvider).currentState,
+    );
 
     final (color, label) = switch (state) {
       AppMqttConnectionState.connected => (DipontoColors.success, 'MQTT OK'),

@@ -9,6 +9,7 @@ import 'package:sirene_app/core/config/app_config.dart';
 import 'package:sirene_app/core/database/database.dart';
 import 'package:sirene_app/features/mqtt/models/mqtt_messages.dart';
 import 'package:sirene_app/features/mqtt/mqtt_providers.dart';
+import 'package:sirene_app/features/operators/operators_provider.dart';
 import 'package:sqlite3/open.dart';
 
 void main() {
@@ -38,6 +39,13 @@ void main() {
     expect(op!.codigo, '0042');
     expect(op.nome, 'Maria');
     expect(op.ativo, isTrue);
+    expect(op.isGestor, isFalse);
+  });
+
+  test('insertOperator persiste flag gestor', () async {
+    final id = await db.insertOperator(codigo: '9000', nome: 'Gestor', isGestor: true);
+    final op = await db.getOperatorById(id);
+    expect(op?.isGestor, isTrue);
   });
 
   test('operatorCodigoExists detecta duplicata', () async {
@@ -74,7 +82,7 @@ void main() {
     );
     addTearDown(container.dispose);
 
-    await container.read(appConfigProvider).setActiveOperatorId(opId);
+    container.read(sessionOperatorIdProvider.notifier).state = opId;
     const batch = BatchConfig(
       numeroOp: 'OP-OP',
       idProduto: '123',

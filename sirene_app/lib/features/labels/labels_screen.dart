@@ -16,27 +16,125 @@ import '../../shared/widgets/screen_app_bar.dart';
 import 'label_buffer_grouping.dart';
 import 'label_print_logic.dart';
 import 'label_printer.dart';
+import 'marking_providers.dart';
+import 'remark_serial.dart';
 import 'zpl_generator.dart';
 import '../mqtt/mqtt_providers.dart';
+
+Future<void> showSerialSearchDialog(BuildContext context, WidgetRef ref) async {
+  final db = ref.read(databaseProvider);
+  final mode = ref.read(appConfigProvider).markingMode;
+  final copy = remarkUiCopy(mode, '');
+  final controller = TextEditingController();
+  var results = <TestResult>[];
+
+  await showDialog<void>(
+    context: context,
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, setState) {
+        Future<void> search() async {
+          final query = controller.text.trim();
+          if (query.isEmpty) return;
+          final found = await db.searchSerials(query);
+          setState(() => results = found);
+        }
+
+        return AlertDialog(
+          title: Text('Buscar / ${copy.actionLabel.toLowerCase()} serial'),
+          content: SizedBox(
+            width: 360,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: controller,
+                  autofocus: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Serial (completo ou parcial)',
+                    suffixIcon: Icon(Icons.search),
+                  ),
+                  onSubmitted: (_) => search(),
+                ),
+                const SizedBox(height: 12),
+                if (results.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 12),
+                    child: Text('Digite e busque um serial validado.'),
+                  )
+                else
+                  Flexible(
+                    child: ListView(
+                      shrinkWrap: true,
+                      children: [
+                        for (final r in results)
+                          ListTile(
+                            dense: true,
+                            leading: const Icon(Icons.qr_code, color: DipontoColors.primary),
+                            title: Text(
+                              r.serial ?? '—',
+                              style: const TextStyle(fontFamily: 'monospace'),
+                            ),
+                            subtitle: Text('OP ${r.numeroOp} — ${r.veredito}'),
+                            trailing: r.serial == null ||
+                                    r.veredito.toUpperCase() != 'APROVADO'
+                                ? null
+                                : TextButton.icon(
+                                    icon: Icon(copy.icon, size: 18),
+                                    label: Text(copy.actionLabel),
+                                    onPressed: () async {
+                                      final serial = r.serial!;
+                                      if (ctx.mounted) Navigator.pop(ctx);
+                                      if (context.mounted) {
+                                        await remarkSerialIfConfirmed(
+                                          context: context,
+                                          ref: ref,
+                                          serial: serial,
+                                          numeroOp: r.numeroOp,
+                                        );
+                                      }
+                                    },
+                                  ),
+                          ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Fechar')),
+            ElevatedButton(onPressed: search, child: const Text('Buscar')),
+          ],
+        );
+      },
+    ),
+  );
+}
 
 class LabelsScreen extends ConsumerWidget {
   const LabelsScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final markingMode = ref.watch(appConfigProvider).markingMode;
+    if (markingMode == MarkingMode.laser) {
+      return _LaserMarkQueueScreen(ref: ref);
+    }
+
     final db = ref.watch(databaseProvider);
     final printFailure = ref.watch(printFailureProvider);
     final dateFmt = DateFormat('dd/MM HH:mm');
 
+    final remarkCopy = remarkUiCopy(markingMode, '');
     return Scaffold(
       appBar: screenAppBar(
         context,
         title: 'Etiquetas',
         actions: [
           IconButton(
-            tooltip: 'Buscar / reimprimir serial',
+            tooltip: 'Buscar / ${remarkCopy.actionLabel.toLowerCase()} serial',
             icon: const Icon(Icons.search),
-            onPressed: () => _showReprintDialog(context, ref),
+            onPressed: () => showSerialSearchDialog(context, ref),
           ),
           StreamBuilder<int>(
             stream: db.watchLabelBufferCount(),
@@ -187,110 +285,6 @@ class LabelsScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _showReprintDialog(BuildContext context, WidgetRef ref) async {
-    final db = ref.read(databaseProvider);
-    final controller = TextEditingController();
-    var results = <TestResult>[];
-
-    await showDialog<void>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setState) {
-          Future<void> search() async {
-            final query = controller.text.trim();
-            if (query.isEmpty) return;
-            final found = await db.searchSerials(query);
-            setState(() => results = found);
-          }
-
-          return AlertDialog(
-            title: const Text('Buscar / reimprimir serial'),
-            content: SizedBox(
-              width: 360,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: controller,
-                    autofocus: true,
-                    decoration: const InputDecoration(
-                      labelText: 'Serial (completo ou parcial)',
-                      suffixIcon: Icon(Icons.search),
-                    ),
-                    onSubmitted: (_) => search(),
-                  ),
-                  const SizedBox(height: 12),
-                  if (results.isEmpty)
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 12),
-                      child: Text('Digite e busque um serial validado.'),
-                    )
-                  else
-                    Flexible(
-                      child: ListView(
-                        shrinkWrap: true,
-                        children: [
-                          for (final r in results)
-                            ListTile(
-                              dense: true,
-                              leading: const Icon(Icons.qr_code, color: DipontoColors.primary),
-                              title: Text(
-                                r.serial ?? '—',
-                                style: const TextStyle(fontFamily: 'monospace'),
-                              ),
-                              subtitle: Text('OP ${r.numeroOp} — ${r.veredito}'),
-                              trailing: r.serial == null
-                                  ? null
-                                  : TextButton.icon(
-                                      icon: const Icon(Icons.print, size: 18),
-                                      label: const Text('Reimprimir'),
-                                      onPressed: () async {
-                                        final serial = r.serial!;
-                                        final confirmed = await showDialog<bool>(
-                                          context: ctx,
-                                          builder: (dialogCtx) => AlertDialog(
-                                            title: const Text('Reimprimir etiqueta'),
-                                            content: Text(
-                                              'A impressora avançará uma linha inteira do rolo '
-                                              '(3 posições). O serial $serial será impresso na '
-                                              'primeira coluna; as outras duas saem em branco.',
-                                            ),
-                                            actions: [
-                                              TextButton(
-                                                onPressed: () => Navigator.pop(dialogCtx, false),
-                                                child: const Text('Cancelar'),
-                                              ),
-                                              ElevatedButton(
-                                                onPressed: () => Navigator.pop(dialogCtx, true),
-                                                child: const Text('Reimprimir'),
-                                              ),
-                                            ],
-                                          ),
-                                        );
-                                        if (confirmed != true) return;
-                                        if (ctx.mounted) Navigator.pop(ctx);
-                                        if (context.mounted) {
-                                          _reprintSerial(context, ref, serial);
-                                        }
-                                      },
-                                    ),
-                            ),
-                        ],
-                      ),
-                    ),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Fechar')),
-              ElevatedButton(onPressed: search, child: const Text('Buscar')),
-            ],
-          );
-        },
-      ),
-    );
-  }
-
   Future<void> _downloadZpl(
     BuildContext context,
     WidgetRef ref,
@@ -325,30 +319,6 @@ class LabelsScreen extends ConsumerWidget {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Arquivo salvo: ${location.path}')),
       );
-    }
-  }
-
-  Future<void> _reprintSerial(BuildContext context, WidgetRef ref, String serial) async {
-    final config = ref.read(appConfigProvider);
-    final db = ref.read(databaseProvider);
-    try {
-      final items = await resolveLabelZplItems(db, [serial]);
-      final item = items.first;
-      final printer = createLabelPrinterTransport(config);
-      await printer.sendZpl(
-        generateZplReprintRow(serial: item.serial, productName: item.productName),
-      );
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Etiqueta $serial reenviada à impressora')),
-        );
-      }
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(formatPrinterError(e, config.printerMode))),
-        );
-      }
     }
   }
 
@@ -404,5 +374,112 @@ class LabelsScreen extends ConsumerWidget {
         const SnackBar(content: Text('Etiquetas enviadas à impressora')),
       );
     }
+  }
+}
+
+class _LaserMarkQueueScreen extends ConsumerWidget {
+  const _LaserMarkQueueScreen({required this.ref});
+
+  final WidgetRef ref;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final db = this.ref.watch(databaseProvider);
+    final markFailure = this.ref.watch(markFailureProvider);
+    final dateFmt = DateFormat('dd/MM HH:mm');
+
+    return Scaffold(
+      appBar: screenAppBar(
+        context,
+        title: 'Gravação',
+        actions: [
+          IconButton(
+            tooltip: 'Buscar / regravar serial',
+            icon: const Icon(Icons.search),
+            onPressed: () => showSerialSearchDialog(context, this.ref),
+          ),
+          StreamBuilder<int>(
+            stream: db.watchPendingMarkQueueCount(),
+            builder: (context, snapshot) {
+              final count = snapshot.data ?? 0;
+              if (count == 0) return const SizedBox.shrink();
+              return Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: Center(
+                  child: Badge(
+                    label: Text('$count'),
+                    child: const Icon(Icons.precision_manufacturing, color: DipontoColors.primary),
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+      body: StreamBuilder<List<MarkQueueEntry>>(
+        stream: db.watchPendingMarkQueue(),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          final entries = snapshot.data!;
+          if (entries.isEmpty) {
+            return const EmptyStateView(
+              icon: Icons.precision_manufacturing_outlined,
+              title: 'Fila de gravação vazia',
+              subtitle:
+                  'Seriais aprovados aparecem aqui. Acione F2 no DiatuCAD para gravar o próximo.',
+            );
+          }
+
+          return Column(
+            children: [
+              if (markFailure != null)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  color: DipontoColors.error.withValues(alpha: 0.15),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.error_outline, color: DipontoColors.error),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          markFailure,
+                          style: const TextStyle(color: DipontoColors.error),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              Padding(
+                padding: const EdgeInsets.all(12),
+                child: Text(
+                  '${entries.length} serial(is) aguardando gravação no laser. '
+                  'O próximo da fila será enviado quando o DiatuCAD solicitar via TCP.',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+              ),
+              Expanded(
+                child: ListView.builder(
+                  itemCount: entries.length,
+                  itemBuilder: (context, index) {
+                    final entry = entries[index];
+                    return ListTile(
+                      leading: Icon(
+                        entry.pinned ? Icons.push_pin : Icons.looks_one_outlined,
+                        color: DipontoColors.primary,
+                      ),
+                      title: Text(entry.serial),
+                      subtitle: Text('OP ${entry.numeroOp} · ${dateFmt.format(entry.createdAt)}'),
+                    );
+                  },
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
   }
 }

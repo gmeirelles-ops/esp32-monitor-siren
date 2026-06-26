@@ -1,0 +1,11 @@
+* text=auto eol=lf
+
+# Scripts Windows
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Visual Studio / Flutter Windows
+*.sln text eol=crlf
+*.vcxproj text eol=crlf
+*.vcxproj.filters text eol=crlf

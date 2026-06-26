@@ -7,6 +7,8 @@ typedef void (*pzem_fault_cb_t)(bool fault);
 
 bool pzem_init(pzem_fault_cb_t fault_cb);
 bool pzem_read_power_w(float *power_w);
+bool pzem_probe_read(float *power_w);
+bool pzem_boot_self_test(void);
 bool pzem_is_fault(void);
 void pzem_clear_fault(void);
 

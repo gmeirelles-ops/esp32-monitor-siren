@@ -47,7 +47,7 @@ String formatBatchDetailCsv(
 }) {
   final numeros = bancadaNumeros ?? const {};
   final buf = StringBuffer()
-    ..writeln('OP;Serial;Produto;Veredito;Sequencial;Potencia dB;Bancada;Operador;Data');
+    ..writeln('OP;Serial;Produto;Veredito;Sequencial;Potencia dB;Tempo s;Pot min dB;Pot max dB;Bancada;Operador;Data');
   for (final t in tests) {
     buf.writeln([
       _csvCell(numeroOp),
@@ -56,6 +56,9 @@ String formatBatchDetailCsv(
       _csvCell(t.veredito),
       t.sequencial,
       t.potenciaMedia.toStringAsFixed(1),
+      t.tempoTesteSec ?? '',
+      t.potenciaMin?.toStringAsFixed(1) ?? '',
+      t.potenciaMax?.toStringAsFixed(1) ?? '',
       _csvCell(formatBancadaLabelFromMap(t.deviceId, numeros)),
       _csvCell(t.operador),
       _csvDateFmt.format(t.createdAt.toLocal()),

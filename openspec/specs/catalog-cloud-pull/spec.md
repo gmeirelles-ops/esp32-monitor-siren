@@ -18,6 +18,13 @@ Quando a sincronização estiver habilitada e o Firebase disponível, o app SHAL
 - **WHEN** a plataforma não tem Firebase (ex.: Linux) ou o sync está desabilitado
 - **THEN** a ação de pull fica indisponível e o catálogo local continua operando normalmente
 
+### Requirement: Download unificado de catálogo
+Quando a sincronização estiver habilitada, a ação "Baixar catálogo" SHALL baixar produtos (`products`) e operadores (`operators`) do Firestore e aplicar ambos no SQLite local.
+
+#### Scenario: Pull com produtos e operadores
+- **WHEN** o operador aciona "Baixar catálogo" com sync habilitado e existem documentos em `products` e `operators`
+- **THEN** o app aplica upsert de produtos e operadores e informa quantos de cada foram baixados
+
 ### Requirement: Mapeamento de produto da nuvem
 O app SHALL converter um documento de `products` do Firestore em produto local, preservando `id_produto`, `nome`, `potencia_ref`, `potencia_min`, `potencia_max`, `tolerancia_pct`, `tempo_teste_sec` e metadados de calibração quando presentes.
 

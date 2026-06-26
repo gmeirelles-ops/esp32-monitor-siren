@@ -1,4 +1,4 @@
-# Diponto Sirene Validator - instalador Windows (Inno Setup 6)
+; Diponto Sirene Validator - instalador Windows (Inno Setup 6)
 ; Compilado via scripts/build_windows_installer.ps1
 
 #ifndef MyAppVersion

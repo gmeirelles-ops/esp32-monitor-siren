@@ -10,8 +10,7 @@ import '../../shared/display_labels.dart';
 import '../../shared/widgets/form_section_card.dart';
 import '../bancadas/bancadas_provider.dart';
 import '../dashboard/dashboard_filters.dart';
-import '../labels/label_printer.dart';
-import '../labels/zpl_generator.dart';
+import '../labels/remark_serial.dart';
 import '../mqtt/mqtt_providers.dart';
 import 'batch_report_export.dart';
 import 'report_filters.dart';
@@ -100,51 +99,31 @@ class _BatchReportDetailScreenState extends ConsumerState<BatchReportDetailScree
     }
   }
 
-  Future<void> _reprintSerial(String serial) async {
-    final config = ref.read(appConfigProvider);
-    final confirmed = await showDialog<bool>(
+  Future<void> _remarkSerial(String serial, String numeroOp) async {
+    await remarkSerialIfConfirmed(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Reimprimir etiqueta'),
-        content: Text(
-          'A impressora avançará uma linha inteira do rolo (3 posições). '
-          'O serial $serial será impresso na primeira coluna; '
-          'as outras duas saem em branco.',
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
-          ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Reimprimir')),
-        ],
-      ),
+      ref: ref,
+      serial: serial,
+      numeroOp: numeroOp,
     );
-    if (confirmed != true || !mounted) return;
+  }
 
-    try {
-      final db = ref.read(databaseProvider);
-      final items = await resolveLabelZplItems(db, [serial]);
-      final item = items.first;
-      final printer = createLabelPrinterTransport(config);
-      await printer.sendZpl(
-        generateZplReprintRow(serial: item.serial, productName: item.productName),
-      );
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Etiqueta $serial reenviada')),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(formatPrinterError(e, config.printerMode))),
-        );
-      }
+  String _testParamsLine(TestResult t) {
+    if (t.tempoTesteSec == null && t.potenciaMin == null && t.potenciaMax == null) {
+      return '';
     }
+    final tempo = t.tempoTesteSec != null ? '${t.tempoTesteSec}s' : '—';
+    final min = t.potenciaMin?.toStringAsFixed(1) ?? '—';
+    final max = t.potenciaMax?.toStringAsFixed(1) ?? '—';
+    return 'Teste: ${tempo} · ${min}–${max} dB\n';
   }
 
   @override
   Widget build(BuildContext context) {
     final dateFmt = DateFormat('dd/MM/yyyy HH:mm');
     final bancadas = ref.watch(bancadasMapProvider).valueOrNull ?? {};
+    final markingMode = ref.watch(appConfigProvider).markingMode;
+    final remarkCopy = remarkUiCopy(markingMode, '');
 
     return Scaffold(
       appBar: AppBar(
@@ -250,6 +229,7 @@ class _BatchReportDetailScreenState extends ConsumerState<BatchReportDetailScree
                                   style: const TextStyle(fontFamily: 'monospace'),
                                 ),
                                 subtitle: Text(
+                                  '${_testParamsLine(t)}'
                                   '${t.veredito} · ${t.potenciaMedia.toStringAsFixed(1)} dB · '
                                   '${formatBancadaLabelFromMap(t.deviceId, bancadas)}\n'
                                   '${formatProductLabelFromSerial(t.serial, catalog: _catalog)} · '
@@ -258,9 +238,9 @@ class _BatchReportDetailScreenState extends ConsumerState<BatchReportDetailScree
                                 isThreeLine: true,
                                 trailing: t.serial != null && isApprovedVeredito(t.veredito)
                                     ? IconButton(
-                                        tooltip: 'Reimprimir etiqueta',
-                                        icon: const Icon(Icons.label_outline, color: DipontoColors.primary),
-                                        onPressed: () => _reprintSerial(t.serial!),
+                                        tooltip: remarkCopy.actionLabel,
+                                        icon: Icon(remarkCopy.icon, color: DipontoColors.primary),
+                                        onPressed: () => _remarkSerial(t.serial!, widget.numeroOp),
                                       )
                                     : null,
                               ),

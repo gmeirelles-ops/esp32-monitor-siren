@@ -11,20 +11,15 @@
   powershell -ExecutionPolicy Bypass -File scripts\flutter_dev.ps1 run -d windows
   powershell -ExecutionPolicy Bypass -File scripts\flutter_dev.ps1 test
   powershell -ExecutionPolicy Bypass -File scripts\flutter_dev.ps1 build windows --release
+  powershell -ExecutionPolicy Bypass -File scripts\flutter_dev.ps1 dist
+  powershell -ExecutionPolicy Bypass -File scripts\flutter_dev.ps1 dist-only
 #>
 $ErrorActionPreference = "Stop"
 
-$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
-$Drive = "S:"
-$AppOnDrive = Join-Path $Drive "sirene_app"
+. (Join-Path $PSScriptRoot "windows_build_common.ps1")
 
-function Ensure-SubstDrive {
-    $existing = subst 2>&1 | Select-String "^$([regex]::Escape($Drive))\:"
-    if (-not $existing) {
-        Write-Host "==> Mapeando $Drive -> $RepoRoot"
-        subst $Drive $RepoRoot
-    }
-}
+$RepoRoot = Ensure-WindowsAsciiRepoPath
+$AppOnDrive = Join-Path $RepoRoot "sirene_app"
 
 if ($PSVersionTable.PSPlatform -and $PSVersionTable.PSPlatform -ne "Win32NT") {
     throw "Use este script no Windows."
@@ -34,17 +29,26 @@ if (-not (Get-Command flutter -ErrorAction SilentlyContinue)) {
     throw "Flutter nao encontrado no PATH."
 }
 
-Ensure-SubstDrive
-
 if ($args.Count -eq 0) {
-    Write-Host "Uso: flutter_dev.ps1 <comando flutter/dart> [args...]"
+    Write-Host "Uso: flutter_dev.ps1 <comando> [args...]"
     Write-Host "Ex.: flutter_dev.ps1 run -d windows"
+    Write-Host "     flutter_dev.ps1 dist          # build release + atualiza dist/"
+    Write-Host "     flutter_dev.ps1 dist-only     # so empacota Release/ em dist/"
     exit 1
+}
+
+$cmd = $args[0]
+if ($cmd -eq "dist") {
+    & (Join-Path $PSScriptRoot "build_windows_release.ps1")
+    exit $LASTEXITCODE
+}
+if ($cmd -eq "dist-only") {
+    & (Join-Path $PSScriptRoot "sync_dist.ps1")
+    exit $LASTEXITCODE
 }
 
 Push-Location $AppOnDrive
 try {
-    $cmd = $args[0]
     $rest = @()
     if ($args.Count -gt 1) {
         $rest = $args[1..($args.Count - 1)]

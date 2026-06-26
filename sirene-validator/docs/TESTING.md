@@ -142,8 +142,20 @@ BROKER=192.168.1.100 DEVICE_ID=aabbccddeeff ./scripts/bench_reconnect.sh
 ## 10.5 Falha UART PZEM
 
 1. Desconecte TX/RX do PZEM.
-2. Tente iniciar teste — deve bloquear e publicar alerta em `sirene/<device_id>/alerta`.
-3. Reconecte PZEM — após recuperação, testes devem voltar.
+2. Reinicie o ESP32 — autoteste no boot deve publicar alerta `pzem_uart_boot` em `alerta`.
+3. Envie `{ "cmd": "PZEM_PROBE" }` — resposta deve ter `"uart_ok": false`.
+4. Reconecte PZEM (TX cruzado: ESP GPIO 27 → RX PZEM, ESP GPIO 26 ← TX PZEM, GND comum).
+5. Envie `PZEM_PROBE` novamente — `"uart_ok": true`.
+6. Testes manuais devem voltar após recuperação automática (`hw_mon`).
+
+## 10.5b PZEM_PROBE remoto
+
+1. Com PZEM conectado e sem teste em andamento, publique em `sirene/<device_id>/comando`:
+   ```json
+   { "cmd": "PZEM_PROBE" }
+   ```
+2. Confirme em `status`: `{"tipo":"pzem","evento":"probe","potencia_w":...,"uart_ok":true}`.
+3. Durante `TESTING`, o comando deve ser rejeitado com `cmd_durante_teste`.
 
 ## 10.6 Rejeição por conflito de estado
 
@@ -152,6 +164,7 @@ BROKER=192.168.1.100 DEVICE_ID=aabbccddeeff ./scripts/bench_reconnect.sh
 | `SET_BATCH` | `TESTING` | Rejeição imediata (`cmd_durante_teste`), sem enfileiramento |
 | `END_BATCH` | `TESTING` | Rejeição imediata (`cmd_durante_teste`), sem enfileiramento |
 | `OTA_UPDATE` | `TESTING` | Rejeição imediata (`cmd_durante_teste`) |
+| `PZEM_PROBE` | `TESTING` | Rejeição imediata (`cmd_durante_teste`) |
 | `START_CALIBRATION` | `BATCH_READY` | Rejeição |
 | `START_CALIBRATION` | `IDLE` | Aceito |
 
@@ -159,22 +172,35 @@ BROKER=192.168.1.100 DEVICE_ID=aabbccddeeff ./scripts/bench_reconnect.sh
 
 Validar com App Web os tópicos:
 
-- `sirene/<device_id>/comando` — `SET_BATCH`, `END_BATCH`, `START_CALIBRATION`
+- `sirene/<device_id>/comando` — `SET_BATCH`, `END_BATCH`, `START_CALIBRATION`, `PZEM_PROBE`, `OTA_UPDATE`
 - `sirene/<device_id>/status` — resultados e rejeições
 - `sirene/<device_id>/calibracao` — amostras `calibracao_amostra` + média `calibracao`
 - `sirene/<device_id>/alerta` — falhas de hardware
 
 ## 11. OTA remoto (`OTA_UPDATE`)
 
-1. Sirva o binário em URL HTTP acessível pelo ESP32 (ex.: `http://192.168.1.10:8080/sirene-validator.bin`).
-2. Publique em `sirene/<device_id>/comando`:
+### Checklist rápido
+
+1. `idf.py build` → `build/sirene-validator.bin`
+2. Sirva o binário na LAN: `cd build && python3 -m http.server 8080`
+3. Descubra `device_id` via `mosquitto_sub -t 'sirene/+/heartbeat'`
+4. Publique em `sirene/<device_id>/comando`:
 
 ```json
 { "cmd": "OTA_UPDATE", "url": "http://192.168.1.10:8080/sirene-validator.bin" }
 ```
 
-3. Confirme progresso/falha em `sirene/<device_id>/status` (JSON com `tipo: "ota"`).
-4. Após reboot, verifique `firmware_version` no heartbeat.
+5. Confirme progresso/falha em `sirene/<device_id>/status` (JSON com `tipo: "ota"`)
+6. Após reboot, verifique `firmware_version` no heartbeat (ex.: `"1.4.1"`)
+
+Ou use o script:
+
+```bash
+DEVICE_ID=<id> ./scripts/serve_firmware_and_ota.sh
+```
+
+### Cenários adicionais
+
 5. **Rejeição durante teste:** inicie um teste e envie `OTA_UPDATE` — deve ser rejeitado sem desligar o relé no meio do ciclo.
 6. **Rollback (opcional):** grave uma imagem inválida ou force falha antes da marca de validação; no próximo boot o firmware anterior deve voltar.
 

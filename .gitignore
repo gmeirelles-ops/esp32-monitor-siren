@@ -2,22 +2,23 @@
 .DS_Store
 Thumbs.db
 *~
+*:Zone.Identifier
 
 # IDE (manter .vscode/ e .cursor/ versionados se o time usa)
 *.swp
 *.swo
 .idea/
 
-# Flutter / Dart (sirene_app)
-sirene_app/.dart_tool/
-sirene_app/.packages
-sirene_app/.flutter-plugins
-sirene_app/.flutter-plugins-dependencies
-sirene_app/.pub-cache/
-sirene_app/.pub/
-sirene_app/build/
-sirene_app/**/doc/api/
-sirene_app/**/*.g.dart.bak
+# Flutter / Dart (all apps)
+**/.dart_tool/
+**/.packages
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+**/.pub-cache/
+**/.pub/
+**/build/
+**/**/doc/api/
+**/**/*.g.dart.bak
 
 # ESP-IDF (sirene-validator)
 sirene-validator/build/

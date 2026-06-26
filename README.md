@@ -16,23 +16,37 @@ Monorepo do sistema de validação de sirenes em linha de produção: firmware E
          │ Wi-Fi / portal 192.168.4.1                 │ SQLite local
          ▼                                            ▼
   ┌──────────────┐                          ┌─────────────────┐
-  │ PZEM + relé  │                          │ Etiquetas Zebra │
-  │ botão físico │                          │ Painel / Lotes  │
+  │ PZEM + relé  │                          │ Etiquetas /     │
+  │ botão físico │                          │ Lote (INICIAR)  │
   └──────────────┘                          └────────┬────────┘
                                                      │
                               sync opcional          ▼
                                           ┌─────────────────┐
                                           │ Firestore       │
-                                          │ (nuvem)         │
-                                          └─────────────────┘
+                                          └────────┬────────┘
+                                                   │
+                                          (sync opcional)
 ```
+
+## Gestor vs operador (um único app)
+
+O **sirene_app** atende operador e gestor no mesmo binário. No cadastro de operadores, marque **Gestor** para quem deve ver telas administrativas após o login com PIN.
+
+| | Operador | Gestor |
+|--|----------|--------|
+| Login | PIN local | PIN local (flag Gestor) |
+| Menu | Lote, Gravação | Lote, Painel, Relatório, Gravação, Cadastros, Configurações |
+| Painel / cadastros | Não | Sim |
+
+O projeto `sirene_manager_app/` (app separado com Firestore) ficou **experimental** e não é necessário para o fluxo atual.
 
 ## Estrutura do repositório
 
 | Pasta | Conteúdo |
 |-------|----------|
 | `sirene-validator/` | Firmware ESP-IDF (testes, MQTT, offline, OTA) |
-| `sirene_app/` | App Flutter desktop (MQTT, SQLite, etiquetas, painel) |
+| `sirene_app/` | App Flutter desktop (operador + gestor com flag no login) |
+| `sirene_manager_app/` | *(experimental, não usado)* app gestor separado com Firestore |
 | `firebase/` | Regras e índices Firestore |
 | `scripts/` | Setup Firebase, benches MQTT |
 | `docs/` | Checklist de produção |

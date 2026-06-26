@@ -64,10 +64,20 @@ void main() {
     setUp(() => db = AppDatabase.forTesting(NativeDatabase.memory()));
     tearDown(() => db.close());
 
-    test('pull faz upsert e ignora docs sem id', () async {
-      final service = CatalogCloudService(
+    CatalogCloudService buildService({
+      List<Map<String, dynamic>> products = const [],
+      List<Map<String, dynamic>> operators = const [],
+    }) {
+      return CatalogCloudService(
         db: db,
-        reader: () async => [
+        productReader: () async => products,
+        operatorReader: () async => operators,
+      );
+    }
+
+    test('pull faz upsert e ignora docs sem id', () async {
+      final service = buildService(
+        products: [
           {
             'id_produto': '123',
             'nome': 'Sirene X',
@@ -81,13 +91,59 @@ void main() {
         ],
       );
 
-      final applied = await service.pull();
+      final applied = await service.pullProducts();
       expect(applied, 1);
 
       final stored = await db.getProduct('123');
       expect(stored, isNotNull);
       expect(stored!.nome, 'Sirene X');
       expect(stored.potenciaMax, 22.0);
+    });
+
+    test('pullOperators aplica operadores da nuvem', () async {
+      final service = buildService(
+        operators: [
+          {
+            'codigo': '4321',
+            'nome': 'Maria',
+            'ativo': true,
+            'updated_at': '2026-06-16T10:00:00.000Z',
+          },
+        ],
+      );
+
+      final applied = await service.pullOperators();
+      expect(applied, 1);
+
+      final ops = await db.watchActiveOperators().first;
+      expect(ops.length, 1);
+      expect(ops.first.nome, 'Maria');
+      expect(ops.first.codigo, '4321');
+    });
+
+    test('pullAll retorna contagem de produtos e operadores', () async {
+      final service = buildService(
+        products: [
+          {
+            'id_produto': '1',
+            'potencia_ref': 20.0,
+            'tempo_teste_sec': 5,
+          },
+        ],
+        operators: [
+          {
+            'codigo': '1111',
+            'nome': 'João',
+            'ativo': true,
+            'updated_at': '2026-06-16T10:00:00.000Z',
+          },
+        ],
+      );
+
+      final result = await service.pullAll();
+      expect(result.products, 1);
+      expect(result.operators, 1);
+      expect(result.total, 2);
     });
   });
 

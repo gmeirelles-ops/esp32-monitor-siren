@@ -6,13 +6,13 @@ TBD - created by archiving change logout-on-exit-batch-retest-dev. Update Purpos
 ### Requirement: Tela inicial de login de operador
 O app SHALL exibir tela de login de operador como primeira tela ao iniciar, antes de qualquer seção do shell principal.
 
-#### Scenario: App sem sessão ativa
-- **WHEN** o app é aberto e não há operador autenticado na sessão
+#### Scenario: App aberto sem operador na sessão atual
+- **WHEN** o app é iniciado (nova execução)
 - **THEN** a tela de login é exibida em tela cheia, sem barra de navegação principal
 
-#### Scenario: App com sessão válida
-- **WHEN** o app é aberto e há operador autenticado com registro ainda ativo
-- **THEN** o app redireciona diretamente para o shell principal
+#### Scenario: Sessão não restaurada entre execuções
+- **WHEN** o operador fechou o app após login bem-sucedido e reabre o aplicativo
+- **THEN** o app exige novo login e não restaura automaticamente o operador anterior
 
 ### Requirement: Lista de operadores cadastrados na login
 A tela de login SHALL listar todos os operadores com status ativo, exibindo o nome de cada operador.
@@ -30,7 +30,7 @@ O app SHALL autenticar o operador quando o PIN informado corresponder ao campo `
 
 #### Scenario: PIN correto
 - **WHEN** o operador seleciona seu nome na lista, informa o PIN correto e confirma entrada
-- **THEN** a sessão é estabelecida e o app navega para o shell principal
+- **THEN** a sessão é estabelecida para a execução atual e o app navega para o shell principal
 
 #### Scenario: PIN incorreto
 - **WHEN** o operador informa PIN que não corresponde ao operador selecionado
@@ -40,20 +40,20 @@ O app SHALL autenticar o operador quando o PIN informado corresponder ao campo `
 - **WHEN** o operador digita o PIN
 - **THEN** o campo exibe caracteres mascarados
 
-### Requirement: Persistência da sessão de operador
-O app SHALL manter o identificador do operador autenticado apenas durante a execução corrente do processo do app. Ao fechar ou encerrar o app, a sessão SHALL ser limpa e o operador SHALL ser obrigado a autenticar novamente na próxima abertura. Logout explícito ou troca de operador nas Configurações continua disponível durante a sessão.
+### Requirement: Sessão válida apenas na execução atual
+O app SHALL manter o operador autenticado somente durante a execução em andamento do processo, sem persistir identificador de operador ativo em armazenamento local entre reinicializações.
 
-#### Scenario: Reabertura após fechar o app
-- **WHEN** o operador fecha a janela do app ou o processo é encerrado e o app é aberto novamente
-- **THEN** a tela de login por PIN é exibida e nenhum operador permanece autenticado
+#### Scenario: Fechar e reabrir aplicativo
+- **WHEN** o operador encerra o processo do app e inicia novamente
+- **THEN** nenhum identificador de operador ativo é lido do armazenamento persistente para pular o login
 
 #### Scenario: Sessão durante uso contínuo
 - **WHEN** o operador navega entre telas sem fechar o app
 - **THEN** a sessão do operador permanece ativa sem novo login
 
-#### Scenario: Operador encerra sessão manualmente
+#### Scenario: Troca de operador durante a sessão
 - **WHEN** o operador aciona "Trocar operador" nas Configurações
-- **THEN** a sessão local é encerrada imediatamente e a tela de login é exibida
+- **THEN** a sessão da execução atual é encerrada e a tela de login é exibida
 
 ### Requirement: Logout de operador
 O app SHALL permitir encerrar a sessão do operador nas Configurações, retornando à tela de login.

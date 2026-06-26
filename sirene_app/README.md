@@ -34,6 +34,29 @@ Ou use o script auxiliar na raiz do repo:
 powershell -ExecutionPolicy Bypass -File scripts\flutter_dev.ps1 run -d windows
 powershell -ExecutionPolicy Bypass -File scripts\flutter_dev.ps1 test
 powershell -ExecutionPolicy Bypass -File scripts\flutter_dev.ps1 build windows --release
+
+# Atualizar dist/ (ZIP portátil) — use sempre que mudar o app para produção
+powershell -ExecutionPolicy Bypass -File scripts\flutter_dev.ps1 dist
+```
+
+### Atualizar a pasta `dist/`
+
+A pasta `dist/` na **raiz do repositório** não é versionada no Git. Ela é gerada pelos scripts de release. Sempre que você alterar o app e quiser distribuir no posto ou pendrive:
+
+| Objetivo | Comando |
+|----------|---------|
+| Build + ZIP portátil em `dist/` | `scripts\flutter_dev.ps1 dist` ou `scripts\build_windows_release.ps1` |
+| Só reempacotar (já rodou `flutter build windows --release`) | `scripts\flutter_dev.ps1 dist-only` ou `scripts\sync_dist.ps1` |
+| ZIP + instalador `.exe` | `scripts\build_windows_all.ps1` |
+
+Antes de gerar `dist/`, atualize a versão em `pubspec.yaml` (`version: x.y.z+build`). O nome do ZIP usa esse número.
+
+Saída típica:
+
+```
+dist/DipontoSireneValidator-1.0.0-win64/
+dist/DipontoSireneValidator-1.0.0-win64.zip
+dist/DipontoSireneValidator-1.0.0-setup.exe   # se rodou build_windows_all
 ```
 
 Abra o projeto no Cursor/VS Code a partir de `S:\` (File → Open Folder) para o IDE usar o mesmo caminho.
@@ -53,7 +76,16 @@ flutter test
 flutter run -d linux
 ```
 
-O target Linux usa o mesmo layout desktop (`NavigationRail`) e o mesmo fluxo de provisionamento (portal no navegador), então serve bem para testar MQTT, lote, seriais e etiquetas durante o desenvolvimento.
+O target Linux usa o mesmo layout desktop (`NavigationRail`) e o mesmo fluxo de provisionamento (portal no navegador), então serve bem para testar MQTT, lote, seriais e etiquetas/gravação laser durante o desenvolvimento.
+
+### Marcação de serial (Etiquetas vs Laser)
+
+| Modo | Hardware | Configuração |
+|------|----------|--------------|
+| **Etiquetas (Zebra)** | ZT230 USB ou rede | Buffer ZPL múltiplos de 3 |
+| **Gravação laser (Diatu)** | Diaotu B3 + DiatuCAD1 | Servidor TCP no app; laser pede serial via F2 |
+
+Documentação laser: [`docs/laser-reference/`](../docs/laser-reference/README.md)
 
 ### O que NÃO funciona no Linux
 
@@ -117,9 +149,20 @@ Saída em `build/windows/x64/runner/Release/` — copie a pasta inteira (não s�
 
 1. PC na mesma rede do broker MQTT (padrão `192.168.51.87:1883`)
 2. **Configurações** → host/porta do broker e IP da impressora Zebra (`9100`)
-3. Provisionamento ESP32: Wi-Fi `SireneValidator` → portal `http://192.168.4.1` no navegador
-4. **Produtos** → cadastre cada SKU com autocalibração (peça padrão na bancada, tolerância 10%)
-5. **Lote** → selecione produto cadastrado (limites preenchidos automaticamente)
+3. **Atualizar firmware** → OTA (rede) ou USB (cabo COM) — ver `docs/GUIA_COMPLETO.md` §11
+4. Provisionamento ESP32: Wi-Fi `SireneValidator` → portal `http://192.168.4.1` no navegador
+5. **Produtos** → cadastre cada SKU com autocalibração (peça padrão na bancada, tolerância 10%)
+6. **Lote** → selecione produto cadastrado (limites preenchidos automaticamente)
+
+### Atualização de firmware (resumo)
+
+| Método | Onde no app | Requisitos |
+|--------|-------------|------------|
+| **OTA rede** | Configurações → Atualizar firmware → aba OTA | `.bin`, bancada online, mesma LAN |
+| **USB cabo** | Mesma tela → aba USB | Windows, porta COM, driver CP210x/CH340 |
+| **Campanha** | Configurações → Administração | Várias bancadas + um `.bin` |
+
+USB: empacote `esptool.exe` com `scripts/bundle_esptool_windows.ps1` ou instale `pip install esptool`.
 
 Checklist completo: [docs/PRODUCAO.md](../docs/PRODUCAO.md)
 

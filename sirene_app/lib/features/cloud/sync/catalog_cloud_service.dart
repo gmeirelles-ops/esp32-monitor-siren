@@ -1,21 +1,34 @@
 import '../../../core/database/database.dart';
 import '../models/firestore_mappers.dart';
 
-/// Lê documentos da coleção `products` do Firestore (ou fonte fake em teste).
+/// Lê documentos de uma coleção Firestore (ou fonte fake em teste).
 typedef CatalogReader = Future<List<Map<String, dynamic>>> Function();
 
-/// Baixa o catálogo da nuvem e faz upsert no SQLite local.
+class CatalogPullResult {
+  const CatalogPullResult({required this.products, required this.operators});
+
+  final int products;
+  final int operators;
+
+  int get total => products + operators;
+}
+
+/// Baixa catálogo da nuvem e aplica no SQLite local.
 class CatalogCloudService {
-  CatalogCloudService({required AppDatabase db, required CatalogReader reader})
-      : _db = db,
-        _reader = reader;
+  CatalogCloudService({
+    required AppDatabase db,
+    required CatalogReader productReader,
+    required CatalogReader operatorReader,
+  })  : _db = db,
+        _productReader = productReader,
+        _operatorReader = operatorReader;
 
   final AppDatabase _db;
-  final CatalogReader _reader;
+  final CatalogReader _productReader;
+  final CatalogReader _operatorReader;
 
-  /// Aplica os produtos remotos no SQLite. Retorna quantos foram aplicados.
-  Future<int> pull() async {
-    final docs = await _reader();
+  Future<int> pullProducts() async {
+    final docs = await _productReader();
     var applied = 0;
     for (final doc in docs) {
       final parsed = productFromFirestore(doc);
@@ -35,4 +48,31 @@ class CatalogCloudService {
     }
     return applied;
   }
+
+  Future<int> pullOperators() async {
+    final docs = await _operatorReader();
+    var applied = 0;
+    for (final doc in docs) {
+      final parsed = operatorFromFirestore(doc);
+      if (parsed == null) continue;
+      await _db.upsertOperatorFromCloud(
+        codigo: parsed.codigo,
+        nome: parsed.nome,
+        ativo: parsed.ativo,
+        isGestor: parsed.isGestor,
+        updatedAt: parsed.updatedAt,
+      );
+      applied++;
+    }
+    return applied;
+  }
+
+  Future<CatalogPullResult> pullAll() async {
+    final products = await pullProducts();
+    final operators = await pullOperators();
+    return CatalogPullResult(products: products, operators: operators);
+  }
+
+  /// Compat: retorna só contagem de produtos.
+  Future<int> pull() => pullProducts();
 }

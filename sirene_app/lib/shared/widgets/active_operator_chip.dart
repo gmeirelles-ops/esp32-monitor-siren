@@ -26,25 +26,46 @@ class ActiveOperatorChip extends ConsumerWidget {
           return _chip(label: compact ? 'Turno' : 'Sem operador', warning: true);
         }
         final label = compact ? op.nome : '${op.nome} (${op.codigo})';
-        return _chip(label: label, warning: false);
+        final isGestor = ref.watch(activeOperatorIsGestorProvider);
+        return _chip(
+          label: label,
+          warning: false,
+          onTap: isGestor ? null : () => clearOperatorSession(ref),
+        );
       },
     );
   }
 
-  Widget _chip({required String label, required bool warning}) {
+  Widget _chip({required String label, required bool warning, VoidCallback? onTap}) {
     final color = warning ? DipontoColors.error : DipontoColors.primary;
+    final chip = Chip(
+      avatar: Icon(Icons.badge_outlined, size: 18, color: color),
+      label: Text(
+        label,
+        style: TextStyle(color: color, fontSize: 12),
+        overflow: TextOverflow.ellipsis,
+      ),
+      backgroundColor: color.withValues(alpha: 0.12),
+      side: BorderSide(color: color.withValues(alpha: 0.5)),
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+    );
+
+    if (onTap == null) {
+      return Padding(padding: const EdgeInsets.only(right: 4), child: chip);
+    }
+
     return Padding(
       padding: const EdgeInsets.only(right: 4),
-      child: Chip(
-        avatar: Icon(Icons.badge_outlined, size: 18, color: color),
-        label: Text(
-          label,
-          style: TextStyle(color: color, fontSize: 12),
-          overflow: TextOverflow.ellipsis,
+      child: Tooltip(
+        message: 'Trocar operador',
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onTap: onTap,
+            child: chip,
+          ),
         ),
-        backgroundColor: color.withValues(alpha: 0.12),
-        side: BorderSide(color: color.withValues(alpha: 0.5)),
-        padding: const EdgeInsets.symmetric(horizontal: 4),
       ),
     );
   }

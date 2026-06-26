@@ -5,12 +5,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/config/app_config.dart';
+import '../../core/providers/core_providers.dart';
+import '../../core/services/factory_reset_service.dart';
+import '../../core/theme/diponto_theme.dart';
+import '../../shared/display_labels.dart';
 import '../../shared/portuguese_labels.dart';
 import '../../shared/widgets/desktop_form_layout.dart';
 import '../../shared/widgets/screen_app_bar.dart';
 import '../../shared/widgets/form_section_card.dart';
 import '../../shared/widgets/responsive_field_row.dart';
 import '../admin/admin_screen.dart';
+import '../firmware/firmware_update_screen.dart';
 import '../cloud/auth/auth_providers.dart';
 import '../devices/devices_screen.dart';
 import '../cloud/auth/login_screen.dart';
@@ -19,6 +24,13 @@ import '../cloud/firebase_bootstrap.dart';
 import '../cloud/sync/sync_providers.dart';
 import '../mqtt/mqtt_providers.dart';
 import '../labels/label_printer.dart';
+import '../labels/label_printer_transport.dart';
+import '../labels/laser_diagnostics_panel.dart';
+import '../labels/marking_providers.dart';
+import '../labels/serial_marking_backend.dart';
+import '../bancadas/bancadas_provider.dart';
+import '../provisioning/provisioning_wizard.dart';
+import 'serial_reconciliation_panel.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -33,8 +45,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   late final TextEditingController _printerHost;
   late final TextEditingController _printerPort;
   late final TextEditingController _stationId;
+  late final TextEditingController _laserTcpPort;
+  late final TextEditingController _laserTcpCommand;
   PrinterMode _printerMode = PrinterMode.usb;
+  MarkingMode _markingMode = MarkingMode.labels;
   String? _printerWindowsName;
+  String? _bancadaDeviceId;
   List<String> _windowsPrinters = [];
   bool _loadingPrinters = false;
 
@@ -47,8 +63,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     _printerHost = TextEditingController(text: config.printerHost);
     _printerPort = TextEditingController(text: '${config.printerPort}');
     _stationId = TextEditingController(text: config.stationId);
+    _laserTcpPort = TextEditingController(text: '${config.laserTcpPort}');
+    _laserTcpCommand = TextEditingController(text: config.laserTcpCommand);
+    _markingMode = config.markingMode;
     _printerMode = Platform.isWindows ? config.printerMode : PrinterMode.network;
     _printerWindowsName = config.printerWindowsName.isEmpty ? null : config.printerWindowsName;
+    _bancadaDeviceId = config.selectedDeviceId;
     if (Platform.isWindows) {
       _refreshWindowsPrinters();
     }
@@ -61,6 +81,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     _printerHost.dispose();
     _printerPort.dispose();
     _stationId.dispose();
+    _laserTcpPort.dispose();
+    _laserTcpCommand.dispose();
     super.dispose();
   }
 
@@ -81,6 +103,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Future<void> _save() async {
+    if (_markingMode == MarkingMode.laser && _laserTcpCommand.text.trim().isEmpty) {
+      _showMessage(
+        'Informe o comando TCP. Padrão recomendado: ${AppConfig.defaultLaserTcpCommand}',
+      );
+      return;
+    }
+
     final config = ref.read(appConfigProvider);
     await config.setMqttHost(_mqttHost.text.trim());
     await config.setMqttPort(int.tryParse(_mqttPort.text) ?? 1883);
@@ -93,14 +122,39 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     await config.setStationId(_stationId.text.trim().isEmpty
         ? AppConfig.defaultStationId
         : _stationId.text.trim());
+    await config.setMarkingMode(_markingMode);
+    await config.setLaserTcpPort(int.tryParse(_laserTcpPort.text) ?? AppConfig.defaultLaserTcpPort);
+    final laserCommand = _laserTcpCommand.text.trim().isEmpty
+        ? AppConfig.defaultLaserTcpCommand
+        : _laserTcpCommand.text.trim();
+    await config.setLaserTcpCommand(laserCommand);
 
+    if (_markingMode == MarkingMode.laser) {
+      ref.read(markQueueProcessorProvider).start();
+    } else {
+      ref.read(markQueueProcessorProvider).stop();
+    }
+
+    ref.invalidate(appConfigProvider);
     ref.read(devicesProvider.notifier).reconnect();
     ref.invalidate(syncStatusProvider);
 
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Configurações salvas')),
-      );
+      if (_markingMode == MarkingMode.laser &&
+          laserCommand != AppConfig.defaultLaserTcpCommand) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Comando personalizado salvo. Confirme que o DiatuCAD usa exatamente: $laserCommand',
+            ),
+            duration: const Duration(seconds: 6),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Configurações salvas')),
+        );
+      }
     }
   }
 
@@ -153,13 +207,116 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       _showMessage('Habilite o sync e faça login antes de baixar o catálogo.');
       return;
     }
-    final count = await pullCatalogFromCloud(ref);
+    final result = await pullCatalogDetailFromCloud(ref);
     if (!mounted) return;
-    _showMessage(
-      count > 0
-          ? '$count produto(s) baixado(s) da nuvem'
-          : 'Nenhum produto na nuvem',
+    if (result.total == 0) {
+      _showMessage('Nenhum produto ou operador na nuvem');
+    } else {
+      _showMessage(
+        '${result.products} produto(s) e ${result.operators} operador(es) baixados',
+      );
+    }
+  }
+
+  Future<void> _saveBancada() async {
+    final deviceId = _bancadaDeviceId;
+    if (deviceId == null) {
+      _showMessage('Selecione uma bancada');
+      return;
+    }
+    final config = ref.read(appConfigProvider);
+    await config.setSelectedDeviceId(deviceId);
+    await config.setBancadaSetupComplete(true);
+    ref.read(selectedDeviceIdProvider.notifier).state = deviceId;
+    ref.invalidate(appConfigProvider);
+    ref.invalidate(bancadaSetupCompleteProvider);
+    if (mounted) _showMessage('Bancada vinculada ao posto');
+  }
+
+  Future<void> _openProvisioning() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const ProvisioningWizard()),
     );
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _factoryReset() async {
+    final confirmController = TextEditingController();
+    var logoutFirebase = false;
+
+    final proceed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('Reset geral do posto'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                'Isso apaga todos os dados locais (SQLite, catálogo, histórico), '
+                'remove o vínculo de bancada e marca o Wi-Fi como não provisionado. '
+                'Digite ZERAR para confirmar.',
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: confirmController,
+                decoration: const InputDecoration(labelText: 'Confirmação'),
+                autofocus: true,
+              ),
+              CheckboxListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Sair da nuvem também'),
+                subtitle: const Text('Encerra sessão Firebase (opcional)'),
+                value: logoutFirebase,
+                onChanged: (v) => setDialogState(() => logoutFirebase = v ?? false),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: Colors.red),
+              onPressed: () {
+                if (confirmController.text.trim() != 'ZERAR') {
+                  ScaffoldMessenger.of(ctx).showSnackBar(
+                    const SnackBar(content: Text('Digite ZERAR para confirmar')),
+                  );
+                  return;
+                }
+                Navigator.pop(ctx, true);
+              },
+              child: const Text('Zerar posto'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    confirmController.dispose();
+    if (proceed != true || !mounted) return;
+
+    try {
+      await ref.read(factoryResetServiceProvider).execute(logoutFirebase: logoutFirebase);
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Reset concluído'),
+          content: const Text(
+            'Dados locais apagados. Feche e reabra o aplicativo, faça login '
+            'e configure novamente a bancada e o Wi-Fi do posto.',
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK')),
+          ],
+        ),
+      );
+      await clearOperatorSession(ref);
+    } catch (e) {
+      if (mounted) _showMessage('Erro no reset: $e');
+    }
   }
 
   Future<void> _logoutOperator() async {
@@ -178,6 +335,24 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Sessão encerrada')),
       );
+    }
+  }
+
+  Future<void> _testLaserMark() async {
+    try {
+      final processor = ref.read(markQueueProcessorProvider);
+      await processor.enqueueTestSerial(AppConfig.laserTestSerial);
+      await processor.ensureRunning();
+      if (mounted) {
+        _showMessage(
+          'Serial ${AppConfig.laserTestSerial} enfileirado. '
+          'Acione F2 no DiatuCAD para gravar.',
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        _showMessage(formatMarkingError(e));
+      }
     }
   }
 
@@ -220,6 +395,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final syncEnabled = ref.watch(syncEnabledProvider);
     final devices = ref.watch(devicesProvider);
     final activeOpAsync = ref.watch(activeOperatorProvider);
+    final wifiProvisioned = ref.watch(wifiProvisionedProvider);
+    final bancadas = ref.watch(bancadasMapProvider).valueOrNull ?? {};
+    final deviceList = devices.values.toList()
+      ..sort((a, b) {
+        final na = bancadas[a.deviceId] ?? 999999;
+        final nb = bancadas[b.deviceId] ?? 999999;
+        if (na != nb) return na.compareTo(nb);
+        return a.deviceId.compareTo(b.deviceId);
+      });
     final onlineCount = devices.values.where((d) => d.isOnline).length;
     final dateFmt = DateFormat('dd/MM/yyyy HH:mm');
 
@@ -258,6 +442,75 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ),
                 ),
                 FormSectionCard(
+                  title: 'Manutenção do posto',
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        _bancadaDeviceId != null
+                            ? 'Bancada: ${formatBancadaLabelFromMap(_bancadaDeviceId!, bancadas)}'
+                            : 'Nenhuma bancada vinculada',
+                        style: Theme.of(context).textTheme.titleSmall,
+                      ),
+                      const SizedBox(height: 8),
+                      if (deviceList.isEmpty)
+                        const Text('Nenhuma bancada detectada na rede MQTT.')
+                      else
+                        DropdownButtonFormField<String>(
+                          value: deviceList.any((d) => d.deviceId == _bancadaDeviceId)
+                              ? _bancadaDeviceId
+                              : null,
+                          decoration: const InputDecoration(labelText: 'Bancada vinculada'),
+                          items: [
+                            for (final d in deviceList)
+                              DropdownMenuItem(
+                                value: d.deviceId,
+                                child: Text(formatBancadaLabelFromMap(d.deviceId, bancadas)),
+                              ),
+                          ],
+                          onChanged: (v) => setState(() => _bancadaDeviceId = v),
+                        ),
+                      const SizedBox(height: 8),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: OutlinedButton(
+                          onPressed: deviceList.isEmpty ? null : _saveBancada,
+                          child: const Text('Salvar bancada'),
+                        ),
+                      ),
+                      const Divider(height: 24),
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: Icon(
+                          wifiProvisioned ? Icons.wifi : Icons.wifi_off,
+                          color: wifiProvisioned ? DipontoColors.success : Colors.grey,
+                        ),
+                        title: Text(wifiProvisioned ? 'Wi-Fi provisionado' : 'Wi-Fi não provisionado'),
+                        subtitle: const Text('Assistente para conectar bancadas à rede da fábrica'),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: _openProvisioning,
+                      ),
+                      const Divider(height: 24),
+                      const Text(
+                        'Reconciliação de série',
+                        style: TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 8),
+                      const SerialReconciliationPanel(),
+                      const Divider(height: 24),
+                      OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.red,
+                          side: const BorderSide(color: Colors.red),
+                        ),
+                        onPressed: _factoryReset,
+                        icon: const Icon(Icons.delete_forever_outlined),
+                        label: const Text('Reset geral do posto'),
+                      ),
+                    ],
+                  ),
+                ),
+                FormSectionCard(
                   title: 'Posto',
                   child: Column(
                     children: [
@@ -281,9 +534,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       ),
                       ListTile(
                         contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.system_update_alt),
+                        title: const Text('Atualizar firmware'),
+                        subtitle: const Text('OTA pela rede ou gravação USB'),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => const FirmwareUpdateScreen(),
+                            ),
+                          );
+                        },
+                      ),
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
                         leading: const Icon(Icons.admin_panel_settings_outlined),
-                        title: const Text('Administração (OTA)'),
-                        subtitle: const Text('Firmware e comandos remotos'),
+                        title: const Text('Administração'),
+                        subtitle: const Text('Campanha OTA multi-bancada'),
                         trailing: const Icon(Icons.chevron_right),
                         onTap: () {
                           Navigator.of(context).push(
@@ -313,6 +580,66 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     ],
                   ),
                 ),
+                FormSectionCard(
+                  title: 'Marcação de serial',
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      SegmentedButton<MarkingMode>(
+                        segments: const [
+                          ButtonSegment(
+                            value: MarkingMode.labels,
+                            label: Text('Etiquetas (Zebra)'),
+                            icon: Icon(Icons.label_outline),
+                          ),
+                          ButtonSegment(
+                            value: MarkingMode.laser,
+                            label: Text('Gravação laser (Diatu)'),
+                            icon: Icon(Icons.precision_manufacturing),
+                          ),
+                        ],
+                        selected: {_markingMode},
+                        onSelectionChanged: (selection) {
+                          setState(() => _markingMode = selection.first);
+                        },
+                      ),
+                      if (_markingMode == MarkingMode.laser) ...[
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: _laserTcpPort,
+                          decoration: const InputDecoration(
+                            labelText: 'Porta TCP (servidor no app)',
+                            helperText:
+                                'DiatuCAD conecta neste PC (127.0.0.1 se mesma máquina)',
+                          ),
+                          keyboardType: TextInputType.number,
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: _laserTcpCommand,
+                          decoration: InputDecoration(
+                            labelText: 'Comando TCP esperado',
+                            helperText:
+                                'Igual ao configurado no texto variável do DiatuCAD '
+                                '(padrão: ${AppConfig.defaultLaserTcpCommand})',
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        const LaserDiagnosticsPanel(),
+                        const SizedBox(height: 8),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: OutlinedButton.icon(
+                            onPressed: _testLaserMark,
+                            icon: const Icon(Icons.bolt_outlined),
+                            label: const Text('Testar gravação'),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                if (_markingMode == MarkingMode.labels)
                 FormSectionCard(
                   title: 'Impressora Zebra',
                   child: Column(

@@ -39,6 +39,9 @@ Map<String, dynamic> mapLoteDocument({
     'status': status,
     'station_id': stationId,
     'started_at': startedAt.toUtc().toIso8601String(),
+    'tempo_teste_sec': batch.tempoTeste,
+    'potencia_min': batch.potenciaMin,
+    'potencia_max': batch.potenciaMax,
     if (endedAt != null) 'ended_at': endedAt.toUtc().toIso8601String(),
     if (aprovados != null) 'aprovados': aprovados,
     if (reprovados != null) 'reprovados': reprovados,
@@ -65,8 +68,12 @@ Map<String, dynamic> mapSerialDocument({
   required TestResultMessage test,
   required String serial,
   String? operador,
+  String? operatorCodigo,
   required String stationId,
   required DateTime timestamp,
+  int? tempoTesteSec,
+  double? potenciaMin,
+  double? potenciaMax,
   bool isRetest = false,
 }) {
   return {
@@ -79,6 +86,10 @@ Map<String, dynamic> mapSerialDocument({
     'sequencial': test.sequencial,
     'serial': serial,
     if (operador != null) 'operador': operador,
+    if (operatorCodigo != null) 'operator_codigo': operatorCodigo,
+    if (tempoTesteSec != null) 'tempo_teste_sec': tempoTesteSec,
+    if (potenciaMin != null) 'potencia_min': potenciaMin,
+    if (potenciaMax != null) 'potencia_max': potenciaMax,
     'timestamp': timestamp.toUtc().toIso8601String(),
     'station_id': stationId,
     'is_retest': isRetest,
@@ -89,8 +100,12 @@ Map<String, dynamic> mapReprovadaDocument({
   required String deviceId,
   required TestResultMessage test,
   String? operador,
+  String? operatorCodigo,
   required String stationId,
   required DateTime timestamp,
+  int? tempoTesteSec,
+  double? potenciaMin,
+  double? potenciaMax,
   bool isRetest = false,
 }) {
   return {
@@ -102,6 +117,10 @@ Map<String, dynamic> mapReprovadaDocument({
     'potencia_media': test.potenciaMedia,
     'sequencial': test.sequencial,
     if (operador != null) 'operador': operador,
+    if (operatorCodigo != null) 'operator_codigo': operatorCodigo,
+    if (tempoTesteSec != null) 'tempo_teste_sec': tempoTesteSec,
+    if (potenciaMin != null) 'potencia_min': potenciaMin,
+    if (potenciaMax != null) 'potencia_max': potenciaMax,
     'timestamp': timestamp.toUtc().toIso8601String(),
     'station_id': stationId,
     'is_retest': isRetest,
@@ -258,6 +277,39 @@ Map<String, dynamic> mapProduct({
       'calibrado_em': product.calibradoEm!.toUtc().toIso8601String(),
     if (product.calibradoDeviceId != null)
       'calibrado_device_id': product.calibradoDeviceId,
+    'updated_at': updatedAt.toUtc().toIso8601String(),
+  };
+}
+
+typedef ParsedOperator = ({
+  String codigo,
+  String nome,
+  bool ativo,
+  bool isGestor,
+  DateTime updatedAt,
+});
+
+ParsedOperator? operatorFromFirestore(Map<String, dynamic> data) {
+  final codigo = data['codigo'];
+  if (codigo is! String || codigo.isEmpty) return null;
+  return (
+    codigo: codigo,
+    nome: (data['nome'] as String?) ?? '',
+    ativo: data['ativo'] is bool ? data['ativo'] as bool : true,
+    isGestor: data['is_gestor'] is bool ? data['is_gestor'] as bool : false,
+    updatedAt: _asDateTime(data['updated_at']) ?? DateTime.now().toUtc(),
+  );
+}
+
+Map<String, dynamic> mapOperator({
+  required Operator operator,
+  required DateTime updatedAt,
+}) {
+  return {
+    'codigo': operator.codigo,
+    'nome': operator.nome,
+    'ativo': operator.ativo,
+    'is_gestor': operator.isGestor,
     'updated_at': updatedAt.toUtc().toIso8601String(),
   };
 }

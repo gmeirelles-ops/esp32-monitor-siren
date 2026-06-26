@@ -1,0 +1,5 @@
+schema: spec-driven
+name: flutter-firmware-upload-usb-ota
+description: >
+  Upload de firmware simplificado no app Flutter Windows: OTA assistido
+  (servidor HTTP embutido + MQTT) e gravação por USB (esptool + porta COM).

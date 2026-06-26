@@ -1,0 +1,5 @@
+schema: spec-driven
+name: fix-pzem-read-and-ota-procedure
+description: >
+  Corrigir leitura UART do PZEM-004T (timing, diagnóstico, GPIO 4/5/26/27),
+  documentar OTA via MQTT já existente e fornecer procedimento operacional passo a passo.

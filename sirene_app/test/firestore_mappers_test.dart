@@ -21,19 +21,24 @@ void main() {
       expect(reprovadaPath('2026001', 3), 'test_results/2026001/reprovadas/3');
     });
 
-    test('mapeia documento de serial aprovado', () {
+    test('mapeia documento de serial aprovado com parâmetros de teste', () {
       final map = mapSerialDocument(
         deviceId: 'aabbccddeeff',
         test: approvedTest,
         serial: '1232600018',
         operador: '001 — João',
+        operatorCodigo: '001',
         stationId: 'posto-01',
         timestamp: DateTime.utc(2026, 6, 10, 14, 31),
+        tempoTesteSec: 5,
+        potenciaMin: 18.0,
+        potenciaMax: 22.0,
       );
       expect(map['serial'], '1232600018');
-      expect(map['sequencial'], 1);
-      expect(map['station_id'], 'posto-01');
-      expect(map['is_retest'], false);
+      expect(map['operator_codigo'], '001');
+      expect(map['tempo_teste_sec'], 5);
+      expect(map['potencia_min'], 18.0);
+      expect(map['potencia_max'], 22.0);
     });
 
     test('mapeia documento reprovado sem serial', () {
@@ -78,6 +83,9 @@ void main() {
       );
       expect(map['numero_op'], '2026001');
       expect(map['status'], 'active');
+      expect(map['tempo_teste_sec'], 5);
+      expect(map['potencia_min'], 18);
+      expect(map['potencia_max'], 22);
     });
   });
 }

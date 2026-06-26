@@ -13,6 +13,8 @@ import '../cloud/auth/auth_providers.dart';
 import '../cloud/sync/sync_providers.dart';
 import '../labels/label_printer.dart';
 import '../labels/label_print_logic.dart';
+import '../labels/marking_providers.dart';
+import '../labels/serial_marking_backend.dart';
 import '../labels/zpl_generator.dart';
 import '../serial/itf_check_digit.dart';
 import 'message_pump.dart';
@@ -37,6 +39,18 @@ final mqttConnectionStateProvider = StreamProvider<AppMqttConnectionState>((ref)
   final service = ref.watch(mqttServiceProvider);
   return service.connectionState;
 });
+
+/// Estado MQTT efetivo — evita "Desconectado" enquanto o stream ainda não emitiu.
+AppMqttConnectionState resolveMqttConnectionDisplayState(
+  AsyncValue<AppMqttConnectionState> mqttAsync,
+  AppMqttConnectionState serviceState,
+) {
+  return mqttAsync.when(
+    data: (state) => state,
+    loading: () => serviceState,
+    error: (_, __) => AppMqttConnectionState.disconnected,
+  );
+}
 
 typedef DeviceRejectionEvent = ({String deviceId, RejectionMessage rejection});
 
@@ -246,6 +260,9 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
     final db = _ref.read(databaseProvider);
     final operadorFinal =
         operador ?? await resolveOperadorLabel(_ref);
+    final operatorId = await resolveOperatorId(_ref);
+    final operatorCodigo = await resolveOperatorCodigo(_ref);
+    final batch = device.activeBatch;
     final bool retest = isRetest ?? _ref.read(retestModeProvider);
     String? serial;
     if (test.isApproved && !retest) {
@@ -262,13 +279,19 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
         );
       } else {
         serial = candidate;
-        await db.addLabelToBuffer(serial: serial, numeroOp: test.numeroOp);
+        final config = _ref.read(appConfigProvider);
+        if (config.markingMode == MarkingMode.laser) {
+          await db.addToMarkQueue(serial: serial, numeroOp: test.numeroOp);
+          await _maybeStartMarkServer();
+        } else {
+          await db.addLabelToBuffer(serial: serial, numeroOp: test.numeroOp);
+          await _maybePrintLabels(db);
+        }
         await db.bumpSerialCounter(
           idProduto: test.idProduto,
           ano: test.ano,
           sequencial: test.sequencial,
         );
-        await _maybePrintLabels(db);
         _advanceBatchSequencial(deviceId, test);
       }
     }
@@ -282,6 +305,10 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
       aprovadosNoLote: test.aprovadosNoLote,
       serial: serial,
       operador: operadorFinal,
+      tempoTesteSec: batch?.tempoTeste,
+      potenciaMin: batch?.potenciaMin,
+      potenciaMax: batch?.potenciaMax,
+      operatorId: operatorId,
       isRetest: retest,
     );
     await _ref.read(firestoreSyncServiceProvider).enqueueTestResult(
@@ -289,6 +316,10 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
       test: test,
       serial: serial,
       operador: operadorFinal,
+      operatorCodigo: operatorCodigo,
+      tempoTesteSec: batch?.tempoTeste,
+      potenciaMin: batch?.potenciaMin,
+      potenciaMax: batch?.potenciaMax,
       isRetest: retest,
     );
     _ref.read(localDataRevisionProvider.notifier).state++;
@@ -359,12 +390,14 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
   }
 
   Future<void> _maybePrintLabels(AppDatabase db) async {
+    final config = _ref.read(appConfigProvider);
+    if (config.markingMode == MarkingMode.laser) return;
+
     final entries = await db.getLabelBuffer();
     if (entries.length < 3 || entries.length % 3 != 0) return;
 
     final toPrint = entries.take(3).toList();
     final items = await resolveLabelZplItems(db, toPrint.map((e) => e.serial).toList());
-    final config = _ref.read(appConfigProvider);
     final printer = createLabelPrinterTransport(config);
 
     try {
@@ -377,12 +410,26 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
     }
   }
 
+  Future<void> _maybeStartMarkServer() async {
+    try {
+      await _ref.read(markQueueProcessorProvider).ensureRunning();
+      _ref.read(markFailureProvider.notifier).state = null;
+    } catch (e) {
+      _ref.read(markFailureProvider.notifier).state = formatMarkingError(e);
+    }
+  }
+
   Future<void> _flushLabelsForOp(AppDatabase db, String numeroOp) async {
+    final config = _ref.read(appConfigProvider);
+    if (config.markingMode == MarkingMode.laser) {
+      await _maybeStartMarkServer();
+      return;
+    }
+
     final entries = await db.getLabelBuffer();
     final opEntries = entries.where((e) => e.numeroOp == numeroOp).toList();
     if (opEntries.isEmpty) return;
 
-    final config = _ref.read(appConfigProvider);
     final printer = createLabelPrinterTransport(config);
     final items = await resolveLabelZplItems(db, opEntries.map((e) => e.serial).toList());
     final printEntries = <({int id, LabelZplItem item})>[];

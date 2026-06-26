@@ -6,6 +6,7 @@ import '../../../core/providers/core_providers.dart';
 import '../../products/products_provider.dart';
 import '../auth/auth_providers.dart';
 import '../firebase_bootstrap.dart';
+import '../../operators/operators_provider.dart';
 import 'catalog_cloud_service.dart';
 import 'firestore_sync_service.dart';
 import 'sync_queue_processor.dart';
@@ -67,9 +68,15 @@ final catalogCloudServiceProvider = Provider<CatalogCloudService?>((ref) {
   final db = ref.watch(databaseProvider);
   return CatalogCloudService(
     db: db,
-    reader: () async {
+    productReader: () async {
       final snapshot = await FirebaseFirestore.instance.collection('products').get();
       return snapshot.docs.map((d) => _normalizeFirestore(d.data())).toList();
+    },
+    operatorReader: () async {
+      final snapshot = await FirebaseFirestore.instance.collection('operators').get();
+      return snapshot.docs
+          .map((d) => _normalizeFirestore({...d.data(), 'codigo': d.id}))
+          .toList();
     },
   );
 });
@@ -121,7 +128,9 @@ Future<void> retryFailedSyncItems(WidgetRef ref, {int? itemId}) async {
 
 Future<int> syncCatalogToCloud(WidgetRef ref) async {
   final sync = ref.read(firestoreSyncServiceProvider);
-  final count = await sync.syncAllProducts();
+  final products = await sync.syncAllProducts();
+  final operators = await sync.syncAllOperators();
+  final count = products + operators;
   if (count > 0) {
     await ref.read(syncQueueProcessorProvider).processQueue();
   }
@@ -129,15 +138,36 @@ Future<int> syncCatalogToCloud(WidgetRef ref) async {
   return count;
 }
 
-/// Baixa o catálogo da nuvem e aplica no SQLite. Retorna quantos foram aplicados.
+/// Baixa produtos e operadores da nuvem. Retorna total aplicado.
 Future<int> pullCatalogFromCloud(WidgetRef ref) async {
   final service = ref.read(catalogCloudServiceProvider);
   if (service == null) return 0;
-  final applied = await service.pull();
-  if (applied > 0) {
+  final result = await service.pullAll();
+  if (result.products > 0) {
     ref.invalidate(productsStreamProvider);
   }
-  return applied;
+  if (result.operators > 0) {
+    ref.invalidate(operatorsStreamProvider);
+    ref.invalidate(activeOperatorsStreamProvider);
+  }
+  return result.total;
+}
+
+/// Detalhe do pull para mensagens na UI.
+Future<CatalogPullResult> pullCatalogDetailFromCloud(WidgetRef ref) async {
+  final service = ref.read(catalogCloudServiceProvider);
+  if (service == null) {
+    return const CatalogPullResult(products: 0, operators: 0);
+  }
+  final result = await service.pullAll();
+  if (result.products > 0) {
+    ref.invalidate(productsStreamProvider);
+  }
+  if (result.operators > 0) {
+    ref.invalidate(operatorsStreamProvider);
+    ref.invalidate(activeOperatorsStreamProvider);
+  }
+  return result;
 }
 
 Future<void> setSyncEnabled(WidgetRef ref, bool enabled) async {

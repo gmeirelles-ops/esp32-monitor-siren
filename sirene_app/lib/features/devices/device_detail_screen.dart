@@ -8,6 +8,7 @@ import '../../shared/portuguese_labels.dart';
 import '../../shared/widgets/diponto_app_bar.dart';
 import '../bancadas/bancadas_provider.dart';
 import '../mqtt/mqtt_providers.dart';
+import '../firmware/firmware_update_screen.dart';
 
 class DeviceDetailScreen extends ConsumerWidget {
   const DeviceDetailScreen({super.key, required this.deviceId});
@@ -72,6 +73,18 @@ class DeviceDetailScreen extends ConsumerWidget {
             _InfoTile('Potência', '${device.lastTestResult!.potenciaMedia.toStringAsFixed(2)} W'),
             _InfoTile('Sequencial', '${device.lastTestResult!.sequencial}'),
           ],
+          const SizedBox(height: 16),
+          OutlinedButton.icon(
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => FirmwareUpdateScreen(initialDeviceId: deviceId),
+                ),
+              );
+            },
+            icon: const Icon(Icons.system_update_alt),
+            label: const Text('Atualizar firmware'),
+          ),
         ],
       ),
     );

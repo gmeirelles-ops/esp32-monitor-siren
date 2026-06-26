@@ -41,5 +41,22 @@ service cloud.firestore {
     match /products/{productId} {
       allow read, write: if isAuthenticated();
     }
+
+    match /operators/{codigo} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // Collection group queries (app gestor — analytics em seriais/reprovadas)
+    match /{path=**}/seriais/{serial} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated() && hasStationId();
+      allow delete: if false;
+    }
+
+    match /{path=**}/reprovadas/{sequencial} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated() && hasStationId();
+      allow delete: if false;
+    }
   }
 }

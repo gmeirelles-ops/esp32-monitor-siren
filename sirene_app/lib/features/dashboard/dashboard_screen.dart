@@ -7,12 +7,12 @@ import '../../shared/display_labels.dart';
 import '../../shared/portuguese_labels.dart';
 import '../../shared/widgets/desktop_form_layout.dart';
 import '../../shared/widgets/empty_state_view.dart';
-import '../../shared/widgets/form_section_card.dart';
 import '../../shared/widgets/screen_app_bar.dart';
 import '../../shared/widgets/simple_bar_chart.dart';
 import '../bancadas/bancadas_provider.dart';
-import '../mqtt/mqtt_providers.dart';
+import '../operators/operators_provider.dart';
 import '../products/products_provider.dart';
+import 'dashboard_batch_status.dart';
 import 'dashboard_providers.dart';
 
 class DashboardScreen extends ConsumerWidget {
@@ -20,6 +20,16 @@ class DashboardScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final isGestor = ref.watch(activeOperatorIsGestorProvider);
+    if (!isGestor) {
+      return Scaffold(
+        appBar: screenAppBar(context, title: 'Painel'),
+        body: const Center(
+          child: Text('Acesso restrito a gestores. Faça login com um operador marcado como Gestor.'),
+        ),
+      );
+    }
+
     final filters = ref.watch(dashboardFiltersProvider);
     final dashboardAsync = ref.watch(dashboardDataProvider);
     final bancadas = ref.watch(bancadasMapProvider).valueOrNull ?? {};
@@ -30,9 +40,10 @@ class DashboardScreen extends ConsumerWidget {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('Erro ao carregar painel: $e')),
         data: (data) => ListView(
+          padding: const EdgeInsets.symmetric(vertical: 16),
           children: [
             DesktopFormLayout(
-              maxWidth: 760,
+              maxWidth: 1280,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -56,114 +67,161 @@ class DashboardScreen extends ConsumerWidget {
                       ),
                     )
                   else ...[
-                    _MetricsRow(summary: data.summary, faults: data.faults),
+                    _KpiRow(
+                      summary: data.summary,
+                      faults: data.faults,
+                      yieldTrendPct: data.yieldTrendPct,
+                      reprovadosTrendPct: data.reprovadosTrendPct,
+                    ),
                     const SizedBox(height: 16),
-                    FormSectionCard(
-                      title: _throughputTitle(filters.period),
-                      child: SimpleBarChart(
-                        bars: [
-                          for (final d in data.throughput)
-                            SimpleBarChartBar(
-                              label: '${d.day.day}/${d.day.month}',
-                              value: d.total.toDouble(),
-                              stackedValue: d.aprovados.toDouble(),
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _throughputTitle(filters.period),
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                             ),
-                        ],
-                        showLegend: true,
-                        legendTotalLabel: 'Testado',
-                        legendStackedLabel: 'Aprovados',
-                        valueFormatter: (v) => v.toInt().toString(),
+                            const SizedBox(height: 12),
+                            SimpleBarChart(
+                              bars: [
+                                for (final d in data.throughput)
+                                  SimpleBarChartBar(
+                                    label: '${d.day.day}/${d.day.month}',
+                                    value: d.total.toDouble(),
+                                    stackedValue: d.aprovados.toDouble(),
+                                  ),
+                              ],
+                              showLegend: true,
+                              legendTotalLabel: 'Testado',
+                              legendStackedLabel: 'Aprovados',
+                              valueFormatter: (v) => v.toInt().toString(),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                     const SizedBox(height: 16),
-                    FormSectionCard(
-                      title: PortugueseLabels.rendimentoPorDia,
-                      child: SimpleBarChart(
-                        bars: [
-                          for (final d in data.throughput)
-                            SimpleBarChartBar(
-                              label: '${d.day.day}/${d.day.month}',
-                              value: d.total == 0 ? 0 : (d.aprovados / d.total) * 100,
-                              color: DipontoColors.success,
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Análise de rendimento diário',
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                             ),
-                        ],
-                        defaultColor: DipontoColors.success,
-                        valueFormatter: (v) => '${v.toStringAsFixed(0)}%',
+                            const SizedBox(height: 12),
+                            SimpleBarChart(
+                              bars: [
+                                for (final d in data.throughput)
+                                  SimpleBarChartBar(
+                                    label: '${d.day.day}/${d.day.month}',
+                                    value: d.total == 0 ? 0 : (d.aprovados / d.total) * 100,
+                                    color: DipontoColors.success,
+                                  ),
+                              ],
+                              defaultColor: DipontoColors.success,
+                              valueFormatter: (v) => '${v.toStringAsFixed(0)}%',
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Meta: ${defaultYieldTargetPct.toStringAsFixed(0)}%',
+                              style: TextStyle(
+                                color: DipontoColors.onSurface.withValues(alpha: 0.6),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                     if (data.batchSummaries.isNotEmpty) ...[
                       const SizedBox(height: 16),
-                      FormSectionCard(
-                        title: 'Produção por lote',
-                        child: Column(
-                          children: [
-                            for (final batch in data.batchSummaries)
-                              Card(
-                                margin: const EdgeInsets.only(bottom: 6),
-                                child: ListTile(
-                                  dense: true,
-                                  title: Text('OP ${batch.numeroOp}'),
-                                  subtitle: Text(
-                                    '${batch.aprovados} aprovados · ${batch.reprovados} reprovados · '
-                                    'rendimento ${batch.yieldPct.toStringAsFixed(1)}%',
-                                  ),
-                                  trailing: Text(
-                                    '${batch.total} testes',
-                                    style: const TextStyle(fontWeight: FontWeight.bold),
-                                  ),
+                      Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Produção por lote',
+                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                              ),
+                              const SizedBox(height: 12),
+                              SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                child: DataTable(
+                                  columns: const [
+                                    DataColumn(label: Text('Nº Lote')),
+                                    DataColumn(label: Text('Testes totais')),
+                                    DataColumn(label: Text('Aprovados')),
+                                    DataColumn(label: Text('Reprovados')),
+                                    DataColumn(label: Text('Rendimento (%)')),
+                                    DataColumn(label: Text('Status')),
+                                  ],
+                                  rows: [
+                                    for (final batch in data.batchSummaries)
+                                      DataRow(
+                                        cells: [
+                                          DataCell(Text('OP ${batch.numeroOp}')),
+                                          DataCell(Text('${batch.total} testes')),
+                                          DataCell(Text('${batch.aprovados}')),
+                                          DataCell(
+                                            Text(
+                                              '${batch.reprovados}',
+                                              style: batch.reprovados > 0
+                                                  ? const TextStyle(color: DipontoColors.error)
+                                                  : null,
+                                            ),
+                                          ),
+                                          DataCell(Text('${batch.yieldPct.toStringAsFixed(1)}%')),
+                                          DataCell(
+                                            _StatusChip(status: batchStatusFor(batch)),
+                                          ),
+                                        ],
+                                      ),
+                                  ],
                                 ),
                               ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
                     ],
                     if (data.faults.isNotEmpty) ...[
                       const SizedBox(height: 16),
-                      FormSectionCard(
-                        title: 'Falhas de hardware',
-                        child: SimpleBarChart(
-                          bars: [
-                            for (final f in data.faults)
-                              SimpleBarChartBar(
-                                label: f.falha,
-                                value: f.count.toDouble(),
-                                color: DipontoColors.error,
+                      Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Falhas de hardware',
+                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                               ),
-                          ],
-                          defaultColor: DipontoColors.error,
-                          valueFormatter: (v) => v.toInt().toString(),
+                              const SizedBox(height: 12),
+                              SimpleBarChart(
+                                bars: [
+                                  for (final f in data.faults)
+                                    SimpleBarChartBar(
+                                      label: f.falha,
+                                      value: f.count.toDouble(),
+                                      color: DipontoColors.error,
+                                    ),
+                                ],
+                                defaultColor: DipontoColors.error,
+                                valueFormatter: (v) => v.toInt().toString(),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ],
                   ],
-                  const SizedBox(height: 16),
-                  FormSectionCard(
-                    title: 'Alertas recentes',
-                    child: data.recentAlerts.isEmpty
-                        ? Text(
-                            'Sem alertas recentes.',
-                            style: TextStyle(
-                              color: DipontoColors.onSurface.withValues(alpha: 0.6),
-                            ),
-                          )
-                        : Column(
-                            children: [
-                              for (final a in data.recentAlerts)
-                                ListTile(
-                                  contentPadding: EdgeInsets.zero,
-                                  dense: true,
-                                  leading: const Icon(
-                                    Icons.warning_amber_outlined,
-                                    color: DipontoColors.error,
-                                  ),
-                                  title: Text(a.falha),
-                                  subtitle: Text(
-                                    '${formatBancadaLabelFromMap(a.deviceId, bancadas)} — ${a.createdAt.toLocal()}',
-                                  ),
-                                ),
-                            ],
-                          ),
-                  ),
                 ],
               ),
             ),
@@ -175,9 +233,9 @@ class DashboardScreen extends ConsumerWidget {
 
   String _throughputTitle(DashboardPeriod period) {
     return switch (period) {
-      DashboardPeriod.today => 'Throughput (hoje)',
-      DashboardPeriod.week => 'Throughput (7 dias)',
-      DashboardPeriod.all => 'Throughput (30 dias)',
+      DashboardPeriod.today => 'Visão geral do atendimento (hoje)',
+      DashboardPeriod.week => 'Visão geral do atendimento (7 dias)',
+      DashboardPeriod.all => 'Visão geral do atendimento (30 dias)',
     };
   }
 }
@@ -298,11 +356,18 @@ class _FilterDropdown extends StatelessWidget {
   }
 }
 
-class _MetricsRow extends StatelessWidget {
-  const _MetricsRow({required this.summary, required this.faults});
+class _KpiRow extends StatelessWidget {
+  const _KpiRow({
+    required this.summary,
+    required this.faults,
+    this.yieldTrendPct,
+    this.reprovadosTrendPct,
+  });
 
   final ProductionSummary summary;
   final List<FaultCount> faults;
+  final double? yieldTrendPct;
+  final double? reprovadosTrendPct;
 
   @override
   Widget build(BuildContext context) {
@@ -311,24 +376,28 @@ class _MetricsRow extends StatelessWidget {
       spacing: 12,
       runSpacing: 12,
       children: [
-        _MetricCard(
+        _KpiCard(
           label: 'Testado',
           value: '${summary.total}',
           icon: Icons.fact_check_outlined,
+          trend: yieldTrendPct,
+          trendLabel: yieldTrendPct != null ? 'aprovados vs ontem' : null,
         ),
-        _MetricCard(
+        _KpiCard(
           label: PortugueseLabels.rendimento,
           value: '${summary.yieldPct.toStringAsFixed(1)}%',
           icon: Icons.trending_up,
           color: DipontoColors.success,
         ),
-        _MetricCard(
+        _KpiCard(
           label: 'Reprovados',
           value: '${summary.reprovados}',
           icon: Icons.cancel_outlined,
           color: DipontoColors.error,
+          trend: reprovadosTrendPct,
+          trendLabel: reprovadosTrendPct != null ? 'vs ontem' : null,
         ),
-        _MetricCard(
+        _KpiCard(
           label: 'Falhas HW',
           value: '$totalFaults',
           icon: Icons.warning_amber_outlined,
@@ -339,23 +408,27 @@ class _MetricsRow extends StatelessWidget {
   }
 }
 
-class _MetricCard extends StatelessWidget {
-  const _MetricCard({
+class _KpiCard extends StatelessWidget {
+  const _KpiCard({
     required this.label,
     required this.value,
     required this.icon,
     this.color,
+    this.trend,
+    this.trendLabel,
   });
 
   final String label;
   final String value;
   final IconData icon;
   final Color? color;
+  final double? trend;
+  final String? trendLabel;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 160,
+      width: 180,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: DipontoColors.cardElevated,
@@ -365,7 +438,7 @@ class _MetricCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(icon, color: color ?? DipontoColors.onSurface.withValues(alpha: 0.7)),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           Text(
             value,
             style: Theme.of(context).textTheme.headlineSmall?.copyWith(
@@ -377,8 +450,41 @@ class _MetricCard extends StatelessWidget {
             label,
             style: TextStyle(color: DipontoColors.onSurface.withValues(alpha: 0.6)),
           ),
+          if (trend != null && trendLabel != null)
+            Text(
+              '${trend! >= 0 ? '+' : ''}${trend!.toStringAsFixed(0)}% $trendLabel',
+              style: TextStyle(
+                color: trend! >= 0 ? DipontoColors.success : DipontoColors.error,
+                fontSize: 12,
+              ),
+            ),
         ],
       ),
+    );
+  }
+}
+
+class _StatusChip extends StatelessWidget {
+  const _StatusChip({required this.status});
+
+  final BatchStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    final (label, color) = switch (status) {
+      BatchStatus.concluido => ('Concluído', DipontoColors.success),
+      BatchStatus.revisar => ('Revisar', DipontoColors.error),
+      BatchStatus.emAndamento => ('Em andamento', Colors.blueAccent),
+    };
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color),
+      ),
+      child: Text(label, style: TextStyle(color: color, fontSize: 12)),
     );
   }
 }

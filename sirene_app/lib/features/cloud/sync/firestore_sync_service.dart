@@ -47,6 +47,10 @@ class FirestoreSyncService {
     required TestResultMessage test,
     String? serial,
     String? operador,
+    String? operatorCodigo,
+    int? tempoTesteSec,
+    double? potenciaMin,
+    double? potenciaMax,
     bool isRetest = false,
   }) async {
     if (!isActive) return;
@@ -76,8 +80,12 @@ class FirestoreSyncService {
           test: test,
           serial: serial,
           operador: operador,
+          operatorCodigo: operatorCodigo,
           stationId: stationId,
           timestamp: timestamp,
+          tempoTesteSec: tempoTesteSec,
+          potenciaMin: potenciaMin,
+          potenciaMax: potenciaMax,
           isRetest: isRetest,
         ),
         operation: 'set',
@@ -92,8 +100,12 @@ class FirestoreSyncService {
           deviceId: deviceId,
           test: test,
           operador: operador,
+          operatorCodigo: operatorCodigo,
           stationId: stationId,
           timestamp: timestamp,
+          tempoTesteSec: tempoTesteSec,
+          potenciaMin: potenciaMin,
+          potenciaMax: potenciaMax,
           isRetest: isRetest,
         ),
         operation: 'set',
@@ -199,6 +211,30 @@ class FirestoreSyncService {
     await _db.enqueueSync(
       collection: 'products',
       documentId: product.idProduto,
+      payload: jsonEncode(payload),
+      operation: 'set',
+    );
+  }
+
+  Future<void> enqueueOperator(Operator operator) async {
+    if (!isActive) return;
+    await _enqueueOperatorToQueue(operator);
+  }
+
+  Future<int> syncAllOperators() async {
+    if (!isActive) return 0;
+    final operators = await _db.getAllOperators();
+    for (final operator in operators) {
+      await _enqueueOperatorToQueue(operator);
+    }
+    return operators.length;
+  }
+
+  Future<void> _enqueueOperatorToQueue(Operator operator) async {
+    final payload = mapOperator(operator: operator, updatedAt: DateTime.now());
+    await _db.enqueueSync(
+      collection: 'operators',
+      documentId: operator.codigo,
       payload: jsonEncode(payload),
       operation: 'set',
     );

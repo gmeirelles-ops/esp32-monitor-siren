@@ -1,7 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/database/database.dart';
+import '../../core/database/veredito.dart';
 import '../../core/providers/core_providers.dart';
+import 'dashboard_batch_status.dart';
 import 'dashboard_filters.dart';
 
 export 'dashboard_filters.dart' show DashboardFilters, DashboardPeriod, sinceForDashboardPeriod;
@@ -14,6 +16,8 @@ class DashboardData {
     required this.recentAlerts,
     required this.batchSummaries,
     required this.filterOptions,
+    this.yieldTrendPct,
+    this.reprovadosTrendPct,
   });
 
   final ProductionSummary summary;
@@ -22,6 +26,8 @@ class DashboardData {
   final List<HardwareEvent> recentAlerts;
   final List<BatchProductionSummary> batchSummaries;
   final DashboardFilterOptions filterOptions;
+  final double? yieldTrendPct;
+  final double? reprovadosTrendPct;
 }
 
 class DashboardFilterOptions {
@@ -86,6 +92,40 @@ final dashboardDataProvider = FutureProvider<DashboardData>((ref) async {
     devices: await db.deviceIdsOrderedByBancada(),
   );
 
+  double? yieldTrend;
+  double? reprovTrend;
+  if (filters.period == DashboardPeriod.today && since != null) {
+    final yesterdayStart = since.subtract(const Duration(days: 1));
+    final rows = await db.testResultsFiltered(
+      since: yesterdayStart,
+      numeroOp: op,
+      idProduto: product,
+      deviceId: device,
+    );
+    var todayAprovados = 0;
+    var todayReprovados = 0;
+    var yesterdayAprovados = 0;
+    var yesterdayReprovados = 0;
+    for (final r in rows) {
+      final approved = isApprovedVeredito(r.veredito);
+      if (!r.createdAt.isBefore(since)) {
+        if (approved) {
+          todayAprovados++;
+        } else {
+          todayReprovados++;
+        }
+      } else if (!r.createdAt.isBefore(yesterdayStart)) {
+        if (approved) {
+          yesterdayAprovados++;
+        } else {
+          yesterdayReprovados++;
+        }
+      }
+    }
+    yieldTrend = percentChange(todayAprovados, yesterdayAprovados);
+    reprovTrend = percentChange(todayReprovados, yesterdayReprovados);
+  }
+
   return DashboardData(
     summary: summary,
     throughput: throughput,
@@ -93,5 +133,7 @@ final dashboardDataProvider = FutureProvider<DashboardData>((ref) async {
     recentAlerts: recentAlerts,
     batchSummaries: batchSummaries,
     filterOptions: filterOptions,
+    yieldTrendPct: yieldTrend,
+    reprovadosTrendPct: reprovTrend,
   );
 });

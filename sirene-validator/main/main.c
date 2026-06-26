@@ -20,6 +20,7 @@
 #include "pzem.h"
 #include "pure_logic.h"
 #include "relay.h"
+#include "sdkconfig.h"
 #include "state_machine.h"
 #include "telemetry.h"
 #include "wifi_prov.h"
@@ -62,6 +63,7 @@ static void handle_end_batch_with_reason(const char *motivo);
 static void handle_start_calibration(void);
 static void on_calibration_sample(float power_w, uint32_t elapsed_ms, void *ctx);
 static void handle_ota_update(cJSON *root);
+static void handle_pzem_probe(void);
 static void publish_test_result(bool approved, float potencia_media, uint32_t sequencial_usado);
 static void process_mqtt_payload(const char *payload);
 static void worker_task(void *arg);
@@ -331,6 +333,17 @@ static void handle_ota_update(cJSON *root)
     }
 }
 
+static void handle_pzem_probe(void)
+{
+    float power = 0;
+    bool ok = pzem_probe_read(&power);
+    char json[128];
+    snprintf(json, sizeof(json),
+             "{\"tipo\":\"pzem\",\"evento\":\"probe\",\"potencia_w\":%.2f,\"uart_ok\":%s}",
+             power, ok ? "true" : "false");
+    publish_or_queue("status", json);
+}
+
 static void process_mqtt_payload(const char *payload)
 {
     cJSON *root = cJSON_Parse(payload);
@@ -362,6 +375,8 @@ static void process_mqtt_payload(const char *payload)
         }
     } else if (strcmp(cmd->valuestring, "OTA_UPDATE") == 0) {
         handle_ota_update(root);
+    } else if (strcmp(cmd->valuestring, "PZEM_PROBE") == 0) {
+        handle_pzem_probe();
     } else {
         mqtt_bridge_publish_rejection("cmd_desconhecido");
     }
@@ -394,7 +409,7 @@ static bool mqtt_cmd_blocked_during_test(const char *payload)
     }
     p++;
 
-    static const char *blocked[] = {"SET_BATCH", "END_BATCH", "START_CALIBRATION", "OTA_UPDATE", NULL};
+    static const char *blocked[] = {"SET_BATCH", "END_BATCH", "START_CALIBRATION", "OTA_UPDATE", "PZEM_PROBE", NULL};
     for (int i = 0; blocked[i] != NULL; i++) {
         size_t n = strlen(blocked[i]);
         if (strncmp(p, blocked[i], n) == 0 && p[n] == '"') {
@@ -571,6 +586,17 @@ void app_main(void)
     button_init(s_button_queue);
     offline_queue_init();
     telemetry_init();
+
+#if !CONFIG_DEV_MOCK_PZEM
+    if (!pzem_boot_self_test()) {
+        s_state_before_fault = state_machine_get();
+        state_machine_set(STATE_HARDWARE_FAULT);
+        led_feedback_signal(FEEDBACK_FAULT);
+        char alerta[128];
+        snprintf(alerta, sizeof(alerta), "{\"tipo\":\"hardware\",\"falha\":\"pzem_uart_boot\"}");
+        publish_or_queue("alerta", alerta);
+    }
+#endif
 
     ESP_LOGI(TAG, "device_id=%s firmware=%s", device_id_get(), FIRMWARE_VERSION);
 

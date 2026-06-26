@@ -6,7 +6,7 @@ Guia para colocar firmware v1.3.0 + app Flutter em operação no posto.
 
 - [ ] Broker Mosquitto na LAN (ex.: `192.168.51.87:1883` — IP do servidor de fábrica)
 - [ ] Wi-Fi industrial estável na área da linha
-- [ ] PC Windows no posto com acesso à rede MQTT e à impressora Zebra
+- [ ] PC Windows no posto com acesso à rede MQTT e à impressora Zebra **ou** laser Diatu (DiatuCAD)
 
 ## 2. Firmware (ESP32)
 
@@ -48,7 +48,35 @@ Pré-requisito adicional: [Inno Setup 6](https://jrsoftware.org/isdl.php) (`choc
 **No PC do posto:**
 1. Execute o setup (SmartScreen pode alertar — app não assinado)
 2. Use o atalho **Diponto Sirene Validator** no Menu Iniciar
-3. Dados SQLite ficam em `%APPDATA%` (reinstalar preserva configuração local)
+3. Dados SQLite ficam em `Documentos\sirene_app.sqlite` (reinstalar preserva dados locais)
+
+> **Login de operador:** toda abertura do app exige seleção de nome + PIN. A sessão não persiste entre execuções — feche e reabra para validar o fluxo no posto.
+
+> **Setup do posto:** na primeira execução (ou após reset), o app pede para vincular **uma bancada** ao PC. A tela de Lote não permite trocar bancada — use **Configurações → Manutenção do posto**. Ano e próximo sequencial do lote são calculados automaticamente.
+
+> **Reset geral:** em **Configurações → Manutenção do posto → Reset geral do posto**, digite `ZERAR` para apagar SQLite (`Documentos\sirene_app.sqlite`), preferências locais, vínculo de bancada e flag de Wi-Fi. Reabra o app e reconfigure login + bancada.
+
+> **Reimprimir / regravar:** em modo **Etiquetas**, a busca por serial reimprime ZPL; em modo **Gravação laser**, enfileira regravação (F2 no DiatuCAD).
+
+> **Catálogo na nuvem:** com sync habilitado, **Baixar catálogo** traz produtos e operadores da coleção Firestore `operators/{PIN}`.
+
+## 4. App gestor (escritório)
+
+App separado **`sirene_manager_app`** — dashboard analítico para supervisores, lendo dados sincronizados no Firestore (sem MQTT).
+
+```powershell
+cd sirene_manager_app
+flutterfire configure   # mesmo projeto Firebase dos postos
+flutter pub get
+flutter run -d windows
+# ou: powershell -File ..\scripts\build_manager_windows.ps1
+```
+
+- Login com conta Firebase (gestor)
+- KPIs, gráficos 7 dias, tabela **Produção por lote** (sem coluna Ações)
+- Postos precisam ter **sync Firestore habilitado** para alimentar o painel
+
+No app **operador**: botão de lote = **INICIAR**; item **Painel** removido do menu (resumo do dia na tela Lote).
 
 ### Pendrive / distribuição portátil
 
@@ -56,7 +84,14 @@ Gera ZIP pronto para copiar no pendrive e testar no posto:
 
 **No Windows (dev):**
 ```powershell
+# Build completo + ZIP em dist/
 powershell -ExecutionPolicy Bypass -File scripts\build_windows_release.ps1
+
+# Ou pelo helper (usa caminho S: se houver acento na pasta)
+powershell -ExecutionPolicy Bypass -File scripts\flutter_dev.ps1 dist
+
+# Ja compilou com flutter build windows --release? So atualiza dist/
+powershell -ExecutionPolicy Bypass -File scripts\sync_dist.ps1
 ```
 
 **ZIP + instalador de uma vez:**
@@ -88,7 +123,7 @@ dist/DipontoSireneValidator-<versão>-win64/
     └── data/   ← obrigatório; não copie só o .exe
 ```
 
-> Dados SQLite ficam no perfil do usuário Windows (`%APPDATA%`), não no pendrive.
+> Dados SQLite ficam em `Documentos\sirene_app.sqlite` no perfil do usuário Windows, não no pendrive.
 
 ### Build manual (alternativa)
 
@@ -105,7 +140,8 @@ Copie `build/windows/x64/runner/Release/` inteira para o posto.
 
 Configure em **Configurações**:
 - Broker MQTT (host + porta) — deve coincidir com o broker provisionado nos ESP32
-- Impressora Zebra:
+- **Marcação de serial:** Etiquetas (Zebra) **ou** Gravação laser (Diatu) — ver [`docs/laser-reference/`](../laser-reference/README.md)
+- Impressora Zebra (modo Etiquetas):
   - **USB (recomendado):** ZT230 conectada ao PC do posto; instale o driver Zebra ZPL; selecione o nome da impressora no app
   - **Rede (opcional):** IP + porta 9100 (cartão de rede ou print server)
 
@@ -120,6 +156,22 @@ Configure em **Configurações**:
    - [ ] Linha de 3 seriais aprovados imprime alinhada
    - [ ] Reimpressão avulsa avisa que consome linha inteira (3 posições)
    - [ ] Órfãs (1–2 no buffer): impressão manual pelo operador
+
+### Laser Diatu B3 (modo Gravação)
+
+1. Instale **DiatuCAD1** e conecte a placa USB do laser (sair do modo demonstração)
+2. Crie template com **Texto variável → TCP/IP** — ver [`docs/laser-reference/diatu-tcp.md`](../laser-reference/diatu-tcp.md)
+3. No app: **Configurações** → **Gravação laser (Diatu)** → porta TCP (padrão 9101) → **Salvar**
+4. Checklist laser (8 passos):
+   - [ ] Modo **Gravação laser** salvo (não Etiquetas)
+   - [ ] Comando TCP idêntico no app e no DiatuCAD (`TCP: Give me string`)
+   - [ ] **Marca de controlo TCP** desativada no Diaotu (evita conflito de porta)
+   - [ ] **Testar gravação** enfileira `0000000000`
+   - [ ] **Simular DiatuCAD** no painel diagnóstico retorna `0000000000`
+   - [ ] `scripts\test_laser_tcp.ps1` retorna serial (não `ERROR:*`)
+   - [ ] F2 no DiatuCAD grava serial na carcaça
+   - [ ] Aprovação real na bancada → serial ITF gravado via F2
+5. Em falha: capturar log do painel **Diagnóstico laser** e anexar ao relatório
 
 ### Firebase / Firestore (opcional — nuvem)
 
@@ -158,11 +210,12 @@ Para cada modelo de sirene:
 
 ## 5. Operação diária
 
-1. **Lote** → selecione dispositivo + produto cadastrado
-2. Informe OP, ano, quantidade e sequencial → **SET_BATCH**
-3. Operador pressiona **botão físico** para cada teste
-4. Aprovações geram serial e buffer de etiquetas (múltiplos de 3)
-5. **Encerrar lote** ao atingir a meta
+1. **Login** → selecione operador e informe PIN (obrigatório em toda abertura)
+2. **Lote** → selecione dispositivo + produto cadastrado
+3. Informe OP, ano, quantidade e sequencial → **SET_BATCH**
+4. Operador pressiona **botão físico** para cada teste
+5. Aprovações geram serial (etiqueta ou fila laser conforme modo em Configurações)
+6. **Encerrar lote** ao atingir a meta
 
 ## 6. Atualizações
 

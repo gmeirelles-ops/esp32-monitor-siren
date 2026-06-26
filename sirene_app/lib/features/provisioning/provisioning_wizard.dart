@@ -1,19 +1,21 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
+import '../../core/providers/core_providers.dart';
 import '../../core/theme/diponto_theme.dart';
 
-class ProvisioningWizard extends StatefulWidget {
+class ProvisioningWizard extends ConsumerStatefulWidget {
   const ProvisioningWizard({super.key});
 
   @override
-  State<ProvisioningWizard> createState() => _ProvisioningWizardState();
+  ConsumerState<ProvisioningWizard> createState() => _ProvisioningWizardState();
 }
 
-class _ProvisioningWizardState extends State<ProvisioningWizard> {
+class _ProvisioningWizardState extends ConsumerState<ProvisioningWizard> {
   static const _portalUrl = 'http://192.168.4.1';
 
   bool _showWebView = false;
@@ -56,6 +58,15 @@ class _ProvisioningWizardState extends State<ProvisioningWizard> {
     } else {
       _showMessage('Não foi possível abrir $uri');
     }
+  }
+
+  Future<void> _markProvisioned() async {
+    await ref.read(appConfigProvider).setWifiProvisioned(true);
+    ref.invalidate(appConfigProvider);
+    ref.invalidate(wifiProvisionedProvider);
+    if (!mounted) return;
+    _showMessage('Wi-Fi marcado como provisionado neste posto');
+    Navigator.of(context).pop();
   }
 
   void _showMessage(String msg) {
@@ -129,6 +140,12 @@ class _ProvisioningWizardState extends State<ProvisioningWizard> {
                     label: const Text('Abrir no navegador'),
                   ),
                 ],
+                const SizedBox(height: 24),
+                OutlinedButton.icon(
+                  onPressed: _markProvisioned,
+                  icon: const Icon(Icons.check_circle_outline),
+                  label: const Text('Concluir provisionamento'),
+                ),
               ],
             ),
     );

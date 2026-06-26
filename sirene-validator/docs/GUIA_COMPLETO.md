@@ -89,8 +89,8 @@ sirene-validator/components/board_config/include/board_config.h
 
 | Função | GPIO | Direção | Descrição |
 |--------|------|---------|-----------|
-| **Relé** | `26` | Saída | Energiza a sirene sob teste. **Sempre desligado no boot.** |
-| **Botão** | `27` | Entrada (pull-up) | Dispara o ciclo de teste. Debounce 50 ms. |
+| **Relé** | `4` | Saída | Energiza a sirene sob teste. **Sempre desligado no boot.** |
+| **Botão** | `5` | Entrada (pull-up) | Dispara o ciclo de teste. Debounce 50 ms. |
 | **LED status** | `25` | Saída | Feedback visual (aprovado/falha). |
 | **Buzzer** | `33` | Saída | Feedback sonoro (reprovado/falha). |
 
@@ -99,18 +99,18 @@ sirene-validator/components/board_config/include/board_config.h
 | Parâmetro | Valor |
 |-----------|-------|
 | UART | `UART_NUM_2` |
-| TX (ESP32 → PZEM) | GPIO `17` |
-| RX (ESP32 ← PZEM) | GPIO `16` |
+| TX (ESP32 → PZEM) | GPIO `27` |
+| RX (ESP32 ← PZEM) | GPIO `26` |
 | Baud rate | `9600` |
-| Endereço Modbus | `0xF8` |
+| Endereço Modbus | `0x01` (v3.0 de fábrica usa `0xF8`) |
 
 ### Ligação sugerida
 
 ```
-ESP32 GPIO 17 (TX) ──► RX do PZEM-004T
-ESP32 GPIO 16 (RX) ◄── TX do PZEM-004T
-ESP32 GPIO 26      ──► IN do módulo relé ──► Sirene em teste
-ESP32 GPIO 27      ◄── Botão (GND ao pressionar, pull-up interno)
+ESP32 GPIO 27 (TX) ──► RX do PZEM-004T
+ESP32 GPIO 26 (RX) ◄── TX do PZEM-004T
+ESP32 GPIO 4       ──► IN do módulo relé ──► Sirene em teste
+ESP32 GPIO 5       ◄── Botão (GND ao pressionar, pull-up interno)
 ESP32 GPIO 25      ──► LED + resistor
 ESP32 GPIO 33      ──► Buzzer
 ```
@@ -329,6 +329,27 @@ Limpa NVS do lote e vai para `IDLE`. Rejeitado durante `TESTING`.
 
 Mede 5 s, publica amostras em tempo real e média final em `calibracao`. Só aceito em `IDLE`. Usado pelo app na tela **Produtos** para autocalibrar SKUs.
 
+#### PZEM_PROBE — Diagnóstico UART/PZEM
+
+```json
+{ "cmd": "PZEM_PROBE" }
+```
+
+Resposta em `status`:
+
+```json
+{
+  "tipo": "pzem",
+  "evento": "probe",
+  "potencia_w": 0.0,
+  "uart_ok": true
+}
+```
+
+- Não energiza o relé
+- Rejeitado durante `TESTING` ou calibração
+- Útil para validar ligação TX/RX antes de iniciar lote
+
 #### OTA_UPDATE — Atualizar firmware
 
 ```json
@@ -341,6 +362,28 @@ Mede 5 s, publica amostras em tempo real e média final em `calibracao`. Só ace
 - URL deve começar com `http://` ou `https://`
 - Rejeitado durante `TESTING`
 - Relé desligado durante o download
+
+##### Passo a passo OTA (produção)
+
+1. **Compilar** o firmware no PC: `idf.py build` → gera `build/sirene-validator.bin`
+2. **Servir o binário** na mesma LAN do ESP32:
+   ```bash
+   cd build && python3 -m http.server 8080
+   ```
+   Anote o IP do PC (ex.: `192.168.51.10`). URL: `http://192.168.51.10:8080/sirene-validator.bin`
+3. **Descobrir `device_id`**: assine `sirene/+/heartbeat` e anote o ID do dispositivo
+4. **Enviar comando** em `sirene/<device_id>/comando`:
+   ```json
+   { "cmd": "OTA_UPDATE", "url": "http://192.168.51.10:8080/sirene-validator.bin" }
+   ```
+5. **Monitorar** `sirene/<device_id>/status` — eventos `tipo:ota` (`inicio`, `sucesso`, `falha`)
+6. **Confirmar** após reboot: `firmware_version` no heartbeat (ex.: `"1.4.1"`)
+
+Script auxiliar (build + serve + MQTT):
+
+```bash
+DEVICE_ID=<id> ./scripts/serve_firmware_and_ota.sh
+```
 
 ### Mensagens publicadas pelo ESP32
 
@@ -524,13 +567,30 @@ Sobrevive a reboot e queda de energia:
 
 ## 11. OTA (atualização remota)
 
+### Método recomendado — App Flutter (Windows)
+
+1. **Configurações** → **Atualizar firmware**
+2. Aba **Pela rede (OTA)**:
+   - Escolher `sirene-validator.bin`
+   - Selecionar bancada online
+   - **Iniciar atualização OTA** (o app serve o HTTP e envia MQTT automaticamente)
+3. Aba **Por USB (cabo)** (Windows):
+   - Selecionar porta COM
+   - Modo *Atualizar app* (`0x20000`) ou *Flash completo*
+   - **Gravar via USB** (usa `esptool` empacotado ou Python)
+
+Também acessível pelo detalhe da bancada → **Atualizar firmware**.
+
+Campanha para **várias bancadas**: Configurações → Administração.
+
 ### Pré-requisitos
 
 - Partições `ota_0` + `ota_1` + `otadata` (layout em `partitions.csv`)
-- Primeira gravação com layout OTA: **obrigatoriamente por cabo USB**
-- Servidor HTTP(S) servindo o `.bin` na mesma rede
+- Primeira gravação com layout OTA: **obrigatoriamente por cabo USB** (aba USB → flash completo)
+- PC e ESP32 na mesma rede (OTA)
+- Firewall Windows: liberar porta HTTP local (padrão `8080`) se OTA falhar
 
-### Servir binário (exemplo)
+### Alternativa manual — Python + MQTT Explorer
 
 ```bash
 cd /tmp/sv_build  # ou diretório do build
@@ -664,7 +724,7 @@ Local: `sirene_app/` (Windows desktop em produção)
 - Monitoramento em tempo real (estado FSM, resultados)
 - Geração de serial ITF 2 de 5 em aprovações
 - Buffer de etiquetas ZPL (múltiplos de 3)
-- Calibração e OTA (seção Admin)
+- Calibração e **Atualizar firmware** (OTA + USB em Configurações; campanha em Admin)
 - Provisionamento Wi-Fi guiado
 - Indicadores de status MQTT/dispositivo no cabeçalho global
 
@@ -917,12 +977,14 @@ Ver [TESTING.md](TESTING.md) para checklist detalhado de bancada.
 
 | Constante | Valor | Descrição |
 |-----------|-------|-----------|
-| `GPIO_RELAY` | 26 | Relé |
-| `GPIO_BUTTON` | 27 | Botão |
+| `GPIO_RELAY` | 4 | Relé |
+| `GPIO_BUTTON` | 5 | Botão |
 | `GPIO_LED_STATUS` | 25 | LED |
 | `GPIO_BUZZER` | 33 | Buzzer |
-| `PZEM_TX_PIN` | 17 | UART TX |
-| `PZEM_RX_PIN` | 16 | UART RX |
+| `PZEM_TX_PIN` | 27 | UART TX |
+| `PZEM_RX_PIN` | 26 | UART RX |
+| `PZEM_RESPONSE_DELAY_MS` | 100 | Delay pós-TX antes de ler PZEM |
+| `PZEM_READ_TIMEOUT_MS` | 300 | Timeout leitura UART PZEM |
 | `MQTT_BROKER_URI` | mqtt://192.168.1.100:1883 | Broker |
 | `WIFI_AP_SSID` | SireneValidator | AP provisionamento |
 | `WIFI_AP_IP` | 192.168.4.1 | Portal |
@@ -930,7 +992,7 @@ Ver [TESTING.md](TESTING.md) para checklist detalhado de bancada.
 | `INRUSH_DISCARD_MS` | 500 | Descarte inrush |
 | `OFFLINE_QUEUE_MAX` | 64 | Máx. fila offline |
 | `CALIBRATION_SAMPLE_MS` | 500 | Intervalo amostras calibração |
-| `FIRMWARE_VERSION` | 1.2.0 | Versão |
+| `FIRMWARE_VERSION` | 1.4.1 | Versão |
 
 ### Comandos úteis
 

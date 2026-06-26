@@ -1,0 +1,13 @@
+{
+  "chip": "esp32",
+  "baud": 460800,
+  "flash_mode": "dio",
+  "flash_freq": "40m",
+  "flash_size": "4MB",
+  "images": {
+    "bootloader": { "file": "bootloader.bin", "offset": "0x1000" },
+    "partition_table": { "file": "partition-table.bin", "offset": "0x8000" },
+    "ota_data": { "file": "ota_data_initial.bin", "offset": "0xf000" },
+    "application": { "file": "sirene-validator.bin", "offset": "0x20000" }
+  }
+}

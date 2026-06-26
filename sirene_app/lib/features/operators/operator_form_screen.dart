@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/database/database.dart';
+import '../cloud/sync/sync_providers.dart';
 import '../mqtt/mqtt_providers.dart';
 
 class OperatorFormScreen extends ConsumerStatefulWidget {
@@ -18,6 +19,7 @@ class _OperatorFormScreenState extends ConsumerState<OperatorFormScreen> {
   late final TextEditingController _codigo;
   late final TextEditingController _nome;
   late bool _ativo;
+  late bool _isGestor;
   bool _saving = false;
 
   bool get _isEditing => widget.existing != null;
@@ -29,6 +31,7 @@ class _OperatorFormScreenState extends ConsumerState<OperatorFormScreen> {
     _codigo = TextEditingController(text: e?.codigo ?? '');
     _nome = TextEditingController(text: e?.nome ?? '');
     _ativo = e?.ativo ?? true;
+    _isGestor = e?.isGestor ?? false;
   }
 
   @override
@@ -57,9 +60,29 @@ class _OperatorFormScreenState extends ConsumerState<OperatorFormScreen> {
           codigo: codigo,
           nome: nome,
           ativo: _ativo,
+          isGestor: _isGestor,
         );
+        if (ref.read(syncEnabledProvider)) {
+          final updated = await db.getOperatorById(widget.existing!.id);
+          if (updated != null) {
+            await ref.read(firestoreSyncServiceProvider).enqueueOperator(updated);
+            await ref.read(syncQueueProcessorProvider).processQueue();
+          }
+        }
       } else {
-        await db.insertOperator(codigo: codigo, nome: nome, ativo: _ativo);
+        final id = await db.insertOperator(
+          codigo: codigo,
+          nome: nome,
+          ativo: _ativo,
+          isGestor: _isGestor,
+        );
+        if (ref.read(syncEnabledProvider)) {
+          final created = await db.getOperatorById(id);
+          if (created != null) {
+            await ref.read(firestoreSyncServiceProvider).enqueueOperator(created);
+            await ref.read(syncQueueProcessorProvider).processQueue();
+          }
+        }
       }
       if (!mounted) return;
       Navigator.of(context).pop();
@@ -104,6 +127,13 @@ class _OperatorFormScreenState extends ConsumerState<OperatorFormScreen> {
                 subtitle: const Text('Operadores inativos não aparecem no turno'),
                 value: _ativo,
                 onChanged: (v) => setState(() => _ativo = v),
+              ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Gestor'),
+                subtitle: const Text('Acesso ao Painel analítico após o login'),
+                value: _isGestor,
+                onChanged: (v) => setState(() => _isGestor = v),
               ),
               const SizedBox(height: 16),
               ElevatedButton(

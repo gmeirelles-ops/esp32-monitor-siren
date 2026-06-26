@@ -12,6 +12,14 @@ final appConfigProvider = Provider<AppConfig>((ref) {
   return AppConfig(ref.watch(sharedPreferencesProvider));
 });
 
+final bancadaSetupCompleteProvider = Provider<bool>((ref) {
+  return ref.watch(appConfigProvider).bancadaSetupComplete;
+});
+
+final wifiProvisionedProvider = Provider<bool>((ref) {
+  return ref.watch(appConfigProvider).wifiProvisioned;
+});
+
 final databaseProvider = Provider<AppDatabase>((ref) {
   final db = AppDatabase();
   ref.onDispose(db.close);

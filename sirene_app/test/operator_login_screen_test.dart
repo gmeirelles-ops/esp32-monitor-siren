@@ -10,6 +10,7 @@ import 'package:sirene_app/core/config/app_config.dart';
 import 'package:sirene_app/core/database/database.dart';
 import 'package:sirene_app/features/mqtt/mqtt_providers.dart';
 import 'package:sirene_app/features/operators/operator_login_screen.dart';
+import 'package:sirene_app/features/operators/operators_provider.dart';
 import 'package:sqlite3/open.dart';
 
 void main() {
@@ -61,7 +62,8 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
 
     final config = container.read(appConfigProvider);
-    expect(config.activeOperatorId, isNotNull);
+    expect(config.activeOperatorId, isNull);
+    expect(container.read(sessionOperatorIdProvider), isNotNull);
   });
 
   testWidgets('PIN incorreto exibe erro', (tester) async {
@@ -89,6 +91,7 @@ void main() {
     await tester.pump();
 
     expect(find.textContaining('PIN incorreto'), findsOneWidget);
+    expect(container.read(sessionOperatorIdProvider), isNull);
     expect(container.read(appConfigProvider).activeOperatorId, isNull);
   });
 }
