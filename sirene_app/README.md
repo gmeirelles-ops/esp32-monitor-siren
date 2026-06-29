@@ -15,9 +15,18 @@ Se o repositório estiver em `OneDrive\Área de Trabalho\...`, **Flutter quebra*
 | `dart run build_runner` | `package_config.json did not contain its own root package` |
 | `flutter build windows` | `Unable to read file: ...\?rea de Trabalho\...` |
 
-**Solução recomendada:** clone ou mova o projeto para um caminho ASCII, ex.: `C:\dev\esp32-monitor-siren`.
+**Solução recomendada:** clone ou mova o projeto para um caminho ASCII, ex.: `C:\dev\diponto-sirene`.
 
-**Alternativa rápida (sem mover):**
+**Importante:** o `subst S:` ajuda em alguns comandos Dart, mas **não basta** para `flutter build windows` — o CMake ainda grava o caminho real (`Área de Trabalho`) no cache e o build falha em `flutter_wrapper_app.vcxproj`. Use caminho ASCII real ou junction:
+
+```powershell
+# CMD como administrador — junction sem mover arquivos:
+mklink /J C:\dev\diponto-sirene "C:\Users\SEU_USUARIO\OneDrive\Área de Trabalho\diponto\firmware\esp32-monitor-siren"
+cd C:\dev\diponto-sirene
+powershell -ExecutionPolicy Bypass -File scripts\rebuild_windows_clean.ps1
+```
+
+**Alternativa rápida (subst — só para flutter run / build_runner):**
 
 ```powershell
 subst S: "C:\Users\SEU_USUARIO\OneDrive\Área de Trabalho\esp32-monitor-siren"

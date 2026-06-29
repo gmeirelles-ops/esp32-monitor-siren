@@ -1,0 +1,80 @@
+name: Windows Release
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'sirene_app/**'
+      - 'scripts/build_windows_all.ps1'
+      - 'scripts/build_windows_release.ps1'
+      - 'scripts/build_windows_installer.ps1'
+      - 'scripts/gerar_instalador_atualizado.ps1'
+      - 'scripts/rebuild_windows_clean.ps1'
+      - 'scripts/windows_build_common.ps1'
+      - 'scripts/windows-installer/**'
+      - 'scripts/windows-portable/**'
+      - '.github/workflows/windows-release.yml'
+
+concurrency:
+  group: windows-release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows-release:
+    name: Build ZIP + installer
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: "3.44.0"
+          cache: true
+
+      - name: Install Inno Setup
+        run: choco install innosetup -y
+
+      - name: Build portable ZIP and installer
+        shell: pwsh
+        run: ./scripts/build_windows_all.ps1
+
+      - name: Read app version
+        id: version
+        shell: pwsh
+        run: |
+          $line = Get-Content sirene_app/pubspec.yaml | Where-Object { $_ -match '^\s*version:\s*' } | Select-Object -First 1
+          if ($line -match 'version:\s*([\d.]+)') { echo "version=$($Matches[1])" >> $env:GITHUB_OUTPUT }
+
+      - name: Upload ZIP artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: DipontoSireneValidator-win64
+          path: dist/*.zip
+          if-no-files-found: error
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: DipontoSireneValidator-setup
+          path: dist/*-setup.exe
+          if-no-files-found: error
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: sirene-v${{ steps.version.outputs.version }}
+          name: Diponto Sirene Validator v${{ steps.version.outputs.version }}
+          body: |
+            Build automático Windows (ZIP portátil + instalador setup.exe).
+            Baixe o ZIP para pendrive ou o setup.exe para instalar no PC do posto.
+          files: |
+            dist/*.zip
+            dist/*-setup.exe
+          make_latest: true
+          overwrite_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -4,12 +4,45 @@
 $script:SubstDrive = "S:"
 $script:RepoRootCache = $null
 
+function Test-HasNonAsciiPath {
+    param([string]$Path)
+    return $Path -cmatch '[^\u0000-\u007F]'
+}
+
+function Get-PhysicalRepoRoot {
+    return (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+}
+
+function Assert-SafeWindowsProjectPath {
+    $physicalRoot = Get-PhysicalRepoRoot
+    if (-not (Test-HasNonAsciiPath $physicalRoot)) {
+        return
+    }
+
+    Write-Host ""
+    Write-Host "ERRO: o projeto esta em caminho com acento/caractere especial:" -ForegroundColor Red
+    Write-Host "  $physicalRoot"
+    Write-Host ""
+    Write-Host "O CMake grava esse caminho no cache e o build falha em flutter_wrapper_app.vcxproj."
+    Write-Host "O mapeamento subst S: NAO resolve — o Windows expoe o caminho real ao CMake."
+    Write-Host ""
+    Write-Host "Solucao A (recomendada): mova ou clone para caminho ASCII, ex.:"
+    Write-Host "  C:\dev\diponto-sirene"
+    Write-Host ""
+    Write-Host "Solucao B (junction, sem mover arquivos):"
+    Write-Host "  cmd /c mklink /J C:\dev\diponto-sirene `"$physicalRoot`""
+    Write-Host "  cd C:\dev\diponto-sirene"
+    Write-Host "  powershell -ExecutionPolicy Bypass -File scripts\gerar_instalador_atualizado.ps1"
+    Write-Host ""
+    throw "Caminho do projeto incompativel com flutter build windows."
+}
+
 function Ensure-WindowsAsciiRepoPath {
     if ($script:RepoRootCache) {
         return $script:RepoRootCache
     }
 
-    $physicalRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+    $physicalRoot = Get-PhysicalRepoRoot
     if ($PSVersionTable.PSPlatform -and $PSVersionTable.PSPlatform -ne "Win32NT") {
         $script:RepoRootCache = $physicalRoot
         return $script:RepoRootCache
@@ -35,6 +68,7 @@ function Assert-WindowsBuildEnvironment {
         throw "Flutter nao encontrado no PATH. Instale o Flutter SDK e o workload C++ do Visual Studio."
     }
 
+    Assert-SafeWindowsProjectPath
     Ensure-WindowsAsciiRepoPath | Out-Null
 }
 
@@ -72,10 +106,19 @@ function Invoke-ExternalBuildStep {
     Write-Host "==> $Label"
     $prevErrorAction = $ErrorActionPreference
     $ErrorActionPreference = "Continue"
+    $logLines = [System.Collections.Generic.List[string]]::new()
     try {
-        & $Command 2>&1 | ForEach-Object { Write-Host $_ }
+        & $Command 2>&1 | ForEach-Object {
+            $line = $_.ToString()
+            Write-Host $line
+            $logLines.Add($line)
+        }
         if ($LASTEXITCODE -ne 0) {
-            throw $FailureMessage
+            $logDir = Join-Path (Get-RepoRoot) "dist"
+            New-Item -ItemType Directory -Path $logDir -Force | Out-Null
+            $logPath = Join-Path $logDir "last-build.log"
+            $logLines | Set-Content $logPath -Encoding UTF8
+            throw "$FailureMessage`nUltimas linhas salvas em: $logPath"
         }
     }
     finally {
@@ -83,14 +126,33 @@ function Invoke-ExternalBuildStep {
     }
 }
 
+function Invoke-SireneFlutterClean {
+    $appDir = Get-SireneAppDir
+    Push-Location $appDir
+    try {
+        Write-Host "==> flutter clean (remove cache CMake com caminhos antigos)"
+        flutter clean 2>&1 | ForEach-Object { Write-Host $_ }
+        $buildDir = Join-Path $appDir "build\windows"
+        if (Test-Path $buildDir) {
+            Remove-Item $buildDir -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+    finally {
+        Pop-Location
+    }
+}
+
 function Invoke-SireneFlutterWindowsBuild {
     $appDir = Get-SireneAppDir
     $releaseDir = Get-SireneReleaseDir
 
+    Invoke-SireneFlutterClean
+
     Push-Location $appDir
     try {
+        Write-Host "==> Build a partir de: $(Get-Location)"
         Invoke-ExternalBuildStep "flutter pub get" { flutter pub get } "flutter pub get falhou"
-        Invoke-ExternalBuildStep "dart run build_runner build" { dart run build_runner build --delete-conflicting-outputs } "build_runner falhou"
+        Invoke-ExternalBuildStep "dart run build_runner build" { dart run build_runner build } "build_runner falhou"
         Invoke-ExternalBuildStep "flutter build windows --release" { flutter build windows --release } "flutter build windows falhou"
     }
     finally {

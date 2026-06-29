@@ -1,39 +1,50 @@
-﻿Diponto Sirene Validator — pacote portátil Windows
-==================================================
+﻿Diponto Sirene Validator — instalador Windows
+==============================================
 
-Versão do pacote: 1.0.0
+Versão: {{VERSION}}
+
+INSTALAÇÃO EM OUTRO PC
+----------------------
+1. Copie o arquivo DipontoSireneValidator-{{VERSION}}-setup.exe para o PC de destino.
+2. Execute o instalador (duplo clique). Se pedir, confirme permissão de administrador.
+3. Se o Windows SmartScreen avisar (app não assinado):
+   "Mais informações" → "Executar assim mesmo".
+4. Siga o assistente até concluir.
+5. Abra pelo atalho "Diponto Sirene Validator" no menu Iniciar
+   (opcional: marque atalho na área de trabalho durante a instalação).
+
+O app será instalado em:
+  C:\Program Files\Diponto\Sirene Validator\
 
 PRÉ-REQUISITOS
 --------------
 - Windows 10 ou 11 (64 bits)
 - Microsoft Visual C++ Redistributable (x64), se o app não iniciar:
-  https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist
+  https://learn.microsoft.com/pt-br/cpp/windows/latest-supported-vc-redist
 - PC na mesma rede do broker MQTT (Mosquitto)
-- Impressora Zebra ZT230 conectada por USB ao PC do posto (recomendado) ou na rede LAN
-- SmartScreen pode alertar (app não assinado): escolha "Mais informações" → "Executar mesmo assim"
+- Impressora Zebra ZT230 USB no PC do posto (recomendado) ou na rede LAN
 
-COMO INICIAR
-------------
-1. Extraia o ZIP inteiro para uma pasta (pendrive ou disco local).
-2. Dê duplo clique em: Iniciar Diponto Sirene Validator.bat
-   (Não copie só o .exe — a pasta app\ contém DLLs e data\ obrigatórios.)
-
-PRIMEIRA CONFIGURAÇÃO
----------------------
-1. Abra Configurações → informe host/porta do broker MQTT.
+PRIMEIRA CONFIGURAÇÃO NO PC NOVO
+--------------------------------
+1. Configurações → host/porta do broker MQTT (ex.: 192.168.51.87:1883).
 2. Impressora Zebra:
-   a) USB (recomendado): conecte a ZT230 ao PC, instale driver Zebra ZPL,
-      escolha "USB (local)" e selecione a impressora na lista.
-   b) Rede (opcional): IP e porta 9100 se houver cartão de rede ou print server.
+   a) USB: conecte a ZT230, instale driver Zebra ZPL, escolha "USB (local)"
+      e selecione a impressora na lista.
+   b) Rede: IP e porta 9100 se houver print server.
    Use "Testar impressão" para validar.
 3. Cadastros → cadastre operadores e produtos (SKU com autocalibração).
-4. Lote → selecione operador do turno → configure OP e dispositivo.
+4. Lote → selecione operador do turno → configure OP e bancada.
 
 DADOS LOCAIS
 ------------
-Histórico de testes, catálogo e fila de sync ficam no perfil do Windows
-(%APPDATA%), não nesta pasta do pendrive. Trocar de PC não leva os dados
-automaticamente — use backup local quando disponível.
+Histórico, catálogo e fila de sync ficam no perfil do Windows (%APPDATA%),
+não na pasta de instalação. Cada PC começa sem os dados do outro —
+use backup/restauração em Configurações quando disponível.
+
+DESINSTALAR
+-----------
+Painel de Controle → Programas → Desinstalar "Diponto Sirene Validator"
+ou use o atalho "Desinstalar" no menu Iniciar.
 
 SMOKE TEST (validação rápida)
 -----------------------------
@@ -46,4 +57,3 @@ SMOKE TEST (validação rápida)
 SUPORTE
 -------
 Documentação completa: docs/PRODUCAO.md no repositório do projeto.
-

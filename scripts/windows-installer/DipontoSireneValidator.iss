@@ -2,7 +2,7 @@
 ; Compilado via scripts/build_windows_installer.ps1
 
 #ifndef MyAppVersion
-  #define MyAppVersion "1.0.0"
+  #define MyAppVersion "1.0.1"
 #endif
 
 #ifndef MyReleaseDir
