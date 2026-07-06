@@ -41,3 +41,12 @@ String generateFullSerial({
   final check = calculateItfCheckDigit(body);
   return '$body$check';
 }
+
+/// Extrai os 3 dígitos do SKU a partir do serial ITF de 10 dígitos.
+String? extractIdProdutoFromSerial(String serial) {
+  final trimmed = serial.trim();
+  if (trimmed.length < 3) return null;
+  final prefix = trimmed.substring(0, 3);
+  if (!RegExp(r'^\d{3}$').hasMatch(prefix)) return null;
+  return prefix;
+}

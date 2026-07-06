@@ -55,3 +55,9 @@ bool pure_batch_fields_valid(const pure_batch_input_t *in);
 bool pure_serial_body_valid(const char body[9]);
 
 bool pure_ota_url_valid(const char *url);
+
+/** URL http(s) com host em LAN privada, *.local ou OTA_ALLOWED_EXTRA_HOST. */
+bool pure_ota_url_allowed(const char *url, const char *extra_allowed_host);
+
+/// Valida parâmetros do modo ensaio (on/off/total em segundos).
+bool pure_ensaio_params_valid(uint32_t on_sec, uint32_t off_sec, uint32_t duracao_total_sec);

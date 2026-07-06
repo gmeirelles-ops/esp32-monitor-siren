@@ -9,10 +9,13 @@ import 'package:intl/intl.dart';
 import '../../core/config/app_config.dart';
 import '../../core/database/database.dart';
 import '../../core/theme/diponto_theme.dart';
-import '../../shared/display_labels.dart';
 import '../../shared/portuguese_labels.dart';
+import '../../shared/widgets/action_section_card.dart';
 import '../../shared/widgets/empty_state_view.dart';
 import '../../shared/widgets/screen_app_bar.dart';
+import '../../shared/widgets/screen_page_layout.dart';
+import '../../shared/widgets/section_intro.dart';
+import '../../shared/widgets/status_chip_header.dart';
 import 'label_buffer_grouping.dart';
 import 'label_print_logic.dart';
 import 'label_printer.dart';
@@ -171,86 +174,116 @@ class LabelsScreen extends ConsumerWidget {
 
           final groups = groupLabelBufferByOp(entries);
 
+          final orphanTotal = groups.fold<int>(0, (s, g) => s + g.orphanCount);
+
           return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              if (printFailure != null)
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(12),
-                  color: DipontoColors.error.withValues(alpha: 0.15),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.print_disabled, color: DipontoColors.error),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          printFailure,
-                          style: const TextStyle(color: DipontoColors.error),
-                        ),
-                      ),
-                    ],
+              StatusChipHeader(
+                chips: [
+                  StatusChipData(
+                    icon: Icons.label_outline,
+                    label: '${entries.length} pendente(s)',
+                    color: DipontoColors.primary,
                   ),
-                ),
-              if (entries.length % 3 != 0)
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(12),
-                  color: DipontoColors.primary.withValues(alpha: 0.15),
-                  child: Text(
-                    '${entries.length % 3} etiqueta(s) pendente(s) — aguardando múltiplo de 3 ou impressão manual',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(color: DipontoColors.primaryLight),
+                  StatusChipData(
+                    icon: Icons.folder_copy_outlined,
+                    label: '${groups.length} OP(s)',
+                    color: DipontoColors.primaryLight,
                   ),
-                ),
+                  if (printFailure != null)
+                    StatusChipData(
+                      icon: Icons.print_disabled,
+                      label: 'Falha impressão',
+                      color: DipontoColors.error,
+                    )
+                  else if (entries.length % 3 != 0)
+                    StatusChipData(
+                      icon: Icons.info_outline,
+                      label: '${entries.length % 3} fora do múltiplo de 3',
+                      color: Colors.orangeAccent,
+                    ),
+                  if (orphanTotal > 0)
+                    StatusChipData(
+                      icon: Icons.warning_amber_outlined,
+                      label: '$orphanTotal órfã(s)',
+                      color: Colors.orangeAccent,
+                    ),
+                ],
+              ),
               Expanded(
-                child: ListView(
-                  children: [
-                    for (final group in groups)
-                      Card(
-                        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        child: ExpansionTile(
-                          leading: const Icon(Icons.inventory_2_outlined, color: DipontoColors.primary),
-                          title: Text('OP ${group.numeroOp}'),
-                          subtitle: Text('${group.count} etiqueta(s) pendente(s)'),
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              if (group.orphanCount > 0)
-                                Padding(
-                                  padding: const EdgeInsets.only(right: 8),
-                                  child: Chip(
-                                    label: Text('${group.orphanCount} órfã(s)'),
-                                    visualDensity: VisualDensity.compact,
-                                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                  ),
-                                ),
-                              TextButton.icon(
-                                onPressed: () => _printPending(context, ref, group.entries),
-                                icon: const Icon(Icons.print, size: 18),
-                                label: const Text('Imprimir lote'),
-                              ),
-                            ],
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
+                  child: Align(
+                    alignment: Alignment.topLeft,
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 900),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          const SectionIntro(
+                            title: 'Buffer de etiquetas',
+                            subtitle: 'Seriais aprovados aguardando impressão Zebra, agrupados por OP.',
+                            icon: Icons.label_outline,
                           ),
-                          children: [
-                            for (final entry in group.entries)
-                              ListTile(
-                                dense: true,
-                                leading: const Icon(Icons.qr_code, color: DipontoColors.primary),
-                                title: Text(
-                                  entry.serial,
-                                  style: const TextStyle(fontFamily: 'monospace'),
-                                ),
-                                subtitle: Text(dateFmt.format(entry.createdAt.toLocal())),
+                          if (printFailure != null)
+                            ActionSectionCard(
+                              icon: Icons.print_disabled,
+                              title: 'Falha de impressão',
+                              accentColor: DipontoColors.error,
+                              child: Text(
+                                printFailure,
+                                style: const TextStyle(color: DipontoColors.error),
                               ),
-                          ],
-                        ),
+                            ),
+                          for (final group in groups)
+                            ActionSectionCard(
+                              icon: Icons.inventory_2_outlined,
+                              title: 'OP ${group.numeroOp}',
+                              subtitle: '${group.count} etiqueta(s) pendente(s)',
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  if (group.orphanCount > 0)
+                                    Padding(
+                                      padding: const EdgeInsets.only(bottom: 8),
+                                      child: Chip(
+                                        label: Text('${group.orphanCount} órfã(s)'),
+                                        visualDensity: VisualDensity.compact,
+                                      ),
+                                    ),
+                                  Align(
+                                    alignment: Alignment.centerRight,
+                                    child: TextButton.icon(
+                                      onPressed: () => _printPending(context, ref, group.entries),
+                                      icon: const Icon(Icons.print, size: 18),
+                                      label: const Text('Imprimir lote'),
+                                    ),
+                                  ),
+                                  for (final entry in group.entries)
+                                    ListTile(
+                                      dense: true,
+                                      contentPadding: EdgeInsets.zero,
+                                      leading: const Icon(Icons.qr_code, color: DipontoColors.primary),
+                                      title: Text(
+                                        entry.serial,
+                                        style: const TextStyle(fontFamily: 'monospace'),
+                                      ),
+                                      subtitle: Text(dateFmt.format(entry.createdAt.toLocal())),
+                                    ),
+                                ],
+                              ),
+                            ),
+                        ],
                       ),
-                  ],
+                    ),
+                  ),
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.all(16),
+              ScreenBottomBar(
+                hint: kDebugMode ? 'Modo debug: exportar ZPL disponível' : null,
                 child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     if (kDebugMode) ...[
@@ -259,16 +292,9 @@ class LabelsScreen extends ConsumerWidget {
                         icon: const Icon(Icons.download_outlined),
                         label: const Text(PortugueseLabels.baixarArquivoZpl),
                       ),
-                      const Padding(
-                        padding: EdgeInsets.only(top: 4, bottom: 8),
-                        child: Text(
-                          'Salve o .zpl e compare com docs/label-reference/ '
-                          '(ou envie pela Zebra Setup Utilities para teste).',
-                          style: TextStyle(fontSize: 12, color: Colors.grey),
-                        ),
-                      ),
+                      const SizedBox(height: 8),
                     ],
-                    ElevatedButton.icon(
+                    FilledButton.icon(
                       onPressed: entries.isEmpty
                           ? null
                           : () => _printPending(context, ref, entries),
@@ -433,47 +459,78 @@ class _LaserMarkQueueScreen extends ConsumerWidget {
           }
 
           return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              if (markFailure != null)
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(12),
-                  color: DipontoColors.error.withValues(alpha: 0.15),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.error_outline, color: DipontoColors.error),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          markFailure,
-                          style: const TextStyle(color: DipontoColors.error),
-                        ),
-                      ),
-                    ],
+              StatusChipHeader(
+                chips: [
+                  StatusChipData(
+                    icon: Icons.precision_manufacturing,
+                    label: '${entries.length} na fila',
+                    color: DipontoColors.primary,
                   ),
-                ),
-              Padding(
-                padding: const EdgeInsets.all(12),
-                child: Text(
-                  '${entries.length} serial(is) aguardando gravação no laser. '
-                  'O próximo da fila será enviado quando o DiatuCAD solicitar via TCP.',
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
+                  if (markFailure != null)
+                    StatusChipData(
+                      icon: Icons.error_outline,
+                      label: 'Falha gravação',
+                      color: DipontoColors.error,
+                    ),
+                ],
               ),
               Expanded(
-                child: ListView.builder(
-                  itemCount: entries.length,
-                  itemBuilder: (context, index) {
-                    final entry = entries[index];
-                    return ListTile(
-                      leading: Icon(
-                        entry.pinned ? Icons.push_pin : Icons.looks_one_outlined,
-                        color: DipontoColors.primary,
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
+                  child: Align(
+                    alignment: Alignment.topLeft,
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 900),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          const SectionIntro(
+                            title: 'Fila de gravação laser',
+                            subtitle: 'Acione F2 no DiatuCAD para gravar o próximo serial da fila.',
+                            icon: Icons.precision_manufacturing_outlined,
+                          ),
+                          if (markFailure != null)
+                            ActionSectionCard(
+                              icon: Icons.error_outline,
+                              title: 'Falha de gravação',
+                              accentColor: DipontoColors.error,
+                              child: Text(
+                                markFailure,
+                                style: const TextStyle(color: DipontoColors.error),
+                              ),
+                            ),
+                          ActionSectionCard(
+                            icon: Icons.queue_play_next,
+                            title: 'Próximos seriais',
+                            subtitle: 'Ordem de envio via TCP ao DiatuCAD',
+                            child: Column(
+                              children: [
+                                for (var i = 0; i < entries.length; i++) ...[
+                                  if (i > 0) const Divider(height: 1),
+                                  ListTile(
+                                    contentPadding: EdgeInsets.zero,
+                                    leading: Icon(
+                                      entries[i].pinned ? Icons.push_pin : Icons.looks_one_outlined,
+                                      color: DipontoColors.primary,
+                                    ),
+                                    title: Text(
+                                      entries[i].serial,
+                                      style: const TextStyle(fontFamily: 'monospace'),
+                                    ),
+                                    subtitle: Text(
+                                      'OP ${entries[i].numeroOp} · ${dateFmt.format(entries[i].createdAt)}',
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
-                      title: Text(entry.serial),
-                      subtitle: Text('OP ${entry.numeroOp} · ${dateFmt.format(entry.createdAt)}'),
-                    );
-                  },
+                    ),
+                  ),
                 ),
               ),
             ],

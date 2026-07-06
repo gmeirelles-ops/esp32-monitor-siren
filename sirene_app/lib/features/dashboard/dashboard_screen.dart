@@ -1,22 +1,69 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 
 import '../../core/database/database.dart';
+import '../../core/providers/core_providers.dart';
 import '../../core/theme/diponto_theme.dart';
 import '../../shared/display_labels.dart';
-import '../../shared/portuguese_labels.dart';
+import '../../shared/dropdown_value.dart';
+import '../../shared/widgets/action_section_card.dart';
 import '../../shared/widgets/desktop_form_layout.dart';
 import '../../shared/widgets/empty_state_view.dart';
 import '../../shared/widgets/screen_app_bar.dart';
+import '../../shared/widgets/section_intro.dart';
+import '../../shared/widgets/status_chip_header.dart';
 import '../../shared/widgets/simple_bar_chart.dart';
 import '../bancadas/bancadas_provider.dart';
 import '../operators/operators_provider.dart';
 import '../products/products_provider.dart';
 import 'dashboard_batch_status.dart';
+import '../../core/providers/core_providers.dart';
+import '../../shared/reports/report_context.dart';
+import '../../shared/reports/report_export_format.dart';
+import '../../shared/reports/report_pdf_export.dart';
+import '../../shared/reports/report_xml_export.dart';
 import 'dashboard_providers.dart';
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
+
+  Future<void> _exportReport(BuildContext context, WidgetRef ref, DashboardData data) async {
+    final format = await pickReportExportFormat(context);
+    if (format == null || !context.mounted) return;
+
+    final filters = ref.read(dashboardFiltersProvider);
+    final ctx = await loadReportContext(ref);
+
+    try {
+      final path = await exportReportFile(
+        format: format,
+        basename: 'painel',
+        buildPdf: () => buildDashboardPdf(
+          data: data,
+          filters: filters,
+          stationId: ctx.stationId,
+          operatorLabel: ctx.operatorLabel,
+        ),
+        buildXml: () => formatDashboardXml(
+          data: data,
+          filters: filters,
+          stationId: ctx.stationId,
+          operatorLabel: ctx.operatorLabel,
+        ),
+        openPrintDialog: format == ReportExportFormat.pdf,
+      );
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${format.label} salvo: $path')),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erro ao exportar: $e')),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -33,59 +80,107 @@ class DashboardScreen extends ConsumerWidget {
     final filters = ref.watch(dashboardFiltersProvider);
     final dashboardAsync = ref.watch(dashboardDataProvider);
     final bancadas = ref.watch(bancadasMapProvider).valueOrNull ?? {};
+    final yieldTarget = ref.watch(yieldTargetPctProvider);
 
     return Scaffold(
-      appBar: screenAppBar(context, title: 'Painel'),
+      appBar: screenAppBar(
+        context,
+        title: 'Painel',
+        actions: [
+          dashboardAsync.maybeWhen(
+            data: (data) => IconButton(
+              tooltip: 'Exportar relatório',
+              icon: const Icon(Icons.download_outlined),
+              onPressed: () => _exportReport(context, ref, data),
+            ),
+            orElse: () => const SizedBox.shrink(),
+          ),
+        ],
+      ),
       body: dashboardAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('Erro ao carregar painel: $e')),
-        data: (data) => ListView(
-          padding: const EdgeInsets.symmetric(vertical: 16),
+        data: (data) => Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            DesktopFormLayout(
-              maxWidth: 1280,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _FiltersSection(
-                    filters: filters,
-                    options: data.filterOptions,
-                    bancadas: bancadas,
+            if (data.summary.total > 0)
+              StatusChipHeader(
+                chips: [
+                  StatusChipData(
+                    icon: Icons.fact_check_outlined,
+                    label: '${data.summary.total} testados',
+                    color: DipontoColors.primary,
                   ),
-                  const SizedBox(height: 16),
-                  if (data.summary.total == 0)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 48),
-                      child: EmptyStateView(
-                        icon: Icons.insights_outlined,
-                        title: filters.hasActiveFilters
-                            ? 'Nenhum teste com estes filtros'
-                            : 'Sem dados no período',
-                        subtitle: filters.hasActiveFilters
-                            ? 'Ajuste o período ou limpe os filtros de lote, produto ou dispositivo.'
-                            : 'Os testes realizados aparecerão aqui como métricas de produção.',
-                      ),
-                    )
-                  else ...[
-                    _KpiRow(
-                      summary: data.summary,
-                      faults: data.faults,
-                      yieldTrendPct: data.yieldTrendPct,
-                      reprovadosTrendPct: data.reprovadosTrendPct,
-                    ),
-                    const SizedBox(height: 16),
-                    Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              _throughputTitle(filters.period),
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  StatusChipData(
+                    icon: Icons.trending_up,
+                    label: '${data.summary.yieldPct.toStringAsFixed(1)}% rendimento',
+                    color: DipontoColors.success,
+                  ),
+                  StatusChipData(
+                    icon: Icons.cancel_outlined,
+                    label: '${data.summary.reprovados} reprovados',
+                    color: DipontoColors.error,
+                  ),
+                  StatusChipData(
+                    icon: Icons.warning_amber_outlined,
+                    label: '${data.faults.fold<int>(0, (s, f) => s + f.count)} falhas HW',
+                    color: DipontoColors.primaryLight,
+                  ),
+                ],
+              ),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                children: [
+                  DesktopFormLayout(
+                    maxWidth: 1280,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const SectionIntro(
+                          title: 'Painel de produção',
+                          subtitle: 'Métricas do período, throughput e alertas de hardware.',
+                          icon: Icons.insights_outlined,
+                        ),
+                        ActionSectionCard(
+                          icon: Icons.filter_list,
+                          title: 'Filtros',
+                          subtitle: 'Período, lote, produto e bancada',
+                          child: _FiltersSection(
+                            filters: filters,
+                            options: data.filterOptions,
+                            bancadas: bancadas,
+                          ),
+                        ),
+                        if (data.summary.total == 0)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 32),
+                            child: EmptyStateView(
+                              icon: Icons.insights_outlined,
+                              title: filters.hasActiveFilters
+                                  ? 'Nenhum teste com estes filtros'
+                                  : 'Sem dados no período',
+                              subtitle: filters.hasActiveFilters
+                                  ? 'Ajuste o período ou limpe os filtros de lote, produto ou dispositivo.'
+                                  : 'Os testes realizados aparecerão aqui como métricas de produção.',
                             ),
-                            const SizedBox(height: 12),
-                            SimpleBarChart(
+                          )
+                        else ...[
+                          if (data.oee != null)
+                            ActionSectionCard(
+                              icon: Icons.speed,
+                              title: 'OEE simplificado',
+                              child: Text(
+                                'OEE ${data.oee!.oeePct.toStringAsFixed(1)}% '
+                                '(disp. ${data.oee!.availabilityPct.toStringAsFixed(0)}% · '
+                                'perf. ${data.oee!.performancePct.toStringAsFixed(0)}% · '
+                                'qual. ${data.oee!.qualityPct.toStringAsFixed(0)}%)',
+                              ),
+                            ),
+                          ActionSectionCard(
+                            icon: Icons.bar_chart,
+                            title: _throughputTitle(filters.period),
+                            child: SimpleBarChart(
                               bars: [
                                 for (final d in data.throughput)
                                   SimpleBarChartBar(
@@ -99,23 +194,13 @@ class DashboardScreen extends ConsumerWidget {
                               legendStackedLabel: 'Aprovados',
                               valueFormatter: (v) => v.toInt().toString(),
                             ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Análise de rendimento diário',
-                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                            ),
-                            const SizedBox(height: 12),
-                            SimpleBarChart(
+                          ),
+                          ActionSectionCard(
+                            icon: Icons.percent,
+                            title: 'Análise de rendimento diário',
+                            subtitle: 'Meta: ${yieldTarget.toStringAsFixed(0)}%',
+                            accentColor: DipontoColors.success,
+                            child: SimpleBarChart(
                               bars: [
                                 for (final d in data.throughput)
                                   SimpleBarChartBar(
@@ -127,31 +212,12 @@ class DashboardScreen extends ConsumerWidget {
                               defaultColor: DipontoColors.success,
                               valueFormatter: (v) => '${v.toStringAsFixed(0)}%',
                             ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'Meta: ${defaultYieldTargetPct.toStringAsFixed(0)}%',
-                              style: TextStyle(
-                                color: DipontoColors.onSurface.withValues(alpha: 0.6),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    if (data.batchSummaries.isNotEmpty) ...[
-                      const SizedBox(height: 16),
-                      Card(
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                'Produção por lote',
-                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                              ),
-                              const SizedBox(height: 12),
-                              SingleChildScrollView(
+                          ),
+                          if (data.batchSummaries.isNotEmpty)
+                            ActionSectionCard(
+                              icon: Icons.table_chart_outlined,
+                              title: 'Produção por lote',
+                              child: SingleChildScrollView(
                                 scrollDirection: Axis.horizontal,
                                 child: DataTable(
                                   columns: const [
@@ -179,32 +245,67 @@ class DashboardScreen extends ConsumerWidget {
                                           ),
                                           DataCell(Text('${batch.yieldPct.toStringAsFixed(1)}%')),
                                           DataCell(
-                                            _StatusChip(status: batchStatusFor(batch)),
+                                            _StatusChip(
+                                              status: batchStatusFor(
+                                                batch,
+                                                yieldTarget: yieldTarget,
+                                              ),
+                                            ),
                                           ),
                                         ],
                                       ),
                                   ],
                                 ),
                               ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                    if (data.faults.isNotEmpty) ...[
-                      const SizedBox(height: 16),
-                      Card(
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                'Falhas de hardware',
-                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                            ),
+                          if (data.recentAlerts.isNotEmpty)
+                            ActionSectionCard(
+                              icon: Icons.warning_amber_outlined,
+                              title: 'Alertas de hardware recentes',
+                              accentColor: DipontoColors.error,
+                              child: Column(
+                                children: [
+                                  for (final alert in data.recentAlerts)
+                                    ListTile(
+                                      dense: true,
+                                      contentPadding: EdgeInsets.zero,
+                                      leading: const Icon(
+                                        Icons.warning_amber_outlined,
+                                        color: DipontoColors.error,
+                                      ),
+                                      title: Text(alert.falha),
+                                      subtitle: Text(
+                                        '${alert.deviceId} · '
+                                        '${DateFormat('dd/MM HH:mm').format(alert.createdAt.toLocal())}',
+                                      ),
+                                    ),
+                                ],
                               ),
-                              const SizedBox(height: 12),
-                              SimpleBarChart(
+                            ),
+                          if (data.operatorProductivity.isNotEmpty)
+                            ActionSectionCard(
+                              icon: Icons.people_outline,
+                              title: 'Produtividade por operador',
+                              child: Column(
+                                children: [
+                                  for (final op in data.operatorProductivity.take(10))
+                                    ListTile(
+                                      dense: true,
+                                      contentPadding: EdgeInsets.zero,
+                                      title: Text(op.label),
+                                      trailing: Text(
+                                        '${op.total} testes · ${op.yieldPct.toStringAsFixed(0)}%',
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          if (data.faults.isNotEmpty)
+                            ActionSectionCard(
+                              icon: Icons.build_circle_outlined,
+                              title: 'Falhas de hardware',
+                              accentColor: DipontoColors.error,
+                              child: SimpleBarChart(
                                 bars: [
                                   for (final f in data.faults)
                                     SimpleBarChartBar(
@@ -216,12 +317,11 @@ class DashboardScreen extends ConsumerWidget {
                                 defaultColor: DipontoColors.error,
                                 valueFormatter: (v) => v.toInt().toString(),
                               ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
+                            ),
+                        ],
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -279,7 +379,7 @@ class _FiltersSection extends ConsumerWidget {
           children: [
             _FilterDropdown(
               label: 'Lote (OP)',
-              value: filters.numeroOp,
+              value: validDropdownValue(filters.numeroOp, options.ops),
               items: options.ops,
               onChanged: (v) => notifier.state = v == null
                   ? filters.copyWith(clearNumeroOp: true)
@@ -287,7 +387,7 @@ class _FiltersSection extends ConsumerWidget {
             ),
             _FilterDropdown(
               label: 'Produto',
-              value: filters.idProduto,
+              value: validDropdownValue(filters.idProduto, options.products),
               items: options.products,
               itemLabel: (id) => formatProductLabel(id, catalog: catalog),
               onChanged: (v) => notifier.state = v == null
@@ -296,7 +396,7 @@ class _FiltersSection extends ConsumerWidget {
             ),
             _FilterDropdown(
               label: 'Bancada',
-              value: filters.deviceId,
+              value: validDropdownValue(filters.deviceId, options.devices),
               items: options.devices,
               itemLabel: (id) => formatBancadaLabelFromMap(id, bancadas),
               onChanged: (v) => notifier.state = v == null
@@ -336,6 +436,7 @@ class _FilterDropdown extends StatelessWidget {
     return SizedBox(
       width: 200,
       child: DropdownButtonFormField<String?>(
+        isExpanded: true,
         decoration: InputDecoration(
           labelText: label,
           isDense: true,
@@ -343,122 +444,28 @@ class _FilterDropdown extends StatelessWidget {
         ),
         value: value,
         items: [
-          const DropdownMenuItem<String?>(value: null, child: Text('Todos')),
+          const DropdownMenuItem<String?>(
+            value: null,
+            child: Text('Todos', overflow: TextOverflow.ellipsis),
+          ),
           for (final item in items)
             DropdownMenuItem<String?>(
               value: item,
-              child: Text(itemLabel?.call(item) ?? item),
-            ),
-        ],
-        onChanged: onChanged,
-      ),
-    );
-  }
-}
-
-class _KpiRow extends StatelessWidget {
-  const _KpiRow({
-    required this.summary,
-    required this.faults,
-    this.yieldTrendPct,
-    this.reprovadosTrendPct,
-  });
-
-  final ProductionSummary summary;
-  final List<FaultCount> faults;
-  final double? yieldTrendPct;
-  final double? reprovadosTrendPct;
-
-  @override
-  Widget build(BuildContext context) {
-    final totalFaults = faults.fold<int>(0, (sum, f) => sum + f.count);
-    return Wrap(
-      spacing: 12,
-      runSpacing: 12,
-      children: [
-        _KpiCard(
-          label: 'Testado',
-          value: '${summary.total}',
-          icon: Icons.fact_check_outlined,
-          trend: yieldTrendPct,
-          trendLabel: yieldTrendPct != null ? 'aprovados vs ontem' : null,
-        ),
-        _KpiCard(
-          label: PortugueseLabels.rendimento,
-          value: '${summary.yieldPct.toStringAsFixed(1)}%',
-          icon: Icons.trending_up,
-          color: DipontoColors.success,
-        ),
-        _KpiCard(
-          label: 'Reprovados',
-          value: '${summary.reprovados}',
-          icon: Icons.cancel_outlined,
-          color: DipontoColors.error,
-          trend: reprovadosTrendPct,
-          trendLabel: reprovadosTrendPct != null ? 'vs ontem' : null,
-        ),
-        _KpiCard(
-          label: 'Falhas HW',
-          value: '$totalFaults',
-          icon: Icons.warning_amber_outlined,
-          color: DipontoColors.primary,
-        ),
-      ],
-    );
-  }
-}
-
-class _KpiCard extends StatelessWidget {
-  const _KpiCard({
-    required this.label,
-    required this.value,
-    required this.icon,
-    this.color,
-    this.trend,
-    this.trendLabel,
-  });
-
-  final String label;
-  final String value;
-  final IconData icon;
-  final Color? color;
-  final double? trend;
-  final String? trendLabel;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 180,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: DipontoColors.cardElevated,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: color ?? DipontoColors.onSurface.withValues(alpha: 0.7)),
-          const SizedBox(height: 8),
-          Text(
-            value,
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: color,
-                ),
-          ),
-          Text(
-            label,
-            style: TextStyle(color: DipontoColors.onSurface.withValues(alpha: 0.6)),
-          ),
-          if (trend != null && trendLabel != null)
-            Text(
-              '${trend! >= 0 ? '+' : ''}${trend!.toStringAsFixed(0)}% $trendLabel',
-              style: TextStyle(
-                color: trend! >= 0 ? DipontoColors.success : DipontoColors.error,
-                fontSize: 12,
+              child: Text(
+                itemLabel?.call(item) ?? item,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
         ],
+        selectedItemBuilder: (context) => [
+          const Text('Todos', overflow: TextOverflow.ellipsis),
+          for (final item in items)
+            Text(
+              itemLabel?.call(item) ?? item,
+              overflow: TextOverflow.ellipsis,
+            ),
+        ],
+        onChanged: onChanged,
       ),
     );
   }

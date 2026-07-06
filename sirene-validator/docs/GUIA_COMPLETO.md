@@ -1,6 +1,8 @@
 # Guia Completo — Sirene Validator (Firmware ESP32)
 
-Documentação detalhada do firmware `sirene-validator` v**1.2.0**, sua integração com MQTT, o app Flutter companion e a arquitetura prevista com Firebase.
+Documentação detalhada do firmware `sirene-validator` v**1.7.0**, sua integração com MQTT, o app Flutter companion e a arquitetura prevista com Firebase.
+
+> Deploy industrial: [DEPLOY_PRODUCTION.md](DEPLOY_PRODUCTION.md)
 
 ---
 
@@ -40,10 +42,10 @@ Responsabilidades do firmware:
 | Medir potência e dar veredito APROVADO/REPROVADO | Calcular dígito verificador ITF 2 de 5 |
 | Gerenciar sequencial do lote (só em aprovação) | Imprimir etiquetas Zebra |
 | Persistir lote e fila offline | Conectar ao Firebase diretamente |
-| Publicar resultados via MQTT | Configurar broker MQTT em runtime |
-| Provisionar Wi-Fi via captive portal | Disparar teste remotamente (só botão físico) |
+| Publicar resultados via MQTT | Imprimir etiquetas Zebra |
+| Provisionar Wi-Fi e broker MQTT via captive portal | Disparar teste remotamente (só botão físico) |
 
-Versão atual: **1.2.0** (definida em `board_config.h`).
+Versão atual: **1.7.0** (definida em `board_config.h`).
 
 ---
 
@@ -176,7 +178,7 @@ PROVISIONING ──► IDLE ──► BATCH_READY ⇄ TESTING
 |--------|-------------|--------|------------|-------------|------|
 | `PROVISIONING` | Portal Wi-Fi ativo | Não | Não | Não | Não |
 | `IDLE` | Sem lote | Não | Sim | Sim | Sim |
-| `BATCH_READY` | Lote configurado | **Botão** | Sim | Não | Sim |
+| `BATCH_READY` | Lote configurado | **Botão** | Sim | Sim | Sim |
 | `TESTING` | Medindo potência | — | Rejeitado | Rejeitado | Rejeitado |
 | `HARDWARE_FAULT` | PZEM sem resposta | Bloqueado | Depende | Não | Sim |
 | `OTA_UPDATING` | Baixando firmware | Bloqueado | Rejeitado | Rejeitado | — |
@@ -255,32 +257,34 @@ I (xxx) main: device_id=aabbccddeeff firmware=1.2.0
 
 ### Tópicos MQTT
 
-Padrão: `sirene/<device_id>/<suffix>`
+Padrão: `producao/bancada-{NN}/{suffix}` (NN = 01–99). O `device_id` (MAC) aparece **apenas no JSON** do heartbeat.
 
 | Tópico | Direção | QoS | Retain | Descrição |
 |--------|---------|-----|--------|-----------|
-| `sirene/<id>/comando` | ESP32 **sub** | 1 | — | Comandos recebidos |
-| `sirene/<id>/status` | ESP32 pub | 1 | — | Resultados, rejeições, OTA |
-| `sirene/<id>/calibracao` | ESP32 pub | 1 | — | Potência de referência |
-| `sirene/<id>/alerta` | ESP32 pub | 1 | — | Falhas de hardware |
-| `sirene/<id>/presenca` | ESP32 pub + LWT | 1 | **sim** | `online` / `offline` |
-| `sirene/<id>/heartbeat` | ESP32 pub | 1 | — | Saúde a cada 30 s |
+| `producao/bancada-NN/comando` | ESP32 **sub** | 1 | — | Comandos recebidos |
+| `producao/bancada-NN/status` | ESP32 pub | 1 | — | Resultados, rejeições, OTA |
+| `producao/bancada-NN/calibracao` | ESP32 pub | 1 | — | Potência de referência |
+| `producao/bancada-NN/ensaio` | ESP32 pub | 1 | — | Progresso do modo ensaio |
+| `producao/bancada-NN/alerta` | ESP32 pub | 1 | — | Falhas de hardware |
+| `producao/bancada-NN/presenca` | ESP32 pub + LWT | 1 | **sim** | `online` / `offline` |
+| `producao/bancada-NN/heartbeat` | ESP32 pub | 1 | — | Saúde a cada 30 s |
+
+**Broker cloud:** `mqtt.diponto.com:443` — ESP usa MQTT TLS nativo; app Flutter usa WebSocket TLS (`wss://mqtt.diponto.com/ws`).
 
 ### Testar conexão manualmente
 
 ```bash
-# Substituir pelo device_id real
-DEVICE_ID=aabbccddeeff
-BROKER=192.168.1.100
+BANCADA=01
+BROKER=mqtt.diponto.com
 
 # Monitorar presença e heartbeat
-mosquitto_sub -h $BROKER -v \
-  -t "sirene/$DEVICE_ID/presenca" \
-  -t "sirene/$DEVICE_ID/heartbeat"
+mosquitto_sub -h $BROKER -p 443 -u devices -P '<senha>' -v \
+  -t "producao/bancada-$BANCADA/presenca" \
+  -t "producao/bancada-$BANCADA/heartbeat"
 
 # Enviar lote
-mosquitto_pub -h $BROKER -q 1 \
-  -t "sirene/$DEVICE_ID/comando" \
+mosquitto_pub -h $BROKER -p 443 -u devices -P '<senha>' -q 1 \
+  -t "producao/bancada-$BANCADA/comando" \
   -m '{"cmd":"SET_BATCH","numero_op":"2026001","id_produto":"123","ano":"26","tempo_teste":5,"potencia_min":18.0,"potencia_max":22.0,"quantidade_total":10,"proximo_sequencial":1}'
 ```
 
@@ -288,7 +292,7 @@ mosquitto_pub -h $BROKER -q 1 \
 
 ## 8. Contratos MQTT (comandos e mensagens)
 
-### Comandos (publicar em `sirene/<id>/comando`)
+### Comandos (publicar em `producao/bancada-NN/comando`)
 
 #### SET_BATCH — Configurar lote
 
@@ -313,13 +317,21 @@ mosquitto_pub -h $BROKER -q 1 \
 - **ACK** em `status`: `{"tipo":"batch","evento":"configurado","numero_op":"...","estado":"BATCH_READY"}`
 - Ao atingir `quantidade_total` aprovados, lote encerra automaticamente com `{"tipo":"batch","evento":"encerrado","motivo":"cota_atingida"}`
 
-#### END_BATCH — Encerrar lote
+#### END_BATCH / CANCEL_BATCH — Encerrar lote
 
 ```json
 { "cmd": "END_BATCH" }
 ```
 
-Limpa NVS do lote e vai para `IDLE`. Rejeitado durante `TESTING`.
+ou
+
+```json
+{ "cmd": "CANCEL_BATCH" }
+```
+
+Limpa NVS do lote e vai para `IDLE`. Publica `{"tipo":"batch","evento":"encerrado","motivo":"operador"}`. Rejeitado durante `TESTING`, calibração ou OTA.
+
+**Botão físico:** duplo toque rápido (&lt; 800 ms) com lote em `BATCH_READY` — mesmo efeito (`motivo":"botao_duplo"`).
 
 #### START_CALIBRATION — Modo calibração
 
@@ -327,7 +339,33 @@ Limpa NVS do lote e vai para `IDLE`. Rejeitado durante `TESTING`.
 { "cmd": "START_CALIBRATION" }
 ```
 
-Mede 5 s, publica amostras em tempo real e média final em `calibracao`. Só aceito em `IDLE`. Usado pelo app na tela **Produtos** para autocalibrar SKUs.
+Mede 5 s, publica amostras em tempo real e média final em `calibracao`. Aceito em `IDLE`, `BATCH_READY` ou `HARDWARE_FAULT` (firmware 1.5.0+), exceto durante teste/OTA. Rejeitado se PZEM em falha (`calibracao_pzem_falha`).
+
+#### START_ENSAIO / STOP_ENSAIO — Modo ensaio (ciclos ON/OFF)
+
+Iniciar:
+
+```json
+{
+  "cmd": "START_ENSAIO",
+  "on_sec": 30,
+  "off_sec": 15,
+  "duracao_total_sec": 7200
+}
+```
+
+Parar:
+
+```json
+{ "cmd": "STOP_ENSAIO" }
+```
+
+- Alterna relé ligado/desligado sem medição PZEM (ensaio acústico/endurance)
+- `on_sec` e `off_sec`: 1–600 s; `duracao_total_sec`: 10–28800 s (até 8 h)
+- `on_sec + off_sec` não pode exceder `duracao_total_sec`
+- Aceito em `IDLE`, `BATCH_READY` ou `HARDWARE_FAULT`; rejeitado durante teste de produção (`ensaio_durante_teste`), calibração ou OTA
+- Eventos publicados em `ensaio` (não em `status`)
+- **Botão físico** durante ensaio: interrompe a sessão (`motivo":"parado"`)
 
 #### PZEM_PROBE — Diagnóstico UART/PZEM
 
@@ -349,6 +387,23 @@ Resposta em `status`:
 - Não energiza o relé
 - Rejeitado durante `TESTING` ou calibração
 - Útil para validar ligação TX/RX antes de iniciar lote
+
+#### RESET_WIFI — Trocar rede Wi-Fi
+
+```json
+{ "cmd": "RESET_WIFI" }
+```
+
+Com opção de apagar broker MQTT salvo:
+
+```json
+{ "cmd": "RESET_WIFI", "clear_mqtt": true }
+```
+
+- Apaga credenciais Wi-Fi no NVS e reinicia em modo provisionamento (AP `SireneValidator`)
+- Rejeitado durante `TESTING` ou calibração
+- Alternativa física: segurar o botão de teste por 5 s
+- Heartbeat inclui `wifi_ssid` da rede atual
 
 #### OTA_UPDATE — Atualizar firmware
 
@@ -422,7 +477,13 @@ Códigos de `motivo`:
 | `set_batch_durante_teste` | SET_BATCH em TESTING |
 | `set_batch_campos_invalidos` | Campos faltando |
 | `end_batch_durante_teste` | END_BATCH em TESTING |
-| `calibracao_estado_invalido` | Calibração fora de IDLE |
+| `calibracao_estado_invalido` | Calibração fora de IDLE/BATCH_READY ou durante OTA |
+| `ensaio_campos_invalidos` | START_ENSAIO com parâmetros fora dos limites |
+| `ensaio_estado_invalido` | Ensaio em PROVISIONING, calibração ou OTA |
+| `ensaio_durante_teste` | START_ENSAIO durante teste de produção |
+| `ensaio_ja_ativo` | START_ENSAIO com ensaio já em andamento |
+| `ensaio_inativo` | STOP_ENSAIO sem ensaio ativo |
+| `end_batch_durante_ensaio` | END_BATCH durante ensaio |
 | `ota_estado_invalido` | OTA em TESTING |
 | `ota_url_invalida` | URL vazia ou esquema inválido |
 | `ota_falha_inicio` | Falha ao iniciar task OTA |
@@ -481,12 +542,59 @@ Resultado final ao concluir os 5 s:
 
 ```json
 {
+  "device_id": "841fe83a5db4",
+  "site": "producao",
+  "bancada": 1,
   "tipo": "calibracao",
+  "evento": "concluido",
   "potencia_media": 20.42
 }
 ```
 
-O app Flutter usa as amostras para exibir leituras ao vivo e a média final para calcular `potencia_min`/`potencia_max` (tolerância padrão 10%).
+Início do ciclo: `"evento": "iniciado"`. Falha PZEM: `"evento": "falha"`.
+
+O app Flutter usa as amostras para exibir leituras ao vivo e **`evento: concluido`** (ou `potencia_media`) para encerrar a UI.
+
+#### Ensaio (`ensaio`)
+
+Início da sessão:
+
+```json
+{
+  "device_id": "841fe83a5db4",
+  "site": "producao",
+  "bancada": 1,
+  "tipo": "ensaio",
+  "evento": "iniciado",
+  "on_sec": 30,
+  "off_sec": 15,
+  "duracao_total_sec": 7200
+}
+```
+
+Progresso a cada fase do ciclo:
+
+```json
+{
+  "tipo": "ensaio",
+  "evento": "ciclo",
+  "n": 1,
+  "fase": "ligado",
+  "elapsed_sec": 0
+}
+```
+
+Encerramento (`motivo`: `duracao` ou `parado`):
+
+```json
+{
+  "tipo": "ensaio",
+  "evento": "concluido",
+  "ciclos": 12,
+  "elapsed_sec": 7200,
+  "motivo": "duracao"
+}
+```
 
 #### Alerta hardware (`alerta`)
 
@@ -515,7 +623,7 @@ Eventos: `inicio`, `sucesso`, `falha`.
 
 ### Primeira configuração
 
-1. ESP32 sem credenciais NVS sobe o AP **`SireneValidator`** (aberto, sem senha)
+1. ESP32 sem credenciais NVS sobe o AP **`SireneValidator`** (WPA2, senha **`sirene123`**)
 2. IP do portal: **`http://192.168.4.1`**
 3. Página lista redes do scan (com RSSI) + campo manual
 4. Seção **Broker MQTT (opcional):** host e porta — se vazio, usa fallback de `board_config.h`
@@ -534,9 +642,23 @@ Eventos: `inicio`, `sucesso`, `falha`.
 
 ### Reprovisionar
 
+- **App ou MQTT:** envie `{"cmd":"RESET_WIFI"}` em `sirene/<device_id>/comando` — o ESP32 apaga credenciais Wi-Fi e reinicia no portal `SireneValidator`
+- **Botão físico:** segure o botão de teste por **5 segundos** (fora de teste/calibração) — mesmo efeito do reset Wi-Fi
+- **Opcional:** `{"cmd":"RESET_WIFI","clear_mqtt":true}` também apaga o broker MQTT salvo no NVS
 - Apagar NVS: `idf.py erase-flash` (apaga tudo) ou ferramenta NVS
 - Ou: falha de conexão STA no boot → volta automaticamente ao portal
-- Para **alterar broker MQTT** sem reflash: acesse o portal novamente e informe novo host/porta
+- Para **alterar broker MQTT** sem reflash: use o portal após reset Wi-Fi ou informe novo host/porta no formulário
+
+> **Nota:** `idf.py flash` **não** apaga o NVS — credenciais antigas permanecem. Use `erase-flash`, `RESET_WIFI` ou o botão longo para entrar em provisionamento.
+
+### Comando MQTT `RESET_WIFI`
+
+| Campo | Tipo | Obrigatório | Descrição |
+|-------|------|-------------|-----------|
+| `cmd` | string | sim | `"RESET_WIFI"` |
+| `clear_mqtt` | bool | não | Se `true`, apaga também `mqtt_cfg` |
+
+Resposta em `status`: `{"tipo":"wifi","evento":"reset_iniciado"}` antes do reboot. Heartbeat passa a incluir `wifi_ssid` da rede conectada.
 
 ### No app Flutter (Windows)
 
@@ -925,21 +1047,21 @@ Responsabilidade do **app Flutter**, não do firmware.
 
 | Item | Status | Risco |
 |------|--------|-------|
-| MQTT TLS | Não implementado | Qualquer cliente na LAN pode comandar |
-| MQTT auth | Não implementado | Sem usuário/senha |
-| Portal Wi-Fi | HTTP plano, AP aberto | Credenciais visíveis no AP |
+| MQTT TLS | **Opcional** (portal, mqtts://) | Certificado autoassinado: LAN isolada |
+| MQTT auth | **Implementado** (portal + NVS) | ACL Mosquitto obrigatório |
+| Portal Wi-Fi | WPA2, senha **derivada do MAC** | Anotar senha exibida no portal |
+| OTA whitelist | **LAN privada / `*.local` apenas** | URLs públicas rejeitadas |
 | OTA signing | Sem Secure Boot | Imagem não assinada criptograficamente |
 | NVS encryption | Não habilitado | Senha Wi-Fi em texto no flash |
+| OTA apaga NVS | **Desabilitado em produção** | Perfil `sdkconfig.defaults.provisioning` só para fábrica |
 
-Aceito para **rede industrial isolada** de chão de fábrica. Para ambientes expostos, considerar: TLS MQTT, senha no AP, HTTPS no portal.
+Aceito para **rede industrial isolada** de chão de fábrica. Para ambientes expostos: TLS MQTT, HTTPS no portal, Secure Boot.
 
 ### Limitações funcionais
 
-- Broker MQTT só muda recompilando firmware
-- Sem comando remoto de teste (botão obrigatório)
-- Sem ACK de `SET_BATCH` (usar heartbeat)
-- `quantidade_total` não encerra lote automaticamente
-- Fila offline republica tudo em `status` (perde tópico original)
+- Teste só pelo botão físico (sem comando remoto)
+- OTA não assinado — servir apenas de servidor interno confiável
+- Senha do AP de provisionamento é fixa (`sirene123`)
 
 ---
 
@@ -987,12 +1109,12 @@ Ver [TESTING.md](TESTING.md) para checklist detalhado de bancada.
 | `PZEM_READ_TIMEOUT_MS` | 300 | Timeout leitura UART PZEM |
 | `MQTT_BROKER_URI` | mqtt://192.168.1.100:1883 | Broker |
 | `WIFI_AP_SSID` | SireneValidator | AP provisionamento |
+| `WIFI_AP_PASS` | (derivada MAC) | Senha AP `sv` + 6 hex do MAC |
 | `WIFI_AP_IP` | 192.168.4.1 | Portal |
 | `HEARTBEAT_INTERVAL_SEC` | 30 | Intervalo heartbeat |
 | `INRUSH_DISCARD_MS` | 500 | Descarte inrush |
 | `OFFLINE_QUEUE_MAX` | 64 | Máx. fila offline |
-| `CALIBRATION_SAMPLE_MS` | 500 | Intervalo amostras calibração |
-| `FIRMWARE_VERSION` | 1.4.1 | Versão |
+| `FIRMWARE_VERSION` | 1.7.0 | Versão |
 
 ### Comandos úteis
 

@@ -1,0 +1,41 @@
+Diponto Sirene Validator — instalação pelo USB (sem baixar nuvem no posto)
+==========================================================================
+
+Use quando o PC do posto não consegue baixar catálogo da nuvem ou fecha ao sincronizar.
+
+PARTE 1 — No PC de configuração (escritório / seu notebook)
+------------------------------------------------------------
+1. Instale ou extraia o ZIP win64 nesta pasta do pendrive (estrutura: app\, LEIA-ME.txt).
+2. Abra o app AQUI, faça login Firebase e use Configurações → Baixar catálogo da nuvem.
+3. Ajuste MQTT, station_id, bancada e operadores como quiser no posto.
+4. Feche o app.
+5. Duplo clique: Exportar dados para USB.bat
+   (ou: powershell -File exportar_posto_usb.ps1 -SemSync se o posto não tiver Firebase ainda)
+6. Confira a pasta dados_posto\ com sirene_app.sqlite e shared_preferences.json.
+
+PARTE 2 — No PC do posto (producao)
+-----------------------------------
+1. Conecte o pendrive.
+2. Duplo clique: Instalar no PC.bat
+3. O script copia o programa para C:\Diponto\SireneValidator e restaura o catálogo.
+4. Abra pelo atalho na área de trabalho.
+5. **Vincule a bancada** deste posto (tela inicial ou Configurações → Manutenção).
+6. Login operador (PIN) — operadores já vêm no SQLite exportado.
+7. Em Configurações: selecione a impressora USB deste PC.
+
+OPÇÕES DO EXPORT (PC de configuração)
+-------------------------------------
+  exportar_posto_usb.ps1 -StationId posto-02
+  exportar_posto_usb.ps1 -SemSync          (desliga sync no pacote; liga depois no posto)
+
+SÓ ATUALIZAR DADOS (app já instalado no posto)
+----------------------------------------------
+  powershell -File instalar_posto_do_usb.ps1 -SoDados
+
+O QUE VAI NO USB
+----------------
+  app\                      programa completo
+  dados_posto\              catálogo + config exportados
+  Instalar no PC.bat
+  Exportar dados para USB.bat
+  Iniciar Diponto Sirene Validator.bat   (testar direto do pendrive)

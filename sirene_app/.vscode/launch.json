@@ -1,0 +1,22 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "sirene_app (Windows)",
+      "cwd": "${workspaceFolder}",
+      "request": "launch",
+      "type": "dart",
+      "deviceId": "windows",
+      "program": "lib/main.dart"
+    },
+    {
+      "name": "sirene_app (Windows release)",
+      "cwd": "${workspaceFolder}",
+      "request": "launch",
+      "type": "dart",
+      "deviceId": "windows",
+      "program": "lib/main.dart",
+      "flutterMode": "release"
+    }
+  ]
+}

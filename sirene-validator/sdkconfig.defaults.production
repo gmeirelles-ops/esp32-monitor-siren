@@ -1,0 +1,5 @@
+# Perfil produção industrial — mesclar com sdkconfig.defaults:
+#   cat sdkconfig.defaults sdkconfig.defaults.production > sdkconfig.defaults.merged
+# ou definir via menuconfig: Component config → OTA erase NVS on boot → desabilitado
+#
+# CONFIG_OTA_ERASE_NVS_ON_BOOT is not set

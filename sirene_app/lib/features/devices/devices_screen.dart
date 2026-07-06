@@ -4,12 +4,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../shared/display_labels.dart';
 import '../../shared/portuguese_labels.dart';
 import '../../core/theme/diponto_theme.dart';
+import '../../shared/widgets/action_section_card.dart';
 import '../../shared/widgets/empty_state_view.dart';
+import '../../shared/widgets/screen_app_bar.dart';
+import '../../shared/widgets/screen_page_layout.dart';
+import '../../shared/widgets/section_intro.dart';
+import '../../shared/widgets/status_chip_header.dart';
 import '../mqtt/models/mqtt_messages.dart';
 import '../mqtt/mqtt_providers.dart';
 import '../bancadas/bancadas_provider.dart';
 import '../provisioning/provisioning_wizard.dart';
-import '../../shared/widgets/diponto_app_bar.dart';
 import 'device_detail_screen.dart';
 
 class DevicesScreen extends ConsumerWidget {
@@ -23,18 +27,20 @@ class DevicesScreen extends ConsumerWidget {
       ref.watch(mqttConnectionStateProvider),
       ref.read(mqttServiceProvider).currentState,
     );
+    final mqttConnected = mqttState == AppMqttConnectionState.connected;
     final sorted = devices.values.toList()
       ..sort((a, b) {
-        final na = bancadas[a.deviceId] ?? 999999;
-        final nb = bancadas[b.deviceId] ?? 999999;
+        final na = a.bancadaNum ?? bancadas[a.deviceId] ?? 999999;
+        final nb = b.bancadaNum ?? bancadas[b.deviceId] ?? 999999;
         if (na != nb) return na.compareTo(nb);
         return a.deviceId.compareTo(b.deviceId);
       });
+    final onlineCount = sorted.where((d) => d.isOnline).length;
 
     final (emptyTitle, emptySubtitle, showProgress) = switch (mqttState) {
       AppMqttConnectionState.connected => (
           'Aguardando dispositivos...',
-          'MQTT conectado. Nenhuma sirene publicou presença ainda.',
+          'MQTT conectado. Nenhuma bancada publicou presença ainda.',
           true,
         ),
       AppMqttConnectionState.connecting ||
@@ -51,7 +57,8 @@ class DevicesScreen extends ConsumerWidget {
     };
 
     return Scaffold(
-      appBar: DipontoAppBar(
+      appBar: screenAppBar(
+        context,
         title: PortugueseLabels.navBancadas,
         actions: [
           IconButton(
@@ -65,21 +72,39 @@ class DevicesScreen extends ConsumerWidget {
           ),
         ],
       ),
-      body: sorted.isEmpty
-          ? EmptyStateView(
+      body: ScreenPageLayout(
+        header: StatusChipHeader(
+          chips: [
+            StatusChipData(
+              icon: Icons.podcasts_outlined,
+              label: mqttConnected ? 'MQTT conectado' : 'MQTT offline',
+              color: mqttConnected ? DipontoColors.success : DipontoColors.error,
+            ),
+            StatusChipData(
+              icon: Icons.devices_outlined,
+              label: '$onlineCount/${sorted.length} online',
+              color: DipontoColors.primaryLight,
+            ),
+          ],
+        ),
+        intro: SectionIntro(
+          title: PortugueseLabels.navBancadas,
+          subtitle: 'Bancadas detectadas na rede MQTT. Toque para ver detalhes e firmware.',
+          icon: Icons.precision_manufacturing_outlined,
+        ),
+        children: [
+          if (sorted.isEmpty)
+            EmptyStateView(
               icon: Icons.router,
               title: emptyTitle,
               subtitle: emptySubtitle,
               showProgress: showProgress,
             )
-          : ListView.builder(
-              padding: const EdgeInsets.all(12),
-              itemCount: sorted.length,
-              itemBuilder: (context, index) {
-                final device = sorted[index];
-                return _DeviceCard(device: device, bancadas: bancadas);
-              },
-            ),
+          else
+            for (final device in sorted)
+              _DeviceCard(device: device, bancadas: bancadas),
+        ],
+      ),
     );
   }
 }
@@ -94,46 +119,49 @@ class _DeviceCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final isProvisioning = device.estado == DeviceFsmState.provisioning;
     final hasAlert = device.lastHardwareAlert != null;
+    final accent = device.isOnline ? DipontoColors.success : DipontoColors.error;
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: device.isOnline ? DipontoColors.success : DipontoColors.error,
-          child: Icon(
-            device.isOnline ? Icons.wifi : Icons.wifi_off,
-            color: Colors.white,
-            size: 20,
-          ),
-        ),
-        title: Text(formatBancadaLabelFromMap(device.deviceId, bancadas)),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(device.estado.label),
-            if (isProvisioning)
-              const Text(
-                'Provisionando',
-                style: TextStyle(color: DipontoColors.primaryLight),
-              ),
-            if (hasAlert)
-              Text(
-                'Alerta: ${device.lastHardwareAlert}',
-                style: const TextStyle(color: DipontoColors.error),
-              ),
-          ],
-        ),
-        trailing: device.isOnline
-            ? Text('${device.rssi} dBm', style: const TextStyle(fontSize: 12))
-            : null,
-        onTap: () {
-          ref.read(selectedDeviceIdProvider.notifier).state = device.deviceId;
-          Navigator.of(context).push(
-            MaterialPageRoute<void>(
-              builder: (_) => DeviceDetailScreen(deviceId: device.deviceId),
+    return ActionSectionCard(
+      icon: device.isOnline ? Icons.wifi : Icons.wifi_off,
+      title: formatBancadaLabelForDevice(
+        device.deviceId,
+        bancadaNum: device.bancadaNum,
+        numeros: bancadas,
+      ),
+      subtitle: '${device.estado.label}${device.isOnline ? ' · ${device.rssi} dBm' : ''}',
+      accentColor: accent,
+      trailing: const Icon(Icons.chevron_right),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (isProvisioning)
+            const Text(
+              'Modo provisionamento — AP SireneValidator',
+              style: TextStyle(color: DipontoColors.primaryLight),
             ),
-          );
-        },
+          if (hasAlert)
+            Text(
+              'Alerta: ${device.lastHardwareAlert}',
+              style: const TextStyle(color: DipontoColors.error),
+            ),
+          if (device.firmwareVersion.isNotEmpty)
+            Text('Firmware ${device.firmwareVersion}'),
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed: () {
+                ref.read(selectedDeviceIdProvider.notifier).state = device.deviceId;
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => DeviceDetailScreen(deviceId: device.deviceId),
+                  ),
+                );
+              },
+              child: const Text('Abrir detalhes'),
+            ),
+          ),
+        ],
       ),
     );
   }

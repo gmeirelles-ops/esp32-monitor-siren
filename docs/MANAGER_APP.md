@@ -50,6 +50,28 @@ npx -y firebase-tools@latest deploy --only firestore:rules,firestore:indexes --p
 
 Depois reinicie o app gestor e faça login novamente.
 
+## Funcionalidades (v1)
+
+- KPIs consolidados (testado, rendimento, reprovados) por período
+- Saúde dos postos (`stations/{station_id}`) — último sync, fila pendente
+- Produção por OP e por operador
+- Consulta global de serial (collection group)
+- Export CSV e relatório texto em `Documentos/relatorios_gestor`
+- Cloud Function `aggregateProduction` (fallback client-side se indisponível)
+
+Deploy das functions:
+
+```powershell
+cd esp32-monitor-siren
+npx -y firebase-tools@latest deploy --only functions,firestore:rules --project monitor-sirenv2-6d201
+```
+
+Claim de gestor (restrito a managers nas regras futuras):
+
+```powershell
+node firebase/scripts/set_manager_claim.js <uid-do-usuario>
+```
+
 ## Permissões
 
 v1: qualquer usuário Firebase autenticado com acesso de leitura às regras atuais (`isAuthenticated()`).

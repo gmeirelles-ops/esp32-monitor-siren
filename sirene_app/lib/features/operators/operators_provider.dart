@@ -25,21 +25,43 @@ final activeOperatorProvider = FutureProvider<Operator?>((ref) async {
 
 Future<void> setActiveOperator(WidgetRef ref, int? operatorId) async {
   ref.read(sessionOperatorIdProvider.notifier).state = operatorId;
+  final config = ref.read(appConfigProvider);
+  if (operatorId == null) {
+    await config.clearActiveOperatorId();
+  } else {
+    await config.setActiveOperatorId(operatorId);
+  }
   ref.invalidate(activeOperatorProvider);
 }
 
 Future<void> clearOperatorSession(WidgetRef ref) async {
   ref.read(sessionOperatorIdProvider.notifier).state = null;
-  ref.invalidate(activeOperatorProvider);
   await ref.read(appConfigProvider).clearActiveOperatorId();
+  ref.invalidate(activeOperatorProvider);
 }
 
-/// Limpa sessão legada persistida e garante login na abertura.
-Future<void> resetOperatorSessionOnStartup(WidgetRef ref) async {
-  ref.read(sessionOperatorIdProvider.notifier).state = null;
-  await ref.read(appConfigProvider).clearActiveOperatorId();
+/// Restaura operador logado no turno (persistido localmente).
+Future<void> restoreOperatorSessionOnStartup(WidgetRef ref) async {
+  final savedId = ref.read(appConfigProvider).activeOperatorId;
+  if (savedId == null) {
+    ref.read(sessionOperatorIdProvider.notifier).state = null;
+    ref.invalidate(activeOperatorProvider);
+    return;
+  }
+
+  final op = await ref.read(databaseProvider).getOperatorById(savedId);
+  if (op == null || !op.ativo) {
+    await ref.read(appConfigProvider).clearActiveOperatorId();
+    ref.read(sessionOperatorIdProvider.notifier).state = null;
+  } else {
+    ref.read(sessionOperatorIdProvider.notifier).state = savedId;
+  }
   ref.invalidate(activeOperatorProvider);
 }
+
+/// @deprecated Use [restoreOperatorSessionOnStartup]
+Future<void> resetOperatorSessionOnStartup(WidgetRef ref) =>
+    restoreOperatorSessionOnStartup(ref);
 
 /// Rótulo para test_results: operador local ou fallback Firebase.
 Future<String?> resolveOperadorLabel(Ref ref) async {

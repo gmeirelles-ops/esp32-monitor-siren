@@ -63,7 +63,7 @@ class _OperatorSelectorSheet extends ConsumerWidget {
                           color: selected ? DipontoColors.primary : null,
                         ),
                         title: Text(op.nome),
-                        subtitle: Text(op.codigo),
+                        subtitle: op.isGestor ? const Text('Gestor') : null,
                         onTap: () async {
                           await setActiveOperator(ref, op.id);
                           if (context.mounted) Navigator.of(context).pop();

@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/providers/core_providers.dart';
 import '../../core/theme/diponto_theme.dart';
+import '../../shared/dropdown_value.dart';
 import '../../shared/widgets/desktop_form_layout.dart';
 import '../../shared/widgets/form_section_card.dart';
 import '../../shared/widgets/global_app_bar_actions.dart';
@@ -128,6 +129,7 @@ class _FirmwareUpdateScreenState extends ConsumerState<FirmwareUpdateScreen>
       final completer = Completer<void>();
       _otaSub?.cancel();
       _otaSub = ref.read(mqttServiceProvider).otaEvents.listen((ota) {
+        if (ota.deviceId != null && ota.deviceId != deviceId) return;
         if (ota.evento == 'sucesso') {
           completer.complete();
         } else if (ota.evento == 'falha') {
@@ -373,7 +375,10 @@ class _OtaTab extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
-                value: selectedDeviceId,
+                value: validDropdownValue(
+                  selectedDeviceId,
+                  deviceList.map((d) => d.deviceId),
+                ),
                 decoration: const InputDecoration(labelText: 'Bancada'),
                 items: [
                   for (final d in deviceList)

@@ -56,12 +56,22 @@ bool pure_fsm_can_start_test(pure_state_t state, bool pzem_fault, bool ota_activ
 
 bool pure_fsm_can_accept_batch(pure_state_t state, bool ota_active)
 {
-    return state != PURE_STATE_TESTING && !ota_active;
+    return state != PURE_STATE_TESTING && state != PURE_STATE_OTA_UPDATING && !ota_active;
 }
 
 bool pure_fsm_can_accept_calibration(pure_state_t state, bool ota_active)
 {
-    return state == PURE_STATE_IDLE && !ota_active;
+    if (ota_active) {
+        return false;
+    }
+    switch (state) {
+    case PURE_STATE_PROVISIONING:
+    case PURE_STATE_TESTING:
+    case PURE_STATE_OTA_UPDATING:
+        return false;
+    default:
+        return true;
+    }
 }
 
 bool pure_fsm_can_accept_ota(pure_state_t state)
@@ -158,6 +168,83 @@ bool pure_ota_url_valid(const char *url)
     }
     if (strncmp(url, "https://", 8) == 0) {
         return url[8] != '\0';
+    }
+    return false;
+}
+
+static bool pure_ota_extract_host(const char *url, char *host, size_t host_len)
+{
+    const char *start = NULL;
+    if (strncmp(url, "https://", 8) == 0) {
+        start = url + 8;
+    } else if (strncmp(url, "http://", 7) == 0) {
+        start = url + 7;
+    } else {
+        return false;
+    }
+
+    size_t i = 0;
+    while (start[i] != '\0' && start[i] != '/' && start[i] != ':' && i + 1 < host_len) {
+        host[i] = start[i];
+        i++;
+    }
+    host[i] = '\0';
+    return host[0] != '\0';
+}
+
+static bool pure_host_is_private_lan(const char *host)
+{
+    if (strncmp(host, "192.168.", 8) == 0) {
+        return true;
+    }
+    if (strncmp(host, "10.", 3) == 0) {
+        return true;
+    }
+    if (strncmp(host, "172.", 4) == 0) {
+        int second = 0;
+        if (sscanf(host, "172.%d.", &second) == 1 && second >= 16 && second <= 31) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool pure_ensaio_params_valid(uint32_t on_sec, uint32_t off_sec, uint32_t duracao_total_sec)
+{
+    if (on_sec < 1 || on_sec > 600) {
+        return false;
+    }
+    if (off_sec < 1 || off_sec > 600) {
+        return false;
+    }
+    if (duracao_total_sec < 10 || duracao_total_sec > 28800) {
+        return false;
+    }
+    if (on_sec + off_sec > duracao_total_sec) {
+        return false;
+    }
+    return true;
+}
+
+bool pure_ota_url_allowed(const char *url, const char *extra_allowed_host)
+{
+    if (!pure_ota_url_valid(url)) {
+        return false;
+    }
+
+    char host[128];
+    if (!pure_ota_extract_host(url, host, sizeof(host))) {
+        return false;
+    }
+
+    if (pure_host_is_private_lan(host)) {
+        return true;
+    }
+    if (strstr(host, ".local") != NULL) {
+        return true;
+    }
+    if (extra_allowed_host && extra_allowed_host[0] != '\0' && strcmp(host, extra_allowed_host) == 0) {
+        return true;
     }
     return false;
 }

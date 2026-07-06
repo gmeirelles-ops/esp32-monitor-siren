@@ -9,7 +9,12 @@ int test_fsm(void)
     if (pure_fsm_can_start_test(PURE_STATE_TESTING, false, false)) failures++;
     if (pure_fsm_can_accept_ota(PURE_STATE_TESTING)) failures++;
     if (!pure_fsm_can_accept_ota(PURE_STATE_IDLE)) failures++;
-    if (pure_fsm_can_accept_calibration(PURE_STATE_BATCH_READY, false)) failures++;
+    if (!pure_fsm_can_accept_calibration(PURE_STATE_BATCH_READY, false)) failures++;
+    if (!pure_fsm_can_accept_calibration(PURE_STATE_HARDWARE_FAULT, false)) failures++;
+    if (pure_fsm_can_accept_calibration(PURE_STATE_BATCH_READY, true)) failures++;
+    if (pure_fsm_can_accept_calibration(PURE_STATE_TESTING, false)) failures++;
+    if (pure_fsm_can_accept_batch(PURE_STATE_OTA_UPDATING, false)) failures++;
+    if (pure_fsm_can_accept_batch(PURE_STATE_IDLE, true)) failures++;
     if (failures) {
         printf("test_fsm FAILED\n");
     }

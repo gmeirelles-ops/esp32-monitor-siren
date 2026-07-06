@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 $ErrorActionPreference = "Stop"
 
 Write-Host "==> Gerando pacote portatil (ZIP) e instalador (setup.exe)"

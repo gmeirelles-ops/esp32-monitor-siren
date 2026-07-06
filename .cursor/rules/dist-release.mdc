@@ -1,0 +1,35 @@
+---
+description: Perguntar antes de gerar ou atualizar artefatos em dist/
+alwaysApply: true
+---
+
+# Release dist/ — confirmar com o usuário
+
+Antes de **gerar, atualizar ou reempacotar** artefatos em `dist/` (ZIP, setup.exe, `package_dist.sh`, scripts `build_windows_*.ps1`, `rebuild_windows_clean.ps1`, `gerar_instalador_atualizado.ps1`), **pergunte explicitamente** se o usuário quer um **dist novo**.
+
+## Quando perguntar
+
+- Após mudanças no `sirene_app` que possam afetar o binário Windows
+- Quando o usuário pedir instalador, ZIP, release ou "dist"
+- Antes de rodar build Windows ou empacotamento, mesmo que pareça implícito
+
+## O que fazer sem confirmação
+
+- Não executar scripts de release
+- Não copiar/reempacotar binários antigos para `dist/` com versão nova
+- Não assumir que o usuário quer distribuir agora
+
+## Pergunta sugerida (português)
+
+> Quer que eu gere o **dist novo** agora (ZIP e/ou instalador `setup.exe`)?  
+> Isso exige build no **Windows** (`C:\producao\...` ou máquina com Flutter + VS + Inno Setup).
+
+## Se o usuário confirmar
+
+- Preferir `scripts\rebuild_windows_clean.ps1` no Windows (caminho ASCII)
+- Ou `scripts\build_quick.ps1` só para ZIP
+- Lembrar que `dist/` está no `.gitignore` e não vai para o Git automaticamente
+
+## Se o usuário recusar
+
+- Continuar só com código/docs/testes; não tocar em `dist/`

@@ -28,6 +28,8 @@ class FirestoreSyncService {
 
   bool get isActive => _isSyncEnabled();
 
+  String stationIdForHeartbeat() => _stationId();
+
   Future<void> _enqueuePath({
     required String documentPath,
     required Map<String, dynamic> payload,

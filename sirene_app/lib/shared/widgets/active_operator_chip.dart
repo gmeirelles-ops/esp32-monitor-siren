@@ -25,7 +25,7 @@ class ActiveOperatorChip extends ConsumerWidget {
         if (op == null) {
           return _chip(label: compact ? 'Turno' : 'Sem operador', warning: true);
         }
-        final label = compact ? op.nome : '${op.nome} (${op.codigo})';
+        final label = op.nome;
         final isGestor = ref.watch(activeOperatorIsGestorProvider);
         return _chip(
           label: label,

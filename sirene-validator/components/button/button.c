@@ -43,6 +43,11 @@ void button_init(QueueHandle_t event_queue)
     gpio_isr_handler_add(GPIO_BUTTON, button_isr, NULL);
 }
 
+bool button_is_pressed(void)
+{
+    return gpio_get_level(GPIO_BUTTON) == 0;
+}
+
 bool button_is_test_in_progress(void)
 {
     return s_test_in_progress;

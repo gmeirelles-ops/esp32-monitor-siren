@@ -1,0 +1,13 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "sirene_app (Linux — devcontainer)",
+      "cwd": "${workspaceFolder}/sirene_app",
+      "request": "launch",
+      "type": "dart",
+      "deviceId": "linux",
+      "program": "lib/main.dart"
+    }
+  ]
+}

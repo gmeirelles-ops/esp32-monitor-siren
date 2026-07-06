@@ -109,7 +109,7 @@ void main() {
     );
 
     final rows = await db.watchTestsByOp('OP-OP').first;
-    expect(rows.single.operador, '77 — Carlos');
+    expect(rows.single.operador, 'Carlos');
   });
 
   test('AppConfig clearActiveOperatorId remove sessão', () async {

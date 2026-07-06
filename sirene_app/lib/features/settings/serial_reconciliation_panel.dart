@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/database/database.dart';
 import '../../core/providers/core_providers.dart';
 import '../../core/theme/diponto_theme.dart';
+import '../../shared/dropdown_value.dart';
 import '../batch/batch_serial_logic.dart';
 import '../products/products_provider.dart';
 
@@ -44,7 +45,9 @@ class _SerialReconciliationPanelState extends ConsumerState<SerialReconciliation
         if (products.isEmpty) {
           return const Text('Cadastre um produto para verificar a série.');
         }
-        _selectedProductId ??= products.first.idProduto;
+        final productIds = products.map((p) => p.idProduto).toList();
+        _selectedProductId = validDropdownValue(_selectedProductId, productIds) ??
+            (productIds.isNotEmpty ? productIds.first : null);
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,

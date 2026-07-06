@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "esp_mac.h"
+#include "mqtt_topics.h"
 
 static char s_device_id[13];
 
@@ -22,5 +23,8 @@ const char *device_id_get(void)
 
 void device_id_topic(char *buf, size_t buflen, const char *suffix)
 {
-    snprintf(buf, buflen, "sirene/%s/%s", s_device_id, suffix);
+    if (mqtt_topics_build(buf, buflen, suffix)) {
+        return;
+    }
+    snprintf(buf, buflen, "producao/unconfigured/%s", suffix ? suffix : "");
 }

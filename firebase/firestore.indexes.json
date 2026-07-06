@@ -1,20 +1,6 @@
 {
   "indexes": [
     {
-      "collectionGroup": "reprovadas",
-      "queryScope": "COLLECTION_GROUP",
-      "fields": [
-        { "fieldPath": "timestamp", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "seriais",
-      "queryScope": "COLLECTION_GROUP",
-      "fields": [
-        { "fieldPath": "timestamp", "order": "ASCENDING" }
-      ]
-    },
-    {
       "collectionGroup": "seriais",
       "queryScope": "COLLECTION_GROUP",
       "fields": [
@@ -39,5 +25,24 @@
       ]
     }
   ],
-  "fieldOverrides": []
+  "fieldOverrides": [
+    {
+      "collectionGroup": "seriais",
+      "fieldPath": "timestamp",
+      "ttl": false,
+      "indexes": [
+        { "order": "ASCENDING", "queryScope": "COLLECTION_GROUP" },
+        { "order": "DESCENDING", "queryScope": "COLLECTION_GROUP" }
+      ]
+    },
+    {
+      "collectionGroup": "reprovadas",
+      "fieldPath": "timestamp",
+      "ttl": false,
+      "indexes": [
+        { "order": "ASCENDING", "queryScope": "COLLECTION_GROUP" },
+        { "order": "DESCENDING", "queryScope": "COLLECTION_GROUP" }
+      ]
+    }
+  ]
 }

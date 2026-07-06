@@ -1,5 +1,5 @@
-#Requires -Version 5.1
-# Funções compartilhadas para build Windows (portátil e instalador).
+﻿#Requires -Version 5.1
+# Funcoes compartilhadas para build Windows (portatil e instalador).
 
 $script:SubstDrive = "S:"
 $script:RepoRootCache = $null
@@ -24,13 +24,13 @@ function Assert-SafeWindowsProjectPath {
     Write-Host "  $physicalRoot"
     Write-Host ""
     Write-Host "O CMake grava esse caminho no cache e o build falha em flutter_wrapper_app.vcxproj."
-    Write-Host "O mapeamento subst S: NAO resolve — o Windows expoe o caminho real ao CMake."
+    Write-Host "O mapeamento subst S: NAO resolve - o Windows expoe o caminho real ao CMake."
     Write-Host ""
     Write-Host "Solucao A (recomendada): mova ou clone para caminho ASCII, ex.:"
     Write-Host "  C:\dev\diponto-sirene"
     Write-Host ""
-    Write-Host "Solucao B (junction, sem mover arquivos):"
-    Write-Host "  cmd /c mklink /J C:\dev\diponto-sirene `"$physicalRoot`""
+    Write-Host 'Solucao B (junction sem mover arquivos):'
+    Write-Host ('  cmd /c mklink /J C:\dev\diponto-sirene "' + $physicalRoot + '"')
     Write-Host "  cd C:\dev\diponto-sirene"
     Write-Host "  powershell -ExecutionPolicy Bypass -File scripts\gerar_instalador_atualizado.ps1"
     Write-Host ""
@@ -142,17 +142,95 @@ function Invoke-SireneFlutterClean {
     }
 }
 
+function Test-FirebaseCppSdkZipValid {
+    param([string]$ZipPath)
+
+    if (-not (Test-Path $ZipPath)) {
+        return $false
+    }
+
+    $size = (Get-Item $ZipPath).Length
+    if ($size -lt 100MB) {
+        return $false
+    }
+
+    $marker = tar -tf $ZipPath 2>$null |
+        Select-String "Release/firebase_firestore.lib" |
+        Select-Object -First 1
+    return $null -ne $marker
+}
+
+function Ensure-FirebaseCppSdkZip {
+    param([string]$OverridePath)
+
+    $sdkVersion = "12.7.0"
+    $fileName = "firebase_cpp_sdk_windows_$sdkVersion.zip"
+    $x64Dir = Join-Path (Get-SireneAppDir) "build\windows\x64"
+    $dest = Join-Path $x64Dir $fileName
+
+    if (Test-FirebaseCppSdkZipValid $dest) {
+        $mb = [math]::Round((Get-Item $dest).Length / 1MB, 1)
+        Write-Host "==> SDK Firebase OK no build ($mb MB)"
+        return
+    }
+
+    if (Test-Path $dest) {
+        Write-Host "==> Removendo ZIP Firebase corrompido/incompleto no build"
+        Remove-Item $dest -Force -ErrorAction SilentlyContinue
+    }
+
+    $extracted = Join-Path $x64Dir "extracted"
+    if (Test-Path $extracted) {
+        Remove-Item $extracted -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
+    $candidates = @()
+    if ($OverridePath) { $candidates += $OverridePath }
+    if ($env:FIREBASE_SDK_ZIP) { $candidates += $env:FIREBASE_SDK_ZIP }
+    $candidates += @(
+        (Join-Path $env:USERPROFILE "Downloads\app_flutter\build\windows\x64\$fileName"),
+        "C:\dev\firebase-cpp-sdk-cache\$fileName"
+    )
+
+    foreach ($src in ($candidates | Where-Object { $_ })) {
+        if (-not (Test-Path $src)) { continue }
+        if (-not (Test-FirebaseCppSdkZipValid $src)) { continue }
+
+        New-Item -ItemType Directory -Path $x64Dir -Force | Out-Null
+        $mb = [math]::Round((Get-Item $src).Length / 1MB, 1)
+        Write-Host "==> Copiando SDK Firebase valido ($mb MB)"
+        Write-Host "    Origem: $src"
+        Copy-Item $src $dest -Force
+        return
+    }
+
+    Write-Host ""
+    Write-Host "AVISO: SDK Firebase local nao encontrado." -ForegroundColor Yellow
+    Write-Host "  O build tentara baixar da internet (pode falhar em rede instavel)."
+    Write-Host "  Copie um ZIP valido para Downloads\app_flutter\build\windows\x64\"
+    Write-Host "  ou defina: `$env:FIREBASE_SDK_ZIP = 'C:\caminho\firebase_cpp_sdk_windows_12.7.0.zip'"
+    Write-Host ""
+}
+
 function Invoke-SireneFlutterWindowsBuild {
+    param(
+        [switch]$SkipClean,
+        [string]$FirebaseSdkZip
+    )
+
     $appDir = Get-SireneAppDir
     $releaseDir = Get-SireneReleaseDir
 
-    Invoke-SireneFlutterClean
+    if (-not $SkipClean) {
+        Invoke-SireneFlutterClean
+    }
 
     Push-Location $appDir
     try {
         Write-Host "==> Build a partir de: $(Get-Location)"
         Invoke-ExternalBuildStep "flutter pub get" { flutter pub get } "flutter pub get falhou"
         Invoke-ExternalBuildStep "dart run build_runner build" { dart run build_runner build } "build_runner falhou"
+        Ensure-FirebaseCppSdkZip -OverridePath $FirebaseSdkZip
         Invoke-ExternalBuildStep "flutter build windows --release" { flutter build windows --release } "flutter build windows falhou"
     }
     finally {
@@ -176,7 +254,7 @@ function Copy-SireneBundledTools {
     $toolsDest = Join-Path $AppDestDir "tools\windows"
     New-Item -ItemType Directory -Path $toolsDest -Force | Out-Null
     Copy-Item -Path (Join-Path $toolsSrc "*") -Destination $toolsDest -Recurse -Force
-    Write-Host "==> Copiando tools/windows (esptool, manifest)"
+    Write-Host '==> Copiando tools/windows (esptool e manifest)'
 }
 
 function Test-SirenePortableLayout {
@@ -226,6 +304,22 @@ function Invoke-SirenePortablePackage {
     $readmeTemplate = Get-Content (Join-Path $templatesDir "LEIA-ME.txt") -Raw -Encoding UTF8
     $readmeTemplate.Replace("{{VERSION}}", $version) | Set-Content (Join-Path $packageDir "LEIA-ME.txt") -Encoding UTF8
     Copy-Item (Join-Path $templatesDir "Iniciar Diponto Sirene Validator.bat") $packageDir -Force
+
+    $usbExtras = @(
+        "posto_usb_paths.ps1",
+        "exportar_posto_usb.ps1",
+        "instalar_posto_do_usb.ps1",
+        "Instalar no PC.bat",
+        "Exportar dados para USB.bat",
+        "LEIA-ME-USB-POSTO.txt",
+        "Diagnostico-Posto.ps1"
+    )
+    foreach ($name in $usbExtras) {
+        $src = Join-Path $templatesDir $name
+        if (Test-Path $src) {
+            Copy-Item $src (Join-Path $packageDir $name) -Force
+        }
+    }
 
     Write-Host "==> Verificando estrutura do pacote"
     Test-SirenePortableLayout -PackageDir $packageDir
@@ -305,7 +399,8 @@ function Get-InnoSetupCompiler {
     ) | Where-Object { $_ -and (Test-Path $_) }
 
     if (@($candidates).Count -eq 0) {
-        throw "Inno Setup 6 nao encontrado. Instale de https://jrsoftware.org/isdl.php ou: choco install innosetup"
+        $msg = 'Inno Setup 6 nao encontrado. Instale de https://jrsoftware.org/isdl.php ou: choco install innosetup'
+        throw $msg
     }
 
     return @($candidates)[0]

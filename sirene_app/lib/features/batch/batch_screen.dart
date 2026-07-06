@@ -5,11 +5,17 @@ import '../../core/database/database.dart';
 import '../../core/providers/core_providers.dart';
 import '../../core/theme/diponto_theme.dart';
 import '../../shared/display_labels.dart';
-import '../../shared/widgets/desktop_form_layout.dart';
+import '../../shared/widgets/action_section_card.dart';
 import '../../shared/widgets/screen_app_bar.dart';
 import '../../shared/widgets/empty_state_view.dart';
-import '../../shared/widgets/form_section_card.dart';
+import '../../shared/widgets/screen_page_layout.dart';
+import '../../shared/widgets/section_intro.dart';
+import '../../shared/widgets/status_chip_header.dart';
+import '../../shared/dropdown_value.dart';
 import '../bancadas/bancadas_provider.dart';
+import '../demo/demo_constants.dart';
+import '../demo/demo_providers.dart';
+import '../demo/demo_service.dart';
 import '../mqtt/models/mqtt_messages.dart';
 import '../mqtt/mqtt_providers.dart';
 import '../products/products_provider.dart';
@@ -73,16 +79,17 @@ class _BatchScreenState extends ConsumerState<BatchScreen> {
   }
 
   Future<void> _sendSetBatch(Product product) async {
-    if (!ref.read(bancadaSetupCompleteProvider)) {
+    final demoMode = ref.read(demoModeProvider);
+    if (!demoMode && !ref.read(bancadaSetupCompleteProvider)) {
       _showSnack('Configure a bancada do posto antes de iniciar o lote');
       _openPostoSetup();
       return;
     }
 
-    final deviceId = ref.read(selectedDeviceIdProvider) ?? ref.read(appConfigProvider).selectedDeviceId;
+    final deviceId = resolveActiveDeviceId(ref);
     if (deviceId == null) {
       _showSnack('Nenhuma bancada vinculada a este posto');
-      _openPostoSetup();
+      if (!demoMode) _openPostoSetup();
       return;
     }
     if (!_validateForm(product)) return;
@@ -129,14 +136,49 @@ class _BatchScreenState extends ConsumerState<BatchScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
+  Widget _buildBottomBar({
+    required Product? product,
+    required bool bancadaReady,
+    required String? deviceId,
+    required BatchConfig? activeBatch,
+  }) {
+    if (activeBatch != null && deviceId != null) {
+      return ScreenBottomBar(
+        child: FilledButton.icon(
+          onPressed: () => _openLiveDashboard(deviceId, activeBatch.numeroOp),
+          icon: const Icon(Icons.dashboard_outlined),
+          label: Text('Painel ao vivo · OP ${activeBatch.numeroOp}'),
+        ),
+      );
+    }
+
+    final canStart = !_sending && product != null && bancadaReady && deviceId != null;
+
+    return ScreenBottomBar(
+      hint: !bancadaReady || deviceId == null ? 'Configure a bancada para iniciar' : null,
+      child: FilledButton.icon(
+        onPressed: canStart ? () => _sendSetBatch(product) : null,
+        icon: _sending
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Icon(Icons.play_arrow),
+        label: const Text('Iniciar lote'),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final devices = ref.watch(devicesProvider);
     final bancadas = ref.watch(bancadasMapProvider).valueOrNull ?? {};
     final productsAsync = ref.watch(productsStreamProvider);
     final bancadaReady = ref.watch(bancadaSetupCompleteProvider);
+    final demoMode = ref.watch(demoModeProvider);
     final todayAsync = ref.watch(batchTodaySummaryProvider);
-    final deviceId = ref.watch(selectedDeviceIdProvider) ?? ref.watch(appConfigProvider).selectedDeviceId;
+    final deviceId = resolveActiveDeviceId(ref);
     final device = deviceId != null ? devices[deviceId] : null;
     final activeBatch = device?.activeBatch;
 
@@ -161,71 +203,98 @@ class _BatchScreenState extends ConsumerState<BatchScreen> {
             );
           }
 
-          _selectedProductId ??= products.first.idProduto;
+          final productIds = products.map((p) => p.idProduto).toList();
+          _selectedProductId = validDropdownValue(_selectedProductId, productIds) ??
+              (productIds.isNotEmpty ? productIds.first : null);
           final product = _selectedProduct(products);
 
-          return ListView(
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              DesktopFormLayout(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    FormSectionCard(
-                      title: 'Turno',
-                      child: todayAsync.when(
-                        loading: () => const Text('Carregando…'),
-                        error: (_, __) => const Text('—'),
-                        data: (summary) => Text(
-                          'Testes hoje: ${summary.total} '
-                          '(${summary.aprovados} aprovados, ${summary.reprovados} reprovados)',
-                          style: const TextStyle(fontWeight: FontWeight.w500),
-                        ),
+              Expanded(
+                child: ScreenPageLayout(
+                  header: StatusChipHeader(
+                    chips: [
+                      StatusChipData(
+                        icon: Icons.today_outlined,
+                        label: todayAsync.valueOrNull != null
+                            ? 'Hoje: ${todayAsync.value!.total} testes'
+                            : 'Turno',
+                        color: DipontoColors.primary,
                       ),
-                    ),
-                    FormSectionCard(
-                      title: 'Bancada',
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          if (!bancadaReady || deviceId == null)
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                const Text(
-                                  'Nenhuma bancada vinculada a este posto.',
-                                  style: TextStyle(color: Colors.orangeAccent),
-                                ),
-                                const SizedBox(height: 8),
-                                ElevatedButton(
-                                  onPressed: _openPostoSetup,
-                                  child: const Text('Configurar bancada'),
-                                ),
-                              ],
-                            )
-                          else
+                      if (deviceId != null)
+                        StatusChipData(
+                          icon: device?.isOnline == true ? Icons.wifi : Icons.wifi_off,
+                          label: demoMode && deviceId == kDemoDeviceId
+                              ? 'Bancada demo'
+                              : formatBancadaLabelFromMap(deviceId, bancadas),
+                          color:
+                              device?.isOnline == true ? DipontoColors.success : DipontoColors.error,
+                        ),
+                      if (demoMode)
+                        const StatusChipData(
+                          icon: Icons.smart_display_outlined,
+                          label: 'Demonstração',
+                          color: Colors.deepPurpleAccent,
+                        ),
+                      if (activeBatch != null)
+                        StatusChipData(
+                          icon: Icons.playlist_add_check,
+                          label: 'OP ${activeBatch.numeroOp}',
+                          color: DipontoColors.primaryLight,
+                        ),
+                    ],
+                  ),
+                  intro: const SectionIntro(
+                    title: 'Configurar lote',
+                    subtitle: 'Selecione o produto, informe a OP e inicie na bancada.',
+                    icon: Icons.playlist_add_check,
+                  ),
+                  children: [
+                    if (!bancadaReady || deviceId == null)
+                      ActionSectionCard(
+                        icon: Icons.link_off,
+                        title: 'Bancada não vinculada',
+                        subtitle: 'Configure o posto antes de iniciar',
+                        accentColor: Colors.orangeAccent,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            const Text(
+                              'Nenhuma bancada vinculada a este posto.',
+                              style: TextStyle(color: Colors.orangeAccent),
+                            ),
+                            const SizedBox(height: 12),
+                            FilledButton(
+                              onPressed: _openPostoSetup,
+                              child: const Text('Configurar bancada'),
+                            ),
+                          ],
+                        ),
+                      )
+                    else
+                      ActionSectionCard(
+                        icon: Icons.precision_manufacturing_outlined,
+                        title: 'Bancada',
+                        subtitle: device?.isOnline == true ? 'Conectada' : 'Offline',
+                        accentColor:
+                            device?.isOnline == true ? DipontoColors.success : DipontoColors.error,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
                             ListTile(
                               contentPadding: EdgeInsets.zero,
-                              leading: Icon(
-                                Icons.circle,
-                                size: 12,
-                                color: device?.isOnline == true
-                                    ? DipontoColors.success
-                                    : DipontoColors.error,
-                              ),
                               title: Text(formatBancadaLabelFromMap(deviceId, bancadas)),
-                              subtitle: Text(
-                                device?.isOnline == true ? 'Conectada' : 'Offline',
-                              ),
+                              subtitle: Text(device?.estado.label ?? '—'),
                               trailing: TextButton(
                                 onPressed: _openSettings,
-                                child: const Text('Alterar em Configurações'),
+                                child: const Text('Alterar'),
                               ),
                             ),
-                          if (activeBatch != null && deviceId != null) ...[
-                            const SizedBox(height: 12),
-                            Card(
-                              color: DipontoColors.primary.withValues(alpha: 0.12),
-                              child: ListTile(
+                            if (activeBatch != null) ...[
+                              const Divider(),
+                              ListTile(
+                                contentPadding: EdgeInsets.zero,
                                 leading: const Icon(
                                   Icons.dashboard_outlined,
                                   color: DipontoColors.primary,
@@ -235,19 +304,20 @@ class _BatchScreenState extends ConsumerState<BatchScreen> {
                                 trailing: const Icon(Icons.chevron_right),
                                 onTap: () => _openLiveDashboard(deviceId, activeBatch.numeroOp),
                               ),
-                            ),
+                            ],
                           ],
-                        ],
+                        ),
                       ),
-                    ),
-                    FormSectionCard(
+                    ActionSectionCard(
+                      icon: Icons.inventory_2_outlined,
                       title: 'Produto e OP',
+                      subtitle: product != null ? product.nome : 'Selecione um produto',
                       child: Form(
                         key: _formKey,
                         child: Column(
                           children: [
                             DropdownButtonFormField<String>(
-                              initialValue: _selectedProductId,
+                              value: _selectedProductId,
                               decoration: const InputDecoration(labelText: 'Produto'),
                               items: products
                                   .map(
@@ -286,26 +356,14 @@ class _BatchScreenState extends ConsumerState<BatchScreen> {
                         ),
                       ),
                     ),
-                    FormSectionCard(
-                      title: 'Ações',
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: ElevatedButton(
-                          onPressed: _sending || product == null || !bancadaReady || deviceId == null
-                              ? null
-                              : () => _sendSetBatch(product),
-                          child: _sending
-                              ? const SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(strokeWidth: 2),
-                                )
-                              : const Text('INICIAR'),
-                        ),
-                      ),
-                    ),
                   ],
                 ),
+              ),
+              _buildBottomBar(
+                product: product,
+                bancadaReady: bancadaReady,
+                deviceId: deviceId,
+                activeBatch: activeBatch,
               ),
             ],
           );

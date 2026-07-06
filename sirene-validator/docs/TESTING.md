@@ -22,7 +22,13 @@ Executar lógica pura sem hardware:
 cd sirene-validator && ./scripts/run_host_tests.sh
 ```
 
-Cobre: veredito de potência, anel FIFO, transições da FSM, composição do serial de 10 dígitos, validação de URL OTA e cota de lote (`quantidade_total`).
+Cobre: veredito de potência, anel FIFO, transições da FSM, composição do serial de 10 dígitos, validação de URL OTA (whitelist LAN) e cota de lote (`quantidade_total`).
+
+## MQTT com autenticação (firmware 1.6.0+)
+
+1. No portal `http://192.168.4.1`, preencha host, porta, usuário e senha do broker.
+2. Configure ACL no Mosquitto por `device_id`.
+3. Use `-u` / `-P` em `mosquitto_pub` e `mosquitto_sub`.
 
 ## Bancada sem PZEM (mock de desenvolvimento)
 
@@ -92,6 +98,19 @@ BROKER=192.168.1.100 DEVICE_ID=aabbccddeeff ./scripts/bench_reconnect.sh
 3. Conecte ao AP e acesse `http://192.168.4.1`.
 4. Informe SSID/senha da rede e salve.
 5. Após reboot, confirme conexão STA nos logs (`device_id=...`, `sistema pronto`).
+
+### 10.1b Reset Wi-Fi sob demanda (firmware 1.4.6+)
+
+1. Com dispositivo online no MQTT, publique em `sirene/<device_id>/comando`:
+
+```json
+{ "cmd": "RESET_WIFI" }
+```
+
+2. Confirme `status` com `{"tipo":"wifi","evento":"reset_iniciado"}`.
+3. Após reboot, conecte ao AP `SireneValidator` e configure em `http://192.168.4.1`.
+4. **Botão:** com dispositivo ligado (fora de teste), segure o botão 5 s — mesmo efeito.
+5. Heartbeat deve exibir `wifi_ssid` após reconectar.
 
 ## 10.2 Ciclo aprovado/reprovado e sequencial
 
@@ -165,7 +184,7 @@ BROKER=192.168.1.100 DEVICE_ID=aabbccddeeff ./scripts/bench_reconnect.sh
 | `END_BATCH` | `TESTING` | Rejeição imediata (`cmd_durante_teste`), sem enfileiramento |
 | `OTA_UPDATE` | `TESTING` | Rejeição imediata (`cmd_durante_teste`) |
 | `PZEM_PROBE` | `TESTING` | Rejeição imediata (`cmd_durante_teste`) |
-| `START_CALIBRATION` | `BATCH_READY` | Rejeição |
+| `START_CALIBRATION` | `BATCH_READY` | Aceito (firmware 1.5.0+) |
 | `START_CALIBRATION` | `IDLE` | Aceito |
 
 ## 10.7 Contratos MQTT ponta a ponta

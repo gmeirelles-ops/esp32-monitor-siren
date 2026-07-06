@@ -4125,7 +4125,9 @@ class $OperatorsTable extends Operators
     ),
     defaultValue: const Constant(true),
   );
-  static const VerificationMeta _isGestorMeta = const VerificationMeta('isGestor');
+  static const VerificationMeta _isGestorMeta = const VerificationMeta(
+    'isGestor',
+  );
   @override
   late final GeneratedColumn<bool> isGestor = GeneratedColumn<bool>(
     'is_gestor',
@@ -5170,6 +5172,1347 @@ class RemarkLogsCompanion extends UpdateCompanion<RemarkLog> {
   }
 }
 
+class $DowntimeEventsTable extends DowntimeEvents
+    with TableInfo<$DowntimeEventsTable, DowntimeEvent> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $DowntimeEventsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _reasonMeta = const VerificationMeta('reason');
+  @override
+  late final GeneratedColumn<String> reason = GeneratedColumn<String>(
+    'reason',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _deviceIdMeta = const VerificationMeta(
+    'deviceId',
+  );
+  @override
+  late final GeneratedColumn<String> deviceId = GeneratedColumn<String>(
+    'device_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _startedAtMeta = const VerificationMeta(
+    'startedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> startedAt = GeneratedColumn<DateTime>(
+    'started_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _endedAtMeta = const VerificationMeta(
+    'endedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> endedAt = GeneratedColumn<DateTime>(
+    'ended_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _notesMeta = const VerificationMeta('notes');
+  @override
+  late final GeneratedColumn<String> notes = GeneratedColumn<String>(
+    'notes',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    reason,
+    deviceId,
+    startedAt,
+    endedAt,
+    notes,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'downtime_events';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<DowntimeEvent> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('reason')) {
+      context.handle(
+        _reasonMeta,
+        reason.isAcceptableOrUnknown(data['reason']!, _reasonMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_reasonMeta);
+    }
+    if (data.containsKey('device_id')) {
+      context.handle(
+        _deviceIdMeta,
+        deviceId.isAcceptableOrUnknown(data['device_id']!, _deviceIdMeta),
+      );
+    }
+    if (data.containsKey('started_at')) {
+      context.handle(
+        _startedAtMeta,
+        startedAt.isAcceptableOrUnknown(data['started_at']!, _startedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_startedAtMeta);
+    }
+    if (data.containsKey('ended_at')) {
+      context.handle(
+        _endedAtMeta,
+        endedAt.isAcceptableOrUnknown(data['ended_at']!, _endedAtMeta),
+      );
+    }
+    if (data.containsKey('notes')) {
+      context.handle(
+        _notesMeta,
+        notes.isAcceptableOrUnknown(data['notes']!, _notesMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  DowntimeEvent map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return DowntimeEvent(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      reason: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}reason'],
+      )!,
+      deviceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}device_id'],
+      ),
+      startedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}started_at'],
+      )!,
+      endedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}ended_at'],
+      ),
+      notes: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}notes'],
+      ),
+    );
+  }
+
+  @override
+  $DowntimeEventsTable createAlias(String alias) {
+    return $DowntimeEventsTable(attachedDatabase, alias);
+  }
+}
+
+class DowntimeEvent extends DataClass implements Insertable<DowntimeEvent> {
+  final int id;
+  final String reason;
+  final String? deviceId;
+  final DateTime startedAt;
+  final DateTime? endedAt;
+  final String? notes;
+  const DowntimeEvent({
+    required this.id,
+    required this.reason,
+    this.deviceId,
+    required this.startedAt,
+    this.endedAt,
+    this.notes,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['reason'] = Variable<String>(reason);
+    if (!nullToAbsent || deviceId != null) {
+      map['device_id'] = Variable<String>(deviceId);
+    }
+    map['started_at'] = Variable<DateTime>(startedAt);
+    if (!nullToAbsent || endedAt != null) {
+      map['ended_at'] = Variable<DateTime>(endedAt);
+    }
+    if (!nullToAbsent || notes != null) {
+      map['notes'] = Variable<String>(notes);
+    }
+    return map;
+  }
+
+  DowntimeEventsCompanion toCompanion(bool nullToAbsent) {
+    return DowntimeEventsCompanion(
+      id: Value(id),
+      reason: Value(reason),
+      deviceId: deviceId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(deviceId),
+      startedAt: Value(startedAt),
+      endedAt: endedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(endedAt),
+      notes: notes == null && nullToAbsent
+          ? const Value.absent()
+          : Value(notes),
+    );
+  }
+
+  factory DowntimeEvent.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return DowntimeEvent(
+      id: serializer.fromJson<int>(json['id']),
+      reason: serializer.fromJson<String>(json['reason']),
+      deviceId: serializer.fromJson<String?>(json['deviceId']),
+      startedAt: serializer.fromJson<DateTime>(json['startedAt']),
+      endedAt: serializer.fromJson<DateTime?>(json['endedAt']),
+      notes: serializer.fromJson<String?>(json['notes']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'reason': serializer.toJson<String>(reason),
+      'deviceId': serializer.toJson<String?>(deviceId),
+      'startedAt': serializer.toJson<DateTime>(startedAt),
+      'endedAt': serializer.toJson<DateTime?>(endedAt),
+      'notes': serializer.toJson<String?>(notes),
+    };
+  }
+
+  DowntimeEvent copyWith({
+    int? id,
+    String? reason,
+    Value<String?> deviceId = const Value.absent(),
+    DateTime? startedAt,
+    Value<DateTime?> endedAt = const Value.absent(),
+    Value<String?> notes = const Value.absent(),
+  }) => DowntimeEvent(
+    id: id ?? this.id,
+    reason: reason ?? this.reason,
+    deviceId: deviceId.present ? deviceId.value : this.deviceId,
+    startedAt: startedAt ?? this.startedAt,
+    endedAt: endedAt.present ? endedAt.value : this.endedAt,
+    notes: notes.present ? notes.value : this.notes,
+  );
+  DowntimeEvent copyWithCompanion(DowntimeEventsCompanion data) {
+    return DowntimeEvent(
+      id: data.id.present ? data.id.value : this.id,
+      reason: data.reason.present ? data.reason.value : this.reason,
+      deviceId: data.deviceId.present ? data.deviceId.value : this.deviceId,
+      startedAt: data.startedAt.present ? data.startedAt.value : this.startedAt,
+      endedAt: data.endedAt.present ? data.endedAt.value : this.endedAt,
+      notes: data.notes.present ? data.notes.value : this.notes,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DowntimeEvent(')
+          ..write('id: $id, ')
+          ..write('reason: $reason, ')
+          ..write('deviceId: $deviceId, ')
+          ..write('startedAt: $startedAt, ')
+          ..write('endedAt: $endedAt, ')
+          ..write('notes: $notes')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(id, reason, deviceId, startedAt, endedAt, notes);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is DowntimeEvent &&
+          other.id == this.id &&
+          other.reason == this.reason &&
+          other.deviceId == this.deviceId &&
+          other.startedAt == this.startedAt &&
+          other.endedAt == this.endedAt &&
+          other.notes == this.notes);
+}
+
+class DowntimeEventsCompanion extends UpdateCompanion<DowntimeEvent> {
+  final Value<int> id;
+  final Value<String> reason;
+  final Value<String?> deviceId;
+  final Value<DateTime> startedAt;
+  final Value<DateTime?> endedAt;
+  final Value<String?> notes;
+  const DowntimeEventsCompanion({
+    this.id = const Value.absent(),
+    this.reason = const Value.absent(),
+    this.deviceId = const Value.absent(),
+    this.startedAt = const Value.absent(),
+    this.endedAt = const Value.absent(),
+    this.notes = const Value.absent(),
+  });
+  DowntimeEventsCompanion.insert({
+    this.id = const Value.absent(),
+    required String reason,
+    this.deviceId = const Value.absent(),
+    required DateTime startedAt,
+    this.endedAt = const Value.absent(),
+    this.notes = const Value.absent(),
+  }) : reason = Value(reason),
+       startedAt = Value(startedAt);
+  static Insertable<DowntimeEvent> custom({
+    Expression<int>? id,
+    Expression<String>? reason,
+    Expression<String>? deviceId,
+    Expression<DateTime>? startedAt,
+    Expression<DateTime>? endedAt,
+    Expression<String>? notes,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (reason != null) 'reason': reason,
+      if (deviceId != null) 'device_id': deviceId,
+      if (startedAt != null) 'started_at': startedAt,
+      if (endedAt != null) 'ended_at': endedAt,
+      if (notes != null) 'notes': notes,
+    });
+  }
+
+  DowntimeEventsCompanion copyWith({
+    Value<int>? id,
+    Value<String>? reason,
+    Value<String?>? deviceId,
+    Value<DateTime>? startedAt,
+    Value<DateTime?>? endedAt,
+    Value<String?>? notes,
+  }) {
+    return DowntimeEventsCompanion(
+      id: id ?? this.id,
+      reason: reason ?? this.reason,
+      deviceId: deviceId ?? this.deviceId,
+      startedAt: startedAt ?? this.startedAt,
+      endedAt: endedAt ?? this.endedAt,
+      notes: notes ?? this.notes,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (reason.present) {
+      map['reason'] = Variable<String>(reason.value);
+    }
+    if (deviceId.present) {
+      map['device_id'] = Variable<String>(deviceId.value);
+    }
+    if (startedAt.present) {
+      map['started_at'] = Variable<DateTime>(startedAt.value);
+    }
+    if (endedAt.present) {
+      map['ended_at'] = Variable<DateTime>(endedAt.value);
+    }
+    if (notes.present) {
+      map['notes'] = Variable<String>(notes.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DowntimeEventsCompanion(')
+          ..write('id: $id, ')
+          ..write('reason: $reason, ')
+          ..write('deviceId: $deviceId, ')
+          ..write('startedAt: $startedAt, ')
+          ..write('endedAt: $endedAt, ')
+          ..write('notes: $notes')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $EnsaioRecordsTable extends EnsaioRecords
+    with TableInfo<$EnsaioRecordsTable, EnsaioRecord> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $EnsaioRecordsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _nomeMeta = const VerificationMeta('nome');
+  @override
+  late final GeneratedColumn<String> nome = GeneratedColumn<String>(
+    'nome',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _deviceIdMeta = const VerificationMeta(
+    'deviceId',
+  );
+  @override
+  late final GeneratedColumn<String> deviceId = GeneratedColumn<String>(
+    'device_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _operadorMeta = const VerificationMeta(
+    'operador',
+  );
+  @override
+  late final GeneratedColumn<String> operador = GeneratedColumn<String>(
+    'operador',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _operatorIdMeta = const VerificationMeta(
+    'operatorId',
+  );
+  @override
+  late final GeneratedColumn<int> operatorId = GeneratedColumn<int>(
+    'operator_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _stationIdMeta = const VerificationMeta(
+    'stationId',
+  );
+  @override
+  late final GeneratedColumn<String> stationId = GeneratedColumn<String>(
+    'station_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _onSecondsMeta = const VerificationMeta(
+    'onSeconds',
+  );
+  @override
+  late final GeneratedColumn<int> onSeconds = GeneratedColumn<int>(
+    'on_seconds',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _offSecondsMeta = const VerificationMeta(
+    'offSeconds',
+  );
+  @override
+  late final GeneratedColumn<int> offSeconds = GeneratedColumn<int>(
+    'off_seconds',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _totalSecondsMeta = const VerificationMeta(
+    'totalSeconds',
+  );
+  @override
+  late final GeneratedColumn<int> totalSeconds = GeneratedColumn<int>(
+    'total_seconds',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _startedAtMeta = const VerificationMeta(
+    'startedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> startedAt = GeneratedColumn<DateTime>(
+    'started_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _endedAtMeta = const VerificationMeta(
+    'endedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> endedAt = GeneratedColumn<DateTime>(
+    'ended_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _statusMeta = const VerificationMeta('status');
+  @override
+  late final GeneratedColumn<String> status = GeneratedColumn<String>(
+    'status',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _ciclosMeta = const VerificationMeta('ciclos');
+  @override
+  late final GeneratedColumn<int> ciclos = GeneratedColumn<int>(
+    'ciclos',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _elapsedSecMeta = const VerificationMeta(
+    'elapsedSec',
+  );
+  @override
+  late final GeneratedColumn<int> elapsedSec = GeneratedColumn<int>(
+    'elapsed_sec',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _motivoMeta = const VerificationMeta('motivo');
+  @override
+  late final GeneratedColumn<String> motivo = GeneratedColumn<String>(
+    'motivo',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _pdfPathMeta = const VerificationMeta(
+    'pdfPath',
+  );
+  @override
+  late final GeneratedColumn<String> pdfPath = GeneratedColumn<String>(
+    'pdf_path',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _demoModeMeta = const VerificationMeta(
+    'demoMode',
+  );
+  @override
+  late final GeneratedColumn<bool> demoMode = GeneratedColumn<bool>(
+    'demo_mode',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("demo_mode" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    nome,
+    deviceId,
+    operador,
+    operatorId,
+    stationId,
+    onSeconds,
+    offSeconds,
+    totalSeconds,
+    startedAt,
+    endedAt,
+    status,
+    ciclos,
+    elapsedSec,
+    motivo,
+    pdfPath,
+    demoMode,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'ensaio_records';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<EnsaioRecord> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('nome')) {
+      context.handle(
+        _nomeMeta,
+        nome.isAcceptableOrUnknown(data['nome']!, _nomeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nomeMeta);
+    }
+    if (data.containsKey('device_id')) {
+      context.handle(
+        _deviceIdMeta,
+        deviceId.isAcceptableOrUnknown(data['device_id']!, _deviceIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_deviceIdMeta);
+    }
+    if (data.containsKey('operador')) {
+      context.handle(
+        _operadorMeta,
+        operador.isAcceptableOrUnknown(data['operador']!, _operadorMeta),
+      );
+    }
+    if (data.containsKey('operator_id')) {
+      context.handle(
+        _operatorIdMeta,
+        operatorId.isAcceptableOrUnknown(data['operator_id']!, _operatorIdMeta),
+      );
+    }
+    if (data.containsKey('station_id')) {
+      context.handle(
+        _stationIdMeta,
+        stationId.isAcceptableOrUnknown(data['station_id']!, _stationIdMeta),
+      );
+    }
+    if (data.containsKey('on_seconds')) {
+      context.handle(
+        _onSecondsMeta,
+        onSeconds.isAcceptableOrUnknown(data['on_seconds']!, _onSecondsMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_onSecondsMeta);
+    }
+    if (data.containsKey('off_seconds')) {
+      context.handle(
+        _offSecondsMeta,
+        offSeconds.isAcceptableOrUnknown(data['off_seconds']!, _offSecondsMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_offSecondsMeta);
+    }
+    if (data.containsKey('total_seconds')) {
+      context.handle(
+        _totalSecondsMeta,
+        totalSeconds.isAcceptableOrUnknown(
+          data['total_seconds']!,
+          _totalSecondsMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_totalSecondsMeta);
+    }
+    if (data.containsKey('started_at')) {
+      context.handle(
+        _startedAtMeta,
+        startedAt.isAcceptableOrUnknown(data['started_at']!, _startedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_startedAtMeta);
+    }
+    if (data.containsKey('ended_at')) {
+      context.handle(
+        _endedAtMeta,
+        endedAt.isAcceptableOrUnknown(data['ended_at']!, _endedAtMeta),
+      );
+    }
+    if (data.containsKey('status')) {
+      context.handle(
+        _statusMeta,
+        status.isAcceptableOrUnknown(data['status']!, _statusMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_statusMeta);
+    }
+    if (data.containsKey('ciclos')) {
+      context.handle(
+        _ciclosMeta,
+        ciclos.isAcceptableOrUnknown(data['ciclos']!, _ciclosMeta),
+      );
+    }
+    if (data.containsKey('elapsed_sec')) {
+      context.handle(
+        _elapsedSecMeta,
+        elapsedSec.isAcceptableOrUnknown(data['elapsed_sec']!, _elapsedSecMeta),
+      );
+    }
+    if (data.containsKey('motivo')) {
+      context.handle(
+        _motivoMeta,
+        motivo.isAcceptableOrUnknown(data['motivo']!, _motivoMeta),
+      );
+    }
+    if (data.containsKey('pdf_path')) {
+      context.handle(
+        _pdfPathMeta,
+        pdfPath.isAcceptableOrUnknown(data['pdf_path']!, _pdfPathMeta),
+      );
+    }
+    if (data.containsKey('demo_mode')) {
+      context.handle(
+        _demoModeMeta,
+        demoMode.isAcceptableOrUnknown(data['demo_mode']!, _demoModeMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  EnsaioRecord map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return EnsaioRecord(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      nome: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}nome'],
+      )!,
+      deviceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}device_id'],
+      )!,
+      operador: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}operador'],
+      ),
+      operatorId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}operator_id'],
+      ),
+      stationId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}station_id'],
+      ),
+      onSeconds: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}on_seconds'],
+      )!,
+      offSeconds: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}off_seconds'],
+      )!,
+      totalSeconds: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}total_seconds'],
+      )!,
+      startedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}started_at'],
+      )!,
+      endedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}ended_at'],
+      ),
+      status: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}status'],
+      )!,
+      ciclos: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}ciclos'],
+      )!,
+      elapsedSec: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}elapsed_sec'],
+      )!,
+      motivo: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}motivo'],
+      ),
+      pdfPath: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}pdf_path'],
+      ),
+      demoMode: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}demo_mode'],
+      )!,
+    );
+  }
+
+  @override
+  $EnsaioRecordsTable createAlias(String alias) {
+    return $EnsaioRecordsTable(attachedDatabase, alias);
+  }
+}
+
+class EnsaioRecord extends DataClass implements Insertable<EnsaioRecord> {
+  final int id;
+  final String nome;
+  final String deviceId;
+  final String? operador;
+  final int? operatorId;
+  final String? stationId;
+  final int onSeconds;
+  final int offSeconds;
+  final int totalSeconds;
+  final DateTime startedAt;
+  final DateTime? endedAt;
+
+  /// running | concluido | interrompido | falha
+  final String status;
+  final int ciclos;
+  final int elapsedSec;
+  final String? motivo;
+  final String? pdfPath;
+  final bool demoMode;
+  const EnsaioRecord({
+    required this.id,
+    required this.nome,
+    required this.deviceId,
+    this.operador,
+    this.operatorId,
+    this.stationId,
+    required this.onSeconds,
+    required this.offSeconds,
+    required this.totalSeconds,
+    required this.startedAt,
+    this.endedAt,
+    required this.status,
+    required this.ciclos,
+    required this.elapsedSec,
+    this.motivo,
+    this.pdfPath,
+    required this.demoMode,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['nome'] = Variable<String>(nome);
+    map['device_id'] = Variable<String>(deviceId);
+    if (!nullToAbsent || operador != null) {
+      map['operador'] = Variable<String>(operador);
+    }
+    if (!nullToAbsent || operatorId != null) {
+      map['operator_id'] = Variable<int>(operatorId);
+    }
+    if (!nullToAbsent || stationId != null) {
+      map['station_id'] = Variable<String>(stationId);
+    }
+    map['on_seconds'] = Variable<int>(onSeconds);
+    map['off_seconds'] = Variable<int>(offSeconds);
+    map['total_seconds'] = Variable<int>(totalSeconds);
+    map['started_at'] = Variable<DateTime>(startedAt);
+    if (!nullToAbsent || endedAt != null) {
+      map['ended_at'] = Variable<DateTime>(endedAt);
+    }
+    map['status'] = Variable<String>(status);
+    map['ciclos'] = Variable<int>(ciclos);
+    map['elapsed_sec'] = Variable<int>(elapsedSec);
+    if (!nullToAbsent || motivo != null) {
+      map['motivo'] = Variable<String>(motivo);
+    }
+    if (!nullToAbsent || pdfPath != null) {
+      map['pdf_path'] = Variable<String>(pdfPath);
+    }
+    map['demo_mode'] = Variable<bool>(demoMode);
+    return map;
+  }
+
+  EnsaioRecordsCompanion toCompanion(bool nullToAbsent) {
+    return EnsaioRecordsCompanion(
+      id: Value(id),
+      nome: Value(nome),
+      deviceId: Value(deviceId),
+      operador: operador == null && nullToAbsent
+          ? const Value.absent()
+          : Value(operador),
+      operatorId: operatorId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(operatorId),
+      stationId: stationId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(stationId),
+      onSeconds: Value(onSeconds),
+      offSeconds: Value(offSeconds),
+      totalSeconds: Value(totalSeconds),
+      startedAt: Value(startedAt),
+      endedAt: endedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(endedAt),
+      status: Value(status),
+      ciclos: Value(ciclos),
+      elapsedSec: Value(elapsedSec),
+      motivo: motivo == null && nullToAbsent
+          ? const Value.absent()
+          : Value(motivo),
+      pdfPath: pdfPath == null && nullToAbsent
+          ? const Value.absent()
+          : Value(pdfPath),
+      demoMode: Value(demoMode),
+    );
+  }
+
+  factory EnsaioRecord.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return EnsaioRecord(
+      id: serializer.fromJson<int>(json['id']),
+      nome: serializer.fromJson<String>(json['nome']),
+      deviceId: serializer.fromJson<String>(json['deviceId']),
+      operador: serializer.fromJson<String?>(json['operador']),
+      operatorId: serializer.fromJson<int?>(json['operatorId']),
+      stationId: serializer.fromJson<String?>(json['stationId']),
+      onSeconds: serializer.fromJson<int>(json['onSeconds']),
+      offSeconds: serializer.fromJson<int>(json['offSeconds']),
+      totalSeconds: serializer.fromJson<int>(json['totalSeconds']),
+      startedAt: serializer.fromJson<DateTime>(json['startedAt']),
+      endedAt: serializer.fromJson<DateTime?>(json['endedAt']),
+      status: serializer.fromJson<String>(json['status']),
+      ciclos: serializer.fromJson<int>(json['ciclos']),
+      elapsedSec: serializer.fromJson<int>(json['elapsedSec']),
+      motivo: serializer.fromJson<String?>(json['motivo']),
+      pdfPath: serializer.fromJson<String?>(json['pdfPath']),
+      demoMode: serializer.fromJson<bool>(json['demoMode']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'nome': serializer.toJson<String>(nome),
+      'deviceId': serializer.toJson<String>(deviceId),
+      'operador': serializer.toJson<String?>(operador),
+      'operatorId': serializer.toJson<int?>(operatorId),
+      'stationId': serializer.toJson<String?>(stationId),
+      'onSeconds': serializer.toJson<int>(onSeconds),
+      'offSeconds': serializer.toJson<int>(offSeconds),
+      'totalSeconds': serializer.toJson<int>(totalSeconds),
+      'startedAt': serializer.toJson<DateTime>(startedAt),
+      'endedAt': serializer.toJson<DateTime?>(endedAt),
+      'status': serializer.toJson<String>(status),
+      'ciclos': serializer.toJson<int>(ciclos),
+      'elapsedSec': serializer.toJson<int>(elapsedSec),
+      'motivo': serializer.toJson<String?>(motivo),
+      'pdfPath': serializer.toJson<String?>(pdfPath),
+      'demoMode': serializer.toJson<bool>(demoMode),
+    };
+  }
+
+  EnsaioRecord copyWith({
+    int? id,
+    String? nome,
+    String? deviceId,
+    Value<String?> operador = const Value.absent(),
+    Value<int?> operatorId = const Value.absent(),
+    Value<String?> stationId = const Value.absent(),
+    int? onSeconds,
+    int? offSeconds,
+    int? totalSeconds,
+    DateTime? startedAt,
+    Value<DateTime?> endedAt = const Value.absent(),
+    String? status,
+    int? ciclos,
+    int? elapsedSec,
+    Value<String?> motivo = const Value.absent(),
+    Value<String?> pdfPath = const Value.absent(),
+    bool? demoMode,
+  }) => EnsaioRecord(
+    id: id ?? this.id,
+    nome: nome ?? this.nome,
+    deviceId: deviceId ?? this.deviceId,
+    operador: operador.present ? operador.value : this.operador,
+    operatorId: operatorId.present ? operatorId.value : this.operatorId,
+    stationId: stationId.present ? stationId.value : this.stationId,
+    onSeconds: onSeconds ?? this.onSeconds,
+    offSeconds: offSeconds ?? this.offSeconds,
+    totalSeconds: totalSeconds ?? this.totalSeconds,
+    startedAt: startedAt ?? this.startedAt,
+    endedAt: endedAt.present ? endedAt.value : this.endedAt,
+    status: status ?? this.status,
+    ciclos: ciclos ?? this.ciclos,
+    elapsedSec: elapsedSec ?? this.elapsedSec,
+    motivo: motivo.present ? motivo.value : this.motivo,
+    pdfPath: pdfPath.present ? pdfPath.value : this.pdfPath,
+    demoMode: demoMode ?? this.demoMode,
+  );
+  EnsaioRecord copyWithCompanion(EnsaioRecordsCompanion data) {
+    return EnsaioRecord(
+      id: data.id.present ? data.id.value : this.id,
+      nome: data.nome.present ? data.nome.value : this.nome,
+      deviceId: data.deviceId.present ? data.deviceId.value : this.deviceId,
+      operador: data.operador.present ? data.operador.value : this.operador,
+      operatorId: data.operatorId.present
+          ? data.operatorId.value
+          : this.operatorId,
+      stationId: data.stationId.present ? data.stationId.value : this.stationId,
+      onSeconds: data.onSeconds.present ? data.onSeconds.value : this.onSeconds,
+      offSeconds: data.offSeconds.present
+          ? data.offSeconds.value
+          : this.offSeconds,
+      totalSeconds: data.totalSeconds.present
+          ? data.totalSeconds.value
+          : this.totalSeconds,
+      startedAt: data.startedAt.present ? data.startedAt.value : this.startedAt,
+      endedAt: data.endedAt.present ? data.endedAt.value : this.endedAt,
+      status: data.status.present ? data.status.value : this.status,
+      ciclos: data.ciclos.present ? data.ciclos.value : this.ciclos,
+      elapsedSec: data.elapsedSec.present
+          ? data.elapsedSec.value
+          : this.elapsedSec,
+      motivo: data.motivo.present ? data.motivo.value : this.motivo,
+      pdfPath: data.pdfPath.present ? data.pdfPath.value : this.pdfPath,
+      demoMode: data.demoMode.present ? data.demoMode.value : this.demoMode,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('EnsaioRecord(')
+          ..write('id: $id, ')
+          ..write('nome: $nome, ')
+          ..write('deviceId: $deviceId, ')
+          ..write('operador: $operador, ')
+          ..write('operatorId: $operatorId, ')
+          ..write('stationId: $stationId, ')
+          ..write('onSeconds: $onSeconds, ')
+          ..write('offSeconds: $offSeconds, ')
+          ..write('totalSeconds: $totalSeconds, ')
+          ..write('startedAt: $startedAt, ')
+          ..write('endedAt: $endedAt, ')
+          ..write('status: $status, ')
+          ..write('ciclos: $ciclos, ')
+          ..write('elapsedSec: $elapsedSec, ')
+          ..write('motivo: $motivo, ')
+          ..write('pdfPath: $pdfPath, ')
+          ..write('demoMode: $demoMode')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    nome,
+    deviceId,
+    operador,
+    operatorId,
+    stationId,
+    onSeconds,
+    offSeconds,
+    totalSeconds,
+    startedAt,
+    endedAt,
+    status,
+    ciclos,
+    elapsedSec,
+    motivo,
+    pdfPath,
+    demoMode,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is EnsaioRecord &&
+          other.id == this.id &&
+          other.nome == this.nome &&
+          other.deviceId == this.deviceId &&
+          other.operador == this.operador &&
+          other.operatorId == this.operatorId &&
+          other.stationId == this.stationId &&
+          other.onSeconds == this.onSeconds &&
+          other.offSeconds == this.offSeconds &&
+          other.totalSeconds == this.totalSeconds &&
+          other.startedAt == this.startedAt &&
+          other.endedAt == this.endedAt &&
+          other.status == this.status &&
+          other.ciclos == this.ciclos &&
+          other.elapsedSec == this.elapsedSec &&
+          other.motivo == this.motivo &&
+          other.pdfPath == this.pdfPath &&
+          other.demoMode == this.demoMode);
+}
+
+class EnsaioRecordsCompanion extends UpdateCompanion<EnsaioRecord> {
+  final Value<int> id;
+  final Value<String> nome;
+  final Value<String> deviceId;
+  final Value<String?> operador;
+  final Value<int?> operatorId;
+  final Value<String?> stationId;
+  final Value<int> onSeconds;
+  final Value<int> offSeconds;
+  final Value<int> totalSeconds;
+  final Value<DateTime> startedAt;
+  final Value<DateTime?> endedAt;
+  final Value<String> status;
+  final Value<int> ciclos;
+  final Value<int> elapsedSec;
+  final Value<String?> motivo;
+  final Value<String?> pdfPath;
+  final Value<bool> demoMode;
+  const EnsaioRecordsCompanion({
+    this.id = const Value.absent(),
+    this.nome = const Value.absent(),
+    this.deviceId = const Value.absent(),
+    this.operador = const Value.absent(),
+    this.operatorId = const Value.absent(),
+    this.stationId = const Value.absent(),
+    this.onSeconds = const Value.absent(),
+    this.offSeconds = const Value.absent(),
+    this.totalSeconds = const Value.absent(),
+    this.startedAt = const Value.absent(),
+    this.endedAt = const Value.absent(),
+    this.status = const Value.absent(),
+    this.ciclos = const Value.absent(),
+    this.elapsedSec = const Value.absent(),
+    this.motivo = const Value.absent(),
+    this.pdfPath = const Value.absent(),
+    this.demoMode = const Value.absent(),
+  });
+  EnsaioRecordsCompanion.insert({
+    this.id = const Value.absent(),
+    required String nome,
+    required String deviceId,
+    this.operador = const Value.absent(),
+    this.operatorId = const Value.absent(),
+    this.stationId = const Value.absent(),
+    required int onSeconds,
+    required int offSeconds,
+    required int totalSeconds,
+    required DateTime startedAt,
+    this.endedAt = const Value.absent(),
+    required String status,
+    this.ciclos = const Value.absent(),
+    this.elapsedSec = const Value.absent(),
+    this.motivo = const Value.absent(),
+    this.pdfPath = const Value.absent(),
+    this.demoMode = const Value.absent(),
+  }) : nome = Value(nome),
+       deviceId = Value(deviceId),
+       onSeconds = Value(onSeconds),
+       offSeconds = Value(offSeconds),
+       totalSeconds = Value(totalSeconds),
+       startedAt = Value(startedAt),
+       status = Value(status);
+  static Insertable<EnsaioRecord> custom({
+    Expression<int>? id,
+    Expression<String>? nome,
+    Expression<String>? deviceId,
+    Expression<String>? operador,
+    Expression<int>? operatorId,
+    Expression<String>? stationId,
+    Expression<int>? onSeconds,
+    Expression<int>? offSeconds,
+    Expression<int>? totalSeconds,
+    Expression<DateTime>? startedAt,
+    Expression<DateTime>? endedAt,
+    Expression<String>? status,
+    Expression<int>? ciclos,
+    Expression<int>? elapsedSec,
+    Expression<String>? motivo,
+    Expression<String>? pdfPath,
+    Expression<bool>? demoMode,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (nome != null) 'nome': nome,
+      if (deviceId != null) 'device_id': deviceId,
+      if (operador != null) 'operador': operador,
+      if (operatorId != null) 'operator_id': operatorId,
+      if (stationId != null) 'station_id': stationId,
+      if (onSeconds != null) 'on_seconds': onSeconds,
+      if (offSeconds != null) 'off_seconds': offSeconds,
+      if (totalSeconds != null) 'total_seconds': totalSeconds,
+      if (startedAt != null) 'started_at': startedAt,
+      if (endedAt != null) 'ended_at': endedAt,
+      if (status != null) 'status': status,
+      if (ciclos != null) 'ciclos': ciclos,
+      if (elapsedSec != null) 'elapsed_sec': elapsedSec,
+      if (motivo != null) 'motivo': motivo,
+      if (pdfPath != null) 'pdf_path': pdfPath,
+      if (demoMode != null) 'demo_mode': demoMode,
+    });
+  }
+
+  EnsaioRecordsCompanion copyWith({
+    Value<int>? id,
+    Value<String>? nome,
+    Value<String>? deviceId,
+    Value<String?>? operador,
+    Value<int?>? operatorId,
+    Value<String?>? stationId,
+    Value<int>? onSeconds,
+    Value<int>? offSeconds,
+    Value<int>? totalSeconds,
+    Value<DateTime>? startedAt,
+    Value<DateTime?>? endedAt,
+    Value<String>? status,
+    Value<int>? ciclos,
+    Value<int>? elapsedSec,
+    Value<String?>? motivo,
+    Value<String?>? pdfPath,
+    Value<bool>? demoMode,
+  }) {
+    return EnsaioRecordsCompanion(
+      id: id ?? this.id,
+      nome: nome ?? this.nome,
+      deviceId: deviceId ?? this.deviceId,
+      operador: operador ?? this.operador,
+      operatorId: operatorId ?? this.operatorId,
+      stationId: stationId ?? this.stationId,
+      onSeconds: onSeconds ?? this.onSeconds,
+      offSeconds: offSeconds ?? this.offSeconds,
+      totalSeconds: totalSeconds ?? this.totalSeconds,
+      startedAt: startedAt ?? this.startedAt,
+      endedAt: endedAt ?? this.endedAt,
+      status: status ?? this.status,
+      ciclos: ciclos ?? this.ciclos,
+      elapsedSec: elapsedSec ?? this.elapsedSec,
+      motivo: motivo ?? this.motivo,
+      pdfPath: pdfPath ?? this.pdfPath,
+      demoMode: demoMode ?? this.demoMode,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (nome.present) {
+      map['nome'] = Variable<String>(nome.value);
+    }
+    if (deviceId.present) {
+      map['device_id'] = Variable<String>(deviceId.value);
+    }
+    if (operador.present) {
+      map['operador'] = Variable<String>(operador.value);
+    }
+    if (operatorId.present) {
+      map['operator_id'] = Variable<int>(operatorId.value);
+    }
+    if (stationId.present) {
+      map['station_id'] = Variable<String>(stationId.value);
+    }
+    if (onSeconds.present) {
+      map['on_seconds'] = Variable<int>(onSeconds.value);
+    }
+    if (offSeconds.present) {
+      map['off_seconds'] = Variable<int>(offSeconds.value);
+    }
+    if (totalSeconds.present) {
+      map['total_seconds'] = Variable<int>(totalSeconds.value);
+    }
+    if (startedAt.present) {
+      map['started_at'] = Variable<DateTime>(startedAt.value);
+    }
+    if (endedAt.present) {
+      map['ended_at'] = Variable<DateTime>(endedAt.value);
+    }
+    if (status.present) {
+      map['status'] = Variable<String>(status.value);
+    }
+    if (ciclos.present) {
+      map['ciclos'] = Variable<int>(ciclos.value);
+    }
+    if (elapsedSec.present) {
+      map['elapsed_sec'] = Variable<int>(elapsedSec.value);
+    }
+    if (motivo.present) {
+      map['motivo'] = Variable<String>(motivo.value);
+    }
+    if (pdfPath.present) {
+      map['pdf_path'] = Variable<String>(pdfPath.value);
+    }
+    if (demoMode.present) {
+      map['demo_mode'] = Variable<bool>(demoMode.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('EnsaioRecordsCompanion(')
+          ..write('id: $id, ')
+          ..write('nome: $nome, ')
+          ..write('deviceId: $deviceId, ')
+          ..write('operador: $operador, ')
+          ..write('operatorId: $operatorId, ')
+          ..write('stationId: $stationId, ')
+          ..write('onSeconds: $onSeconds, ')
+          ..write('offSeconds: $offSeconds, ')
+          ..write('totalSeconds: $totalSeconds, ')
+          ..write('startedAt: $startedAt, ')
+          ..write('endedAt: $endedAt, ')
+          ..write('status: $status, ')
+          ..write('ciclos: $ciclos, ')
+          ..write('elapsedSec: $elapsedSec, ')
+          ..write('motivo: $motivo, ')
+          ..write('pdfPath: $pdfPath, ')
+          ..write('demoMode: $demoMode')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -5189,6 +6532,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $OperatorsTable operators = $OperatorsTable(this);
   late final $BancadasTable bancadas = $BancadasTable(this);
   late final $RemarkLogsTable remarkLogs = $RemarkLogsTable(this);
+  late final $DowntimeEventsTable downtimeEvents = $DowntimeEventsTable(this);
+  late final $EnsaioRecordsTable ensaioRecords = $EnsaioRecordsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -5206,6 +6551,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     operators,
     bancadas,
     remarkLogs,
+    downtimeEvents,
+    ensaioRecords,
   ];
 }
 
@@ -7927,6 +9274,651 @@ typedef $$RemarkLogsTableProcessedTableManager =
       RemarkLog,
       PrefetchHooks Function()
     >;
+typedef $$DowntimeEventsTableCreateCompanionBuilder =
+    DowntimeEventsCompanion Function({
+      Value<int> id,
+      required String reason,
+      Value<String?> deviceId,
+      required DateTime startedAt,
+      Value<DateTime?> endedAt,
+      Value<String?> notes,
+    });
+typedef $$DowntimeEventsTableUpdateCompanionBuilder =
+    DowntimeEventsCompanion Function({
+      Value<int> id,
+      Value<String> reason,
+      Value<String?> deviceId,
+      Value<DateTime> startedAt,
+      Value<DateTime?> endedAt,
+      Value<String?> notes,
+    });
+
+class $$DowntimeEventsTableFilterComposer
+    extends Composer<_$AppDatabase, $DowntimeEventsTable> {
+  $$DowntimeEventsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get reason => $composableBuilder(
+    column: $table.reason,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get deviceId => $composableBuilder(
+    column: $table.deviceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get startedAt => $composableBuilder(
+    column: $table.startedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get endedAt => $composableBuilder(
+    column: $table.endedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get notes => $composableBuilder(
+    column: $table.notes,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$DowntimeEventsTableOrderingComposer
+    extends Composer<_$AppDatabase, $DowntimeEventsTable> {
+  $$DowntimeEventsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get reason => $composableBuilder(
+    column: $table.reason,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get deviceId => $composableBuilder(
+    column: $table.deviceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get startedAt => $composableBuilder(
+    column: $table.startedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get endedAt => $composableBuilder(
+    column: $table.endedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get notes => $composableBuilder(
+    column: $table.notes,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$DowntimeEventsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $DowntimeEventsTable> {
+  $$DowntimeEventsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get reason =>
+      $composableBuilder(column: $table.reason, builder: (column) => column);
+
+  GeneratedColumn<String> get deviceId =>
+      $composableBuilder(column: $table.deviceId, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get startedAt =>
+      $composableBuilder(column: $table.startedAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get endedAt =>
+      $composableBuilder(column: $table.endedAt, builder: (column) => column);
+
+  GeneratedColumn<String> get notes =>
+      $composableBuilder(column: $table.notes, builder: (column) => column);
+}
+
+class $$DowntimeEventsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $DowntimeEventsTable,
+          DowntimeEvent,
+          $$DowntimeEventsTableFilterComposer,
+          $$DowntimeEventsTableOrderingComposer,
+          $$DowntimeEventsTableAnnotationComposer,
+          $$DowntimeEventsTableCreateCompanionBuilder,
+          $$DowntimeEventsTableUpdateCompanionBuilder,
+          (
+            DowntimeEvent,
+            BaseReferences<_$AppDatabase, $DowntimeEventsTable, DowntimeEvent>,
+          ),
+          DowntimeEvent,
+          PrefetchHooks Function()
+        > {
+  $$DowntimeEventsTableTableManager(
+    _$AppDatabase db,
+    $DowntimeEventsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$DowntimeEventsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$DowntimeEventsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$DowntimeEventsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<String> reason = const Value.absent(),
+                Value<String?> deviceId = const Value.absent(),
+                Value<DateTime> startedAt = const Value.absent(),
+                Value<DateTime?> endedAt = const Value.absent(),
+                Value<String?> notes = const Value.absent(),
+              }) => DowntimeEventsCompanion(
+                id: id,
+                reason: reason,
+                deviceId: deviceId,
+                startedAt: startedAt,
+                endedAt: endedAt,
+                notes: notes,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required String reason,
+                Value<String?> deviceId = const Value.absent(),
+                required DateTime startedAt,
+                Value<DateTime?> endedAt = const Value.absent(),
+                Value<String?> notes = const Value.absent(),
+              }) => DowntimeEventsCompanion.insert(
+                id: id,
+                reason: reason,
+                deviceId: deviceId,
+                startedAt: startedAt,
+                endedAt: endedAt,
+                notes: notes,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$DowntimeEventsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $DowntimeEventsTable,
+      DowntimeEvent,
+      $$DowntimeEventsTableFilterComposer,
+      $$DowntimeEventsTableOrderingComposer,
+      $$DowntimeEventsTableAnnotationComposer,
+      $$DowntimeEventsTableCreateCompanionBuilder,
+      $$DowntimeEventsTableUpdateCompanionBuilder,
+      (
+        DowntimeEvent,
+        BaseReferences<_$AppDatabase, $DowntimeEventsTable, DowntimeEvent>,
+      ),
+      DowntimeEvent,
+      PrefetchHooks Function()
+    >;
+typedef $$EnsaioRecordsTableCreateCompanionBuilder =
+    EnsaioRecordsCompanion Function({
+      Value<int> id,
+      required String nome,
+      required String deviceId,
+      Value<String?> operador,
+      Value<int?> operatorId,
+      Value<String?> stationId,
+      required int onSeconds,
+      required int offSeconds,
+      required int totalSeconds,
+      required DateTime startedAt,
+      Value<DateTime?> endedAt,
+      required String status,
+      Value<int> ciclos,
+      Value<int> elapsedSec,
+      Value<String?> motivo,
+      Value<String?> pdfPath,
+      Value<bool> demoMode,
+    });
+typedef $$EnsaioRecordsTableUpdateCompanionBuilder =
+    EnsaioRecordsCompanion Function({
+      Value<int> id,
+      Value<String> nome,
+      Value<String> deviceId,
+      Value<String?> operador,
+      Value<int?> operatorId,
+      Value<String?> stationId,
+      Value<int> onSeconds,
+      Value<int> offSeconds,
+      Value<int> totalSeconds,
+      Value<DateTime> startedAt,
+      Value<DateTime?> endedAt,
+      Value<String> status,
+      Value<int> ciclos,
+      Value<int> elapsedSec,
+      Value<String?> motivo,
+      Value<String?> pdfPath,
+      Value<bool> demoMode,
+    });
+
+class $$EnsaioRecordsTableFilterComposer
+    extends Composer<_$AppDatabase, $EnsaioRecordsTable> {
+  $$EnsaioRecordsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get nome => $composableBuilder(
+    column: $table.nome,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get deviceId => $composableBuilder(
+    column: $table.deviceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get operador => $composableBuilder(
+    column: $table.operador,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get operatorId => $composableBuilder(
+    column: $table.operatorId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get stationId => $composableBuilder(
+    column: $table.stationId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get onSeconds => $composableBuilder(
+    column: $table.onSeconds,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get offSeconds => $composableBuilder(
+    column: $table.offSeconds,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get totalSeconds => $composableBuilder(
+    column: $table.totalSeconds,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get startedAt => $composableBuilder(
+    column: $table.startedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get endedAt => $composableBuilder(
+    column: $table.endedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get ciclos => $composableBuilder(
+    column: $table.ciclos,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get elapsedSec => $composableBuilder(
+    column: $table.elapsedSec,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get motivo => $composableBuilder(
+    column: $table.motivo,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get pdfPath => $composableBuilder(
+    column: $table.pdfPath,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get demoMode => $composableBuilder(
+    column: $table.demoMode,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$EnsaioRecordsTableOrderingComposer
+    extends Composer<_$AppDatabase, $EnsaioRecordsTable> {
+  $$EnsaioRecordsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get nome => $composableBuilder(
+    column: $table.nome,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get deviceId => $composableBuilder(
+    column: $table.deviceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get operador => $composableBuilder(
+    column: $table.operador,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get operatorId => $composableBuilder(
+    column: $table.operatorId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get stationId => $composableBuilder(
+    column: $table.stationId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get onSeconds => $composableBuilder(
+    column: $table.onSeconds,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get offSeconds => $composableBuilder(
+    column: $table.offSeconds,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get totalSeconds => $composableBuilder(
+    column: $table.totalSeconds,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get startedAt => $composableBuilder(
+    column: $table.startedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get endedAt => $composableBuilder(
+    column: $table.endedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get ciclos => $composableBuilder(
+    column: $table.ciclos,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get elapsedSec => $composableBuilder(
+    column: $table.elapsedSec,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get motivo => $composableBuilder(
+    column: $table.motivo,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get pdfPath => $composableBuilder(
+    column: $table.pdfPath,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get demoMode => $composableBuilder(
+    column: $table.demoMode,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$EnsaioRecordsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $EnsaioRecordsTable> {
+  $$EnsaioRecordsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get nome =>
+      $composableBuilder(column: $table.nome, builder: (column) => column);
+
+  GeneratedColumn<String> get deviceId =>
+      $composableBuilder(column: $table.deviceId, builder: (column) => column);
+
+  GeneratedColumn<String> get operador =>
+      $composableBuilder(column: $table.operador, builder: (column) => column);
+
+  GeneratedColumn<int> get operatorId => $composableBuilder(
+    column: $table.operatorId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get stationId =>
+      $composableBuilder(column: $table.stationId, builder: (column) => column);
+
+  GeneratedColumn<int> get onSeconds =>
+      $composableBuilder(column: $table.onSeconds, builder: (column) => column);
+
+  GeneratedColumn<int> get offSeconds => $composableBuilder(
+    column: $table.offSeconds,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get totalSeconds => $composableBuilder(
+    column: $table.totalSeconds,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get startedAt =>
+      $composableBuilder(column: $table.startedAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get endedAt =>
+      $composableBuilder(column: $table.endedAt, builder: (column) => column);
+
+  GeneratedColumn<String> get status =>
+      $composableBuilder(column: $table.status, builder: (column) => column);
+
+  GeneratedColumn<int> get ciclos =>
+      $composableBuilder(column: $table.ciclos, builder: (column) => column);
+
+  GeneratedColumn<int> get elapsedSec => $composableBuilder(
+    column: $table.elapsedSec,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get motivo =>
+      $composableBuilder(column: $table.motivo, builder: (column) => column);
+
+  GeneratedColumn<String> get pdfPath =>
+      $composableBuilder(column: $table.pdfPath, builder: (column) => column);
+
+  GeneratedColumn<bool> get demoMode =>
+      $composableBuilder(column: $table.demoMode, builder: (column) => column);
+}
+
+class $$EnsaioRecordsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $EnsaioRecordsTable,
+          EnsaioRecord,
+          $$EnsaioRecordsTableFilterComposer,
+          $$EnsaioRecordsTableOrderingComposer,
+          $$EnsaioRecordsTableAnnotationComposer,
+          $$EnsaioRecordsTableCreateCompanionBuilder,
+          $$EnsaioRecordsTableUpdateCompanionBuilder,
+          (
+            EnsaioRecord,
+            BaseReferences<_$AppDatabase, $EnsaioRecordsTable, EnsaioRecord>,
+          ),
+          EnsaioRecord,
+          PrefetchHooks Function()
+        > {
+  $$EnsaioRecordsTableTableManager(_$AppDatabase db, $EnsaioRecordsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$EnsaioRecordsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$EnsaioRecordsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$EnsaioRecordsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<String> nome = const Value.absent(),
+                Value<String> deviceId = const Value.absent(),
+                Value<String?> operador = const Value.absent(),
+                Value<int?> operatorId = const Value.absent(),
+                Value<String?> stationId = const Value.absent(),
+                Value<int> onSeconds = const Value.absent(),
+                Value<int> offSeconds = const Value.absent(),
+                Value<int> totalSeconds = const Value.absent(),
+                Value<DateTime> startedAt = const Value.absent(),
+                Value<DateTime?> endedAt = const Value.absent(),
+                Value<String> status = const Value.absent(),
+                Value<int> ciclos = const Value.absent(),
+                Value<int> elapsedSec = const Value.absent(),
+                Value<String?> motivo = const Value.absent(),
+                Value<String?> pdfPath = const Value.absent(),
+                Value<bool> demoMode = const Value.absent(),
+              }) => EnsaioRecordsCompanion(
+                id: id,
+                nome: nome,
+                deviceId: deviceId,
+                operador: operador,
+                operatorId: operatorId,
+                stationId: stationId,
+                onSeconds: onSeconds,
+                offSeconds: offSeconds,
+                totalSeconds: totalSeconds,
+                startedAt: startedAt,
+                endedAt: endedAt,
+                status: status,
+                ciclos: ciclos,
+                elapsedSec: elapsedSec,
+                motivo: motivo,
+                pdfPath: pdfPath,
+                demoMode: demoMode,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required String nome,
+                required String deviceId,
+                Value<String?> operador = const Value.absent(),
+                Value<int?> operatorId = const Value.absent(),
+                Value<String?> stationId = const Value.absent(),
+                required int onSeconds,
+                required int offSeconds,
+                required int totalSeconds,
+                required DateTime startedAt,
+                Value<DateTime?> endedAt = const Value.absent(),
+                required String status,
+                Value<int> ciclos = const Value.absent(),
+                Value<int> elapsedSec = const Value.absent(),
+                Value<String?> motivo = const Value.absent(),
+                Value<String?> pdfPath = const Value.absent(),
+                Value<bool> demoMode = const Value.absent(),
+              }) => EnsaioRecordsCompanion.insert(
+                id: id,
+                nome: nome,
+                deviceId: deviceId,
+                operador: operador,
+                operatorId: operatorId,
+                stationId: stationId,
+                onSeconds: onSeconds,
+                offSeconds: offSeconds,
+                totalSeconds: totalSeconds,
+                startedAt: startedAt,
+                endedAt: endedAt,
+                status: status,
+                ciclos: ciclos,
+                elapsedSec: elapsedSec,
+                motivo: motivo,
+                pdfPath: pdfPath,
+                demoMode: demoMode,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$EnsaioRecordsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $EnsaioRecordsTable,
+      EnsaioRecord,
+      $$EnsaioRecordsTableFilterComposer,
+      $$EnsaioRecordsTableOrderingComposer,
+      $$EnsaioRecordsTableAnnotationComposer,
+      $$EnsaioRecordsTableCreateCompanionBuilder,
+      $$EnsaioRecordsTableUpdateCompanionBuilder,
+      (
+        EnsaioRecord,
+        BaseReferences<_$AppDatabase, $EnsaioRecordsTable, EnsaioRecord>,
+      ),
+      EnsaioRecord,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -7955,4 +9947,8 @@ class $AppDatabaseManager {
       $$BancadasTableTableManager(_db, _db.bancadas);
   $$RemarkLogsTableTableManager get remarkLogs =>
       $$RemarkLogsTableTableManager(_db, _db.remarkLogs);
+  $$DowntimeEventsTableTableManager get downtimeEvents =>
+      $$DowntimeEventsTableTableManager(_db, _db.downtimeEvents);
+  $$EnsaioRecordsTableTableManager get ensaioRecords =>
+      $$EnsaioRecordsTableTableManager(_db, _db.ensaioRecords);
 }

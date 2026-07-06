@@ -16,6 +16,8 @@ class AuthService {
       email: email.trim(),
       password: password,
     );
+    // Garante token pronto antes de voltar à UI (evita corrida com Firestore).
+    await _auth.authStateChanges().firstWhere((user) => user != null);
   }
 
   Future<void> signOut() => _auth.signOut();

@@ -62,7 +62,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
 
     final config = container.read(appConfigProvider);
-    expect(config.activeOperatorId, isNull);
+    expect(config.activeOperatorId, isNotNull);
     expect(container.read(sessionOperatorIdProvider), isNotNull);
   });
 

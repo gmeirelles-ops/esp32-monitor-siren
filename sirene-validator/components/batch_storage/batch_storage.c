@@ -6,11 +6,46 @@
 #include "esp_log.h"
 #include "nvs.h"
 #include "nvs_flash.h"
+#include "pure_logic.h"
 
 static const char *TAG = "batch_nvs";
 
+static void batch_to_pure_input(const batch_context_t *ctx, pure_batch_input_t *in)
+{
+    memset(in, 0, sizeof(*in));
+    strncpy(in->numero_op, ctx->numero_op, sizeof(in->numero_op) - 1);
+    strncpy(in->id_produto, ctx->id_produto, sizeof(in->id_produto) - 1);
+    strncpy(in->ano, ctx->ano, sizeof(in->ano) - 1);
+    in->tempo_teste_sec = ctx->tempo_teste_sec;
+    in->potencia_min = ctx->potencia_min;
+    in->potencia_max = ctx->potencia_max;
+    in->quantidade_total = ctx->quantidade_total;
+    in->proximo_sequencial = ctx->proximo_sequencial;
+}
+
+static bool batch_context_valid(const batch_context_t *ctx)
+{
+    if (!ctx || !ctx->active) {
+        return false;
+    }
+    pure_batch_input_t in;
+    batch_to_pure_input(ctx, &in);
+    if (!pure_batch_fields_valid(&in)) {
+        return false;
+    }
+    if (ctx->aprovados > ctx->quantidade_total) {
+        return false;
+    }
+    return true;
+}
+
 bool batch_storage_save(const batch_context_t *ctx)
 {
+    if (!batch_context_valid(ctx)) {
+        ESP_LOGE(TAG, "recusa salvar lote invalido");
+        return false;
+    }
+
     nvs_handle_t handle;
     esp_err_t err = nvs_open(BATCH_NVS_NAMESPACE, NVS_READWRITE, &handle);
     if (err != ESP_OK) {
@@ -31,6 +66,9 @@ bool batch_storage_save(const batch_context_t *ctx)
     nvs_set_u8(handle, "modo_reteste", ctx->modo_reteste ? 1 : 0);
     err = nvs_commit(handle);
     nvs_close(handle);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "nvs_commit failed: %s", esp_err_to_name(err));
+    }
     return err == ESP_OK;
 }
 
@@ -69,6 +107,13 @@ bool batch_storage_load(batch_context_t *ctx)
     }
     ctx->active = true;
     nvs_close(handle);
+
+    if (!batch_context_valid(ctx)) {
+        ESP_LOGW(TAG, "lote NVS invalido — apagando");
+        batch_storage_clear();
+        memset(ctx, 0, sizeof(*ctx));
+        return false;
+    }
     return true;
 }
 

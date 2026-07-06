@@ -7,12 +7,19 @@
 typedef struct {
     int rssi;
     const char *estado;
+    const char *wifi_ssid;
     size_t fila;
     const char *firmware_version;
     const char *numero_op;
     uint32_t proximo_sequencial;
     uint32_t aprovados;
     bool batch_active;
+    uint32_t queue_drops;
+    uint32_t pzem_faults;
+    bool batch_nvs_fault;
+    int reset_reason;
+    bool time_synced;
+    uint8_t pzem_addr;
 } telemetry_snapshot_t;
 
 bool telemetry_init(void);

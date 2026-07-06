@@ -4,7 +4,9 @@ import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../core/database/database.dart';
+import '../../../core/services/app_log.dart';
 import 'firestore_sync_service.dart';
+import 'station_heartbeat_service.dart';
 
 typedef FirestoreWriter = Future<void> Function(
   String collection,
@@ -56,17 +58,20 @@ class SyncQueueProcessor {
     required FirestoreSyncService syncService,
     FirebaseFirestore? firestore,
     FirestoreWriter? writer,
+    StationHeartbeatService? heartbeat,
     this.maxAttempts = 5,
     this.interval = const Duration(seconds: 30),
   })  : _db = db,
         _syncService = syncService,
         _firestore = firestore,
-        _writer = writer;
+        _writer = writer,
+        _heartbeat = heartbeat ?? StationHeartbeatService(firestore: firestore);
 
   final AppDatabase _db;
   final FirestoreSyncService _syncService;
   final FirebaseFirestore? _firestore;
   final FirestoreWriter? _writer;
+  final StationHeartbeatService _heartbeat;
   final int maxAttempts;
   final Duration interval;
 
@@ -91,6 +96,7 @@ class SyncQueueProcessor {
     try {
       await _syncService.flushPendingDeviceUpdates();
       final items = await _db.getPendingItems();
+      await AppLog.write('Sync: processando ${items.length} item(ns) pendente(s)');
       for (final item in items) {
         if (item.attempts >= maxAttempts) continue;
         try {
@@ -124,6 +130,19 @@ class SyncQueueProcessor {
           }
         }
       }
+      if (lastSuccessfulSync != null) {
+        try {
+          await _heartbeat.recordHeartbeat(
+            stationId: _syncService.stationIdForHeartbeat(),
+            pendingQueue: await _db.countPending(),
+            failedQueue: await _db.countFailed(),
+          );
+        } catch (_) {
+          // Heartbeat opcional; não interrompe a fila.
+        }
+      }
+    } catch (e, st) {
+      await AppLog.write('Sync: processQueue erro geral', error: e, stack: st);
     } finally {
       _processing = false;
     }

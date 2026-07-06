@@ -2,6 +2,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/services/app_log.dart';
+import '../firebase_bootstrap.dart';
 import 'auth_providers.dart';
 import 'auth_service.dart';
 
@@ -31,9 +33,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
+    if (!isFirebaseAvailable) {
+      setState(() => _error = 'Firebase não configurado neste build.');
+      return;
+    }
+
+    final ok = await ensureFirebaseReady(ref);
+    if (!ok) {
+      setState(() => _error = 'Não foi possível iniciar o Firebase neste PC.');
+      return;
+    }
+
     final service = ref.read(authServiceProvider);
     if (service == null) {
-      setState(() => _error = 'Firebase não configurado neste build.');
+      setState(() => _error = 'Serviço de autenticação indisponível. Tente novamente.');
       return;
     }
 
@@ -43,12 +56,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     });
 
     try {
+      await AppLog.write('Login nuvem: tentando signIn');
       await service.signIn(_email.text, _password.text);
+      ref.invalidate(authStateProvider);
+      await AppLog.write('Login nuvem: signIn ok');
       widget.onSuccess?.call();
       if (mounted) Navigator.of(context).pop(true);
     } on FirebaseAuthException catch (e) {
+      await AppLog.write('Login nuvem: FirebaseAuthException ${e.code}');
       setState(() => _error = AuthService.messageForCode(e.code));
-    } catch (_) {
+    } catch (e, st) {
+      await AppLog.write('Login nuvem: erro inesperado', error: e, stack: st);
       setState(() => _error = 'Erro inesperado. Tente novamente.');
     } finally {
       if (mounted) setState(() => _loading = false);

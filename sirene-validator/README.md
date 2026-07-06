@@ -36,17 +36,25 @@ Edite `components/board_config/include/board_config.h`:
 - `FIRMWARE_VERSION` — versão reportada no heartbeat
 - GPIOs do relé, botão, LED, buzzer e UART do PZEM
 
-## Novidades (hardening produção)
+## Novidades (hardening produção v1.7.0)
 
 | Recurso | Descrição |
 |---------|-----------|
-| OTA | Comando MQTT `OTA_UPDATE` com campo `url` (HTTPS) |
+| OTA | Comando MQTT `OTA_UPDATE` — URLs só em LAN privada / `*.local` |
+| MQTT auth | Usuário/senha via portal Wi-Fi e NVS |
+| Lote NVS | Validação no boot; alerta `batch_nvs_fault` se persistência falhar |
+| PZEM | Auto-detect `0x01` / `0xF8`; smoke test pós-OTA |
+| Fila offline | Sem descarte silencioso; `fila_drops` no heartbeat |
+| Timestamps | `ts_ms` + `ts_unix` (SNTP) nos testes |
+| TLS MQTT | Opcional via portal (`mqtts://`) |
+| AP Wi-Fi | Senha derivada do MAC por dispositivo |
+| CI | GitHub Actions com testes host |
 | Telemetria | LWT `presenca` (online/offline) + heartbeat periódico |
 | Robustez | TWDT, reconexão Wi-Fi/MQTT com backoff exponencial + jitter |
-| Portal | Scan com RSSI, URL-decode de senhas, validação STA antes de salvar |
+| Portal | Scan com RSSI, broker MQTT + auth, validação STA antes de salvar |
 | Worker task | Operações longas fora do callback MQTT |
-| Reconexão | Heartbeat imediato + sync offline ao reconectar MQTT |
-| OTA | Validação de URL (`http://`/`https://`), restauração de estado em falha |
+
+Deploy industrial: [docs/DEPLOY_PRODUCTION.md](docs/DEPLOY_PRODUCTION.md).
 
 ## Testes de host (CI)
 

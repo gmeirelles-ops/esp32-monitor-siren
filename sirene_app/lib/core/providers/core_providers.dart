@@ -20,6 +20,14 @@ final wifiProvisionedProvider = Provider<bool>((ref) {
   return ref.watch(appConfigProvider).wifiProvisioned;
 });
 
+final cloudSetupCompleteProvider = Provider<bool>((ref) {
+  return ref.watch(appConfigProvider).cloudSetupComplete;
+});
+
+final yieldTargetPctProvider = Provider<double>((ref) {
+  return ref.watch(appConfigProvider).yieldTargetPct;
+});
+
 final databaseProvider = Provider<AppDatabase>((ref) {
   final db = AppDatabase();
   ref.onDispose(db.close);

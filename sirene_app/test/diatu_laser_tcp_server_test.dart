@@ -36,18 +36,62 @@ void main() {
     });
   });
 
+  group('routeDiatuTcpCommand', () {
+    const serialCmd = 'TCP: Give me string';
+    const modelCmd = 'TCP: model';
+
+    test('roteia serial e modelo', () {
+      expect(
+        routeDiatuTcpCommand(serialCmd, serialCommandPrefix: serialCmd, modelCommandPrefix: modelCmd),
+        DiatuTcpRoute.serial,
+      );
+      expect(
+        routeDiatuTcpCommand(modelCmd, serialCommandPrefix: serialCmd, modelCommandPrefix: modelCmd),
+        DiatuTcpRoute.model,
+      );
+      expect(
+        routeDiatuTcpCommand('wrong', serialCommandPrefix: serialCmd, modelCommandPrefix: modelCmd),
+        DiatuTcpRoute.bad,
+      );
+    });
+
+    test('modelo tem prioridade se ambos casarem', () {
+      expect(
+        routeDiatuTcpCommand(
+          'TCP: model extra',
+          serialCommandPrefix: 'TCP:',
+          modelCommandPrefix: modelCmd,
+        ),
+        DiatuTcpRoute.model,
+      );
+    });
+  });
+
   group('DiatuLaserTcpServer E2E', () {
     const command = 'TCP: Give me string';
+    const modelCommand = 'TCP: model';
     late DiatuLaserTcpServer server;
     late LaserTcpEventLog log;
+    var serialCalls = 0;
+    var modelCalls = 0;
 
     setUp(() async {
       log = LaserTcpEventLog();
+      serialCalls = 0;
+      modelCalls = 0;
       server = DiatuLaserTcpServer(
         port: 0,
         commandPrefix: command,
+        modelCommandPrefix: modelCommand,
         eventLog: log,
-        onRequestSerial: () async => '1234567890',
+        onRequestSerial: () async {
+          serialCalls++;
+          return '1234567890';
+        },
+        onRequestModel: () async {
+          modelCalls++;
+          return 'Sirene Modelo X';
+        },
       );
       await server.start();
     });
@@ -69,12 +113,21 @@ void main() {
       }
     }
 
-    test('comando válido retorna serial', () async {
+    test('comando serial válido retorna serial', () async {
       final response = await clientRoundTrip(command);
       expect(response, '1234567890');
+      expect(serialCalls, 1);
+      expect(modelCalls, 0);
       expect(log.events, isNotEmpty);
       expect(log.lastEvent?.response, '1234567890');
       expect(log.lastEvent?.request, command);
+    });
+
+    test('comando modelo retorna nome sem chamar serial', () async {
+      final response = await clientRoundTrip(modelCommand);
+      expect(response, 'Sirene Modelo X');
+      expect(modelCalls, 1);
+      expect(serialCalls, 0);
     });
 
     test('comando inválido retorna ERROR:BADCMD', () async {
@@ -88,8 +141,10 @@ void main() {
       server = DiatuLaserTcpServer(
         port: 0,
         commandPrefix: command,
+        modelCommandPrefix: modelCommand,
         eventLog: log,
         onRequestSerial: () async => null,
+        onRequestModel: () async => null,
       );
       await server.start();
       final response = await clientRoundTrip(command);

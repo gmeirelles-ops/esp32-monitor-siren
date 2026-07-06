@@ -29,7 +29,7 @@ OTA_URL="http://${LAN_IP}:${HTTP_PORT}/sirene-validator.bin"
 PAYLOAD=$(printf '{"cmd":"OTA_UPDATE","url":"%s"}' "$OTA_URL")
 
 echo "Servindo ${SERVE_DIR} em http://${LAN_IP}:${HTTP_PORT}/"
-python3 -m http.server "$HTTP_PORT" --directory "$SERVE_DIR" &
+python3 -m http.server "$HTTP_PORT" --bind 0.0.0.0 --directory "$SERVE_DIR" &
 HTTP_PID=$!
 trap 'kill "$HTTP_PID" 2>/dev/null || true' EXIT
 

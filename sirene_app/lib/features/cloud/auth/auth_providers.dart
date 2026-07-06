@@ -5,7 +5,7 @@ import '../firebase_bootstrap.dart';
 import 'auth_service.dart';
 
 final firebaseAuthProvider = Provider<FirebaseAuth?>((ref) {
-  if (!firebaseInitialized) return null;
+  if (!ref.watch(firebaseReadyProvider)) return null;
   return FirebaseAuth.instance;
 });
 

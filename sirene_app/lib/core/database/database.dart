@@ -134,6 +134,36 @@ class Bancadas extends Table {
   DateTimeColumn get createdAt => dateTime()();
 }
 
+class DowntimeEvents extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get reason => text()();
+  TextColumn get deviceId => text().nullable()();
+  DateTimeColumn get startedAt => dateTime()();
+  DateTimeColumn get endedAt => dateTime().nullable()();
+  TextColumn get notes => text().nullable()();
+}
+
+class EnsaioRecords extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get nome => text()();
+  TextColumn get deviceId => text()();
+  TextColumn get operador => text().nullable()();
+  IntColumn get operatorId => integer().nullable()();
+  TextColumn get stationId => text().nullable()();
+  IntColumn get onSeconds => integer()();
+  IntColumn get offSeconds => integer()();
+  IntColumn get totalSeconds => integer()();
+  DateTimeColumn get startedAt => dateTime()();
+  DateTimeColumn get endedAt => dateTime().nullable()();
+  /// running | concluido | interrompido | falha
+  TextColumn get status => text()();
+  IntColumn get ciclos => integer().withDefault(const Constant(0))();
+  IntColumn get elapsedSec => integer().withDefault(const Constant(0))();
+  TextColumn get motivo => text().nullable()();
+  TextColumn get pdfPath => text().nullable()();
+  BoolColumn get demoMode => boolean().withDefault(const Constant(false))();
+}
+
 @DriftDatabase(
   tables: [
     TestResults,
@@ -148,6 +178,8 @@ class Bancadas extends Table {
     Operators,
     Bancadas,
     RemarkLogs,
+    DowntimeEvents,
+    EnsaioRecords,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -161,7 +193,7 @@ class AppDatabase extends _$AppDatabase {
   }
 
   @override
-  int get schemaVersion => 15;
+  int get schemaVersion => 17;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -217,15 +249,23 @@ class AppDatabase extends _$AppDatabase {
             await m.createTable(markQueueEntries);
           }
           if (from < 14) {
-            await m.addColumn(testResults, testResults.tempoTesteSec);
-            await m.addColumn(testResults, testResults.potenciaMin);
-            await m.addColumn(testResults, testResults.potenciaMax);
-            await m.addColumn(testResults, testResults.operatorId);
-            await m.addColumn(operators, operators.updatedAt);
-            await m.createTable(remarkLogs);
+            await _addColumnIfNotExists(m, testResults, testResults.tempoTesteSec);
+            await _addColumnIfNotExists(m, testResults, testResults.potenciaMin);
+            await _addColumnIfNotExists(m, testResults, testResults.potenciaMax);
+            await _addColumnIfNotExists(m, testResults, testResults.operatorId);
+            await _addColumnIfNotExists(m, operators, operators.updatedAt);
+            if (!await _tableExists(m, remarkLogs.actualTableName)) {
+              await m.createTable(remarkLogs);
+            }
           }
           if (from < 15) {
-            await m.addColumn(operators, operators.isGestor);
+            await _addColumnIfNotExists(m, operators, operators.isGestor);
+          }
+          if (from < 16) {
+            await m.createTable(downtimeEvents);
+          }
+          if (from < 17) {
+            await m.createTable(ensaioRecords);
           }
         },
       );
@@ -268,9 +308,48 @@ class AppDatabase extends _$AppDatabase {
     );
   }
 
+  /// Sincroniza número da bancada física informado pelo firmware (heartbeat).
+  Future<int> syncBancadaFromFirmware(String deviceId, int numero) async {
+    if (numero < 1 || numero > 99) {
+      return ensureBancada(deviceId);
+    }
+
+    final existing = await getBancadaByDevice(deviceId);
+    if (existing != null) {
+      if (existing.numero != numero) {
+        await (update(bancadas)..where((b) => b.deviceId.equals(deviceId)))
+            .write(BancadasCompanion(numero: Value(numero)));
+      }
+      return numero;
+    }
+
+    final byNum = await (select(bancadas)..where((b) => b.numero.equals(numero)))
+        .getSingleOrNull();
+    if (byNum != null) {
+      await (update(bancadas)..where((b) => b.numero.equals(numero)))
+          .write(BancadasCompanion(deviceId: Value(deviceId)));
+      return numero;
+    }
+
+    await into(bancadas).insert(
+      BancadasCompanion.insert(
+        deviceId: deviceId,
+        numero: Value(numero),
+        createdAt: DateTime.now(),
+      ),
+    );
+    return numero;
+  }
+
   Future<Bancada?> getBancadaByDevice(String deviceId) {
     return (select(bancadas)..where((b) => b.deviceId.equals(deviceId)))
         .getSingleOrNull();
+  }
+
+  Future<String?> getDeviceIdByBancadaNumero(int numero) async {
+    final row = await (select(bancadas)..where((b) => b.numero.equals(numero)))
+        .getSingleOrNull();
+    return row?.deviceId;
   }
 
   Future<Map<String, int>> getBancadaNumeros() async {
@@ -290,6 +369,67 @@ class AppDatabase extends _$AppDatabase {
 
   Stream<List<Bancada>> watchAllBancadasOrdered() {
     return (select(bancadas)..orderBy([(b) => OrderingTerm.asc(b.numero)])).watch();
+  }
+
+  Future<int> insertEnsaioRecord({
+    required String nome,
+    required String deviceId,
+    required int onSeconds,
+    required int offSeconds,
+    required int totalSeconds,
+    required DateTime startedAt,
+    String? operador,
+    int? operatorId,
+    String? stationId,
+    bool demoMode = false,
+  }) {
+    return into(ensaioRecords).insert(
+      EnsaioRecordsCompanion.insert(
+        nome: nome,
+        deviceId: deviceId,
+        onSeconds: onSeconds,
+        offSeconds: offSeconds,
+        totalSeconds: totalSeconds,
+        startedAt: startedAt,
+        status: 'running',
+        operador: Value(operador),
+        operatorId: Value(operatorId),
+        stationId: Value(stationId),
+        demoMode: Value(demoMode),
+      ),
+    );
+  }
+
+  Future<void> finalizeEnsaioRecord({
+    required int id,
+    required String status,
+    required DateTime endedAt,
+    required int ciclos,
+    required int elapsedSec,
+    String? motivo,
+    String? pdfPath,
+  }) {
+    return (update(ensaioRecords)..where((e) => e.id.equals(id))).write(
+      EnsaioRecordsCompanion(
+        status: Value(status),
+        endedAt: Value(endedAt),
+        ciclos: Value(ciclos),
+        elapsedSec: Value(elapsedSec),
+        motivo: Value(motivo),
+        pdfPath: Value(pdfPath),
+      ),
+    );
+  }
+
+  Stream<List<EnsaioRecord>> watchEnsaioRecords({int limit = 50}) {
+    return (select(ensaioRecords)
+          ..orderBy([(e) => OrderingTerm.desc(e.startedAt)])
+          ..limit(limit))
+        .watch();
+  }
+
+  Future<EnsaioRecord?> getEnsaioRecord(int id) {
+    return (select(ensaioRecords)..where((e) => e.id.equals(id))).getSingleOrNull();
   }
 
   /// IDs de dispositivo ordenados pelo número da bancada (para filtros).
@@ -727,7 +867,9 @@ class AppDatabase extends _$AppDatabase {
   }
 
   Future<int> resetAllFailedSyncAttempts() async {
-    final failed = await getFailedSyncItems();
+    final failed = await (select(syncQueue)
+          ..where((t) => t.attempts.isBiggerOrEqualValue(5)))
+        .get();
     for (final item in failed) {
       await resetSyncAttempts(item.id);
     }
@@ -890,7 +1032,7 @@ class AppDatabase extends _$AppDatabase {
   }
 
   /// Rótulo legível para rastreio em testes.
-  static String operatorLabel(Operator op) => '${op.codigo} — ${op.nome}';
+  static String operatorLabel(Operator op) => op.nome;
 
   Future<void> lockOp(String numeroOp) async {
     await into(opLocks).insertOnConflictUpdate(
@@ -1212,6 +1354,79 @@ class AppDatabase extends _$AppDatabase {
     }
     return SerialReconciliation(found: found, gaps: gaps, duplicates: duplicates);
   }
+
+  Future<int> insertDowntime({
+    required String reason,
+    String? deviceId,
+    String? notes,
+    DateTime? startedAt,
+  }) {
+    return into(downtimeEvents).insert(
+      DowntimeEventsCompanion.insert(
+        reason: reason,
+        deviceId: Value(deviceId),
+        notes: Value(notes),
+        startedAt: startedAt ?? DateTime.now(),
+      ),
+    );
+  }
+
+  Future<void> endDowntime(int id) async {
+    await (update(downtimeEvents)..where((t) => t.id.equals(id))).write(
+      DowntimeEventsCompanion(endedAt: Value(DateTime.now())),
+    );
+  }
+
+  Future<List<DowntimeEvent>> listDowntimeEvents({DateTime? since}) async {
+    final query = select(downtimeEvents)
+      ..orderBy([(t) => OrderingTerm.desc(t.startedAt)]);
+    if (since != null) {
+      query.where((t) => t.startedAt.isBiggerOrEqualValue(since));
+    }
+    return query.get();
+  }
+
+  Future<Duration> totalDowntimeDuration({DateTime? since}) async {
+    final events = await listDowntimeEvents(since: since);
+    var total = Duration.zero;
+    final now = DateTime.now();
+    for (final e in events) {
+      final end = e.endedAt ?? now;
+      total += end.difference(e.startedAt);
+    }
+    return total;
+  }
+
+  Future<List<OperatorProductivity>> operatorProductivity({DateTime? since}) async {
+    final query = select(testResults);
+    if (since != null) {
+      query.where((t) => t.createdAt.isBiggerOrEqualValue(since));
+    }
+    final rows = await query.get();
+    final byKey = <String, ({String label, int total, int aprovados})>{};
+
+    for (final row in rows) {
+      final key = row.operatorId?.toString() ?? row.operador ?? '—';
+      final label = row.operador ?? (row.operatorId != null ? '#${row.operatorId}' : '—');
+      final current = byKey[key] ?? (label: label, total: 0, aprovados: 0);
+      byKey[key] = (
+        label: label,
+        total: current.total + 1,
+        aprovados: current.aprovados + (isApprovedVeredito(row.veredito) ? 1 : 0),
+      );
+    }
+
+    return byKey.entries
+        .map(
+          (e) => OperatorProductivity(
+            label: e.value.label,
+            total: e.value.total,
+            aprovados: e.value.aprovados,
+          ),
+        )
+        .toList()
+      ..sort((a, b) => b.total.compareTo(a.total));
+  }
 }
 
 class SerialReconciliation {
@@ -1288,6 +1503,62 @@ class BatchReportSummary extends BatchProductionSummary {
 
   final DateTime? firstTestAt;
   final DateTime? lastTestAt;
+}
+
+class OperatorProductivity {
+  const OperatorProductivity({
+    required this.label,
+    required this.total,
+    required this.aprovados,
+  });
+
+  final String label;
+  final int total;
+  final int aprovados;
+
+  int get reprovados => total - aprovados;
+
+  double get yieldPct => total == 0 ? 0 : (aprovados / total) * 100;
+}
+
+class OeeMetrics {
+  const OeeMetrics({
+    required this.availabilityPct,
+    required this.performancePct,
+    required this.qualityPct,
+  });
+
+  final double availabilityPct;
+  final double performancePct;
+  final double qualityPct;
+
+  double get oeePct => (availabilityPct / 100) * (performancePct / 100) * (qualityPct / 100) * 100;
+}
+
+Future<bool> _tableExists(Migrator m, String tableName) async {
+  final rows = await m.database.customSelect(
+    "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ? LIMIT 1",
+    variables: [Variable.withString(tableName)],
+    readsFrom: {},
+  ).get();
+  return rows.isNotEmpty;
+}
+
+Future<bool> _columnExists(Migrator m, String tableName, String columnName) async {
+  final rows = await m.database.customSelect(
+    'PRAGMA table_info($tableName)',
+    readsFrom: {},
+  ).get();
+  return rows.any((row) => row.read<String>('name') == columnName);
+}
+
+Future<void> _addColumnIfNotExists(
+  Migrator m,
+  TableInfo<Table, Object?> table,
+  GeneratedColumn column,
+) async {
+  if (await _columnExists(m, table.actualTableName, column.name)) return;
+  await m.addColumn(table, column);
 }
 
 LazyDatabase _openConnection() {

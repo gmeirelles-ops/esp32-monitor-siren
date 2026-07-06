@@ -1,0 +1,12 @@
+menu "OTA update"
+
+config OTA_ERASE_NVS_ON_BOOT
+    bool "Erase NVS + storage on first boot after OTA"
+    default n
+    help
+        When enabled, the first boot after a successful OTA (image
+        pending verify) erases the nvs and storage partitions before
+        connecting. The device then enters Wi-Fi provisioning (AP
+        SireneValidator). Disable for normal production OTA updates.
+
+endmenu

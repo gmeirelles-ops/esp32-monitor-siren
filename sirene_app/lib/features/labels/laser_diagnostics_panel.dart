@@ -13,26 +13,48 @@ class LaserDiagnosticsPanel extends ConsumerStatefulWidget {
 }
 
 class _LaserDiagnosticsPanelState extends ConsumerState<LaserDiagnosticsPanel> {
-  bool _simulating = false;
-  String? _lastSimulation;
+  bool _simulatingSerial = false;
+  bool _simulatingModel = false;
+  String? _lastSerialSimulation;
+  String? _lastModelSimulation;
 
-  Future<void> _simulate() async {
+  Future<void> _simulateSerial() async {
     setState(() {
-      _simulating = true;
-      _lastSimulation = null;
+      _simulatingSerial = true;
+      _lastSerialSimulation = null;
     });
     try {
       final processor = ref.read(markQueueProcessorProvider);
       final response = await processor.simulateDiatuClient();
       if (mounted) {
-        setState(() => _lastSimulation = response);
+        setState(() => _lastSerialSimulation = response);
       }
     } catch (e) {
       if (mounted) {
-        setState(() => _lastSimulation = 'ERRO: $e');
+        setState(() => _lastSerialSimulation = 'ERRO: $e');
       }
     } finally {
-      if (mounted) setState(() => _simulating = false);
+      if (mounted) setState(() => _simulatingSerial = false);
+    }
+  }
+
+  Future<void> _simulateModel() async {
+    setState(() {
+      _simulatingModel = true;
+      _lastModelSimulation = null;
+    });
+    try {
+      final processor = ref.read(markQueueProcessorProvider);
+      final response = await processor.simulateDiatuModelClient();
+      if (mounted) {
+        setState(() => _lastModelSimulation = response);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _lastModelSimulation = 'ERRO: $e');
+      }
+    } finally {
+      if (mounted) setState(() => _simulatingModel = false);
     }
   }
 
@@ -88,10 +110,17 @@ class _LaserDiagnosticsPanelState extends ConsumerState<LaserDiagnosticsPanel> {
                     style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
                   ),
                 ],
-                if (_lastSimulation != null) ...[
+                if (_lastSerialSimulation != null) ...[
                   const SizedBox(height: 8),
                   Text(
-                    'Simulação: $_lastSimulation',
+                    'Simulação serial: $_lastSerialSimulation',
+                    style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+                  ),
+                ],
+                if (_lastModelSimulation != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    'Simulação modelo: $_lastModelSimulation',
                     style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
                   ),
                 ],
@@ -124,15 +153,26 @@ class _LaserDiagnosticsPanelState extends ConsumerState<LaserDiagnosticsPanel> {
                   runSpacing: 8,
                   children: [
                     OutlinedButton.icon(
-                      onPressed: _simulating ? null : _simulate,
-                      icon: _simulating
+                      onPressed: _simulatingSerial ? null : _simulateSerial,
+                      icon: _simulatingSerial
                           ? const SizedBox(
                               width: 16,
                               height: 16,
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
                           : const Icon(Icons.cable_outlined, size: 18),
-                      label: const Text('Simular DiatuCAD'),
+                      label: const Text('Simular serial'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: _simulatingModel ? null : _simulateModel,
+                      icon: _simulatingModel
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.text_fields_outlined, size: 18),
+                      label: const Text('Simular modelo'),
                     ),
                     TextButton(
                       onPressed: eventLog.events.isEmpty ? null : eventLog.clear,

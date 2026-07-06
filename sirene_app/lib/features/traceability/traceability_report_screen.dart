@@ -5,14 +5,19 @@ import 'package:intl/intl.dart';
 import '../../core/database/database.dart';
 import '../../core/theme/diponto_theme.dart';
 import '../../shared/display_labels.dart';
+import '../../shared/dropdown_value.dart';
+import '../../shared/widgets/action_section_card.dart';
 import '../../shared/widgets/desktop_form_layout.dart';
 import '../../shared/widgets/empty_state_view.dart';
-import '../../shared/widgets/form_section_card.dart';
 import '../../shared/widgets/screen_app_bar.dart';
+import '../../shared/widgets/section_intro.dart';
 import '../dashboard/dashboard_filters.dart';
 import '../mqtt/mqtt_providers.dart';
 import 'batch_report_detail_screen.dart';
-import 'batch_report_export.dart';
+import '../../shared/reports/report_context.dart';
+import '../../shared/reports/report_export_format.dart';
+import '../../shared/reports/report_pdf_export.dart';
+import '../../shared/reports/report_xml_export.dart';
 import 'report_filters.dart';
 
 final reportFiltersProvider = StateProvider<ReportFilters>((ref) => const ReportFilters());
@@ -50,12 +55,28 @@ class _TraceabilityReportScreenState extends ConsumerState<TraceabilityReportScr
   }
 
   Future<void> _exportList(List<BatchReportSummary> batches) async {
+    final format = await pickReportExportFormat(context);
+    if (format == null || !mounted) return;
+
     setState(() => _exporting = true);
     try {
-      final path = await saveReportCsv('lotes', formatBatchListCsv(batches));
+      final filters = ref.read(reportFiltersProvider);
+      final ctx = await loadReportContext(ref);
+      final meta = ReportPdfMeta(
+        title: 'Lista de lotes',
+        stationId: ctx.stationId,
+        operatorLabel: ctx.operatorLabel,
+      );
+      final path = await exportReportFile(
+        format: format,
+        basename: 'lotes',
+        buildPdf: () => buildBatchListPdf(batches, filters: filters, meta: meta),
+        buildXml: () => formatBatchListXml(batches, filters: filters),
+        openPrintDialog: format == ReportExportFormat.pdf,
+      );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Relatório salvo: $path')),
+          SnackBar(content: Text('${format.label} salvo: $path')),
         );
       }
     } catch (e) {
@@ -114,26 +135,35 @@ class _TraceabilityReportScreenState extends ConsumerState<TraceabilityReportScr
           return ListView(
             children: [
               DesktopFormLayout(
+                maxWidth: 900,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    FormSectionCard(
+                    const SectionIntro(
+                      title: 'Relatório de lotes',
+                      subtitle: 'Filtre por período, produto ou bancada e abra o detalhe de cada OP.',
+                      icon: Icons.fact_check_outlined,
+                    ),
+                    ActionSectionCard(
+                      icon: Icons.filter_list,
                       title: 'Filtros',
+                      subtitle: 'Período e critérios de busca',
                       child: _FiltersPanel(
                         filters: filters,
                         opSearchController: _opSearch,
                         onFiltersChanged: (f) => ref.read(reportFiltersProvider.notifier).state = f,
                       ),
                     ),
-                    const SizedBox(height: 8),
                     if (snapshot.connectionState == ConnectionState.waiting)
                       const Padding(
                         padding: EdgeInsets.all(48),
                         child: Center(child: CircularProgressIndicator()),
                       )
                     else if (snapshot.hasError)
-                      Padding(
-                        padding: const EdgeInsets.all(24),
+                      ActionSectionCard(
+                        icon: Icons.error_outline,
+                        title: 'Erro',
+                        accentColor: DipontoColors.error,
                         child: Text('Erro: ${snapshot.error}'),
                       )
                     else ...[
@@ -142,7 +172,7 @@ class _TraceabilityReportScreenState extends ConsumerState<TraceabilityReportScr
                           final batches = snapshot.data ?? [];
                           if (batches.isEmpty) {
                             return const Padding(
-                              padding: EdgeInsets.only(top: 32),
+                              padding: EdgeInsets.only(top: 16),
                               child: EmptyStateView(
                                 icon: Icons.inventory_2_outlined,
                                 title: 'Nenhum lote encontrado',
@@ -151,44 +181,46 @@ class _TraceabilityReportScreenState extends ConsumerState<TraceabilityReportScr
                             );
                           }
 
-                          return FormSectionCard(
+                          return ActionSectionCard(
+                            icon: Icons.folder_open_outlined,
                             title: 'Lotes (${batches.length})',
+                            subtitle: 'Toque para ver testes e exportar PDF ou XML',
                             child: Column(
                               children: [
-                                for (final batch in batches)
-                                  Card(
-                                    margin: const EdgeInsets.only(bottom: 6),
-                                    child: ListTile(
-                                      leading: const Icon(
-                                        Icons.folder_open_outlined,
-                                        color: DipontoColors.primary,
-                                      ),
-                                      title: Text(
-                                        'OP ${batch.numeroOp}',
-                                        style: const TextStyle(fontWeight: FontWeight.w600),
-                                      ),
-                                      subtitle: Text(
-                                        '${batch.aprovados} aprovados · ${batch.reprovados} reprovados · '
-                                        'yield ${batch.yieldPct.toStringAsFixed(1)}%'
-                                        '${batch.lastTestAt != null ? '\n${dateFmt.format(batch.lastTestAt!.toLocal())}' : ''}',
-                                      ),
-                                      isThreeLine: batch.lastTestAt != null,
-                                      trailing: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Text(
-                                            '${batch.total}',
-                                            style: const TextStyle(
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 16,
-                                            ),
-                                          ),
-                                          const Icon(Icons.chevron_right),
-                                        ],
-                                      ),
-                                      onTap: () => _openBatch(batch, filters),
+                                for (var i = 0; i < batches.length; i++) ...[
+                                  if (i > 0) const Divider(height: 1),
+                                  ListTile(
+                                    contentPadding: EdgeInsets.zero,
+                                    leading: const Icon(
+                                      Icons.folder_open_outlined,
+                                      color: DipontoColors.primary,
                                     ),
+                                    title: Text(
+                                      'OP ${batches[i].numeroOp}',
+                                      style: const TextStyle(fontWeight: FontWeight.w600),
+                                    ),
+                                    subtitle: Text(
+                                      '${batches[i].aprovados} aprovados · ${batches[i].reprovados} reprovados · '
+                                      'yield ${batches[i].yieldPct.toStringAsFixed(1)}%'
+                                      '${batches[i].lastTestAt != null ? '\n${dateFmt.format(batches[i].lastTestAt!.toLocal())}' : ''}',
+                                    ),
+                                    isThreeLine: batches[i].lastTestAt != null,
+                                    trailing: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          '${batches[i].total}',
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 16,
+                                          ),
+                                        ),
+                                        const Icon(Icons.chevron_right),
+                                      ],
+                                    ),
+                                    onTap: () => _openBatch(batches[i], filters),
                                   ),
+                                ],
                               ],
                             ),
                           );
@@ -280,7 +312,7 @@ class _FiltersPanelState extends ConsumerState<_FiltersPanel> {
           children: [
             Expanded(
               child: DropdownButtonFormField<String?>(
-                initialValue: widget.filters.idProduto,
+                value: validDropdownValue(widget.filters.idProduto, _productIds),
                 decoration: const InputDecoration(labelText: 'Produto'),
                 items: [
                   const DropdownMenuItem(value: null, child: Text('Todos')),
@@ -300,7 +332,7 @@ class _FiltersPanelState extends ConsumerState<_FiltersPanel> {
             const SizedBox(width: 12),
             Expanded(
               child: DropdownButtonFormField<String?>(
-                initialValue: widget.filters.deviceId,
+                value: validDropdownValue(widget.filters.deviceId, _devices),
                 decoration: const InputDecoration(labelText: 'Bancada'),
                 items: [
                   const DropdownMenuItem(value: null, child: Text('Todos')),

@@ -1,0 +1,27 @@
+# ==========================================
+# Pastas de compilação e cache do ESP-IDF
+# ==========================================
+build/
+.cache/
+sdkconfig.old
+
+# ==========================================
+# Componentes gerenciados (baixados da internet)
+# O ESP-IDF baixa isso automaticamente via idf_component.yml
+# ==========================================
+managed_components/
+
+# ==========================================
+# Configurações de IDE (VS Code, etc)
+# ==========================================
+.vscode/
+.devcontainer/
+*.swp
+*~
+
+# ==========================================
+# Arquivos temporários do Sistema Operacional
+# ==========================================
+.DS_Store
+Thumbs.db
+desktop.ini

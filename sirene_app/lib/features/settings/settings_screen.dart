@@ -5,14 +5,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/config/app_config.dart';
+import '../../core/database/database.dart';
 import '../../core/providers/core_providers.dart';
 import '../../core/services/factory_reset_service.dart';
+import '../../core/services/app_log.dart';
 import '../../core/theme/diponto_theme.dart';
 import '../../shared/display_labels.dart';
+import '../../shared/dropdown_value.dart';
 import '../../shared/portuguese_labels.dart';
-import '../../shared/widgets/desktop_form_layout.dart';
 import '../../shared/widgets/screen_app_bar.dart';
-import '../../shared/widgets/form_section_card.dart';
 import '../../shared/widgets/responsive_field_row.dart';
 import '../admin/admin_screen.dart';
 import '../firmware/firmware_update_screen.dart';
@@ -22,15 +23,25 @@ import '../cloud/auth/login_screen.dart';
 import '../operators/operators_provider.dart';
 import '../cloud/firebase_bootstrap.dart';
 import '../cloud/sync/sync_providers.dart';
+import '../demo/demo_constants.dart';
+import '../demo/demo_providers.dart';
+import '../demo/demo_service.dart';
+import '../ensaio/ensaio_screen.dart';
 import '../mqtt/mqtt_providers.dart';
+import '../mqtt/models/mqtt_messages.dart';
 import '../labels/label_printer.dart';
-import '../labels/label_printer_transport.dart';
 import '../labels/laser_diagnostics_panel.dart';
 import '../labels/marking_providers.dart';
 import '../labels/serial_marking_backend.dart';
+import '../dashboard/dashboard_providers.dart';
 import '../bancadas/bancadas_provider.dart';
 import '../provisioning/provisioning_wizard.dart';
 import 'serial_reconciliation_panel.dart';
+import 'settings_category.dart';
+import 'widgets/settings_action_card.dart';
+import 'widgets/settings_category_nav.dart';
+import 'widgets/settings_section_intro.dart';
+import 'widgets/settings_status_header.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -42,17 +53,28 @@ class SettingsScreen extends ConsumerStatefulWidget {
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   late final TextEditingController _mqttHost;
   late final TextEditingController _mqttPort;
+  late final TextEditingController _mqttSite;
+  late final TextEditingController _mqttWsPath;
+  late final TextEditingController _mqttUsername;
+  late final TextEditingController _mqttPassword;
+  bool _mqttUseWebSocket = AppConfig.defaultMqttUseWebSocket;
+  bool _mqttUseTls = AppConfig.defaultMqttUseTls;
+  bool _mqttPasswordVisible = false;
   late final TextEditingController _printerHost;
   late final TextEditingController _printerPort;
   late final TextEditingController _stationId;
   late final TextEditingController _laserTcpPort;
   late final TextEditingController _laserTcpCommand;
+  late final TextEditingController _laserModelCommand;
   PrinterMode _printerMode = PrinterMode.usb;
   MarkingMode _markingMode = MarkingMode.labels;
   String? _printerWindowsName;
   String? _bancadaDeviceId;
   List<String> _windowsPrinters = [];
   bool _loadingPrinters = false;
+  late double _yieldTargetPct;
+  late int _shiftStartHour;
+  SettingsCategory _selectedCategory = SettingsCategory.posto;
 
   @override
   void initState() {
@@ -60,15 +82,24 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final config = ref.read(appConfigProvider);
     _mqttHost = TextEditingController(text: config.mqttHost);
     _mqttPort = TextEditingController(text: '${config.mqttPort}');
+    _mqttSite = TextEditingController(text: config.mqttSite);
+    _mqttWsPath = TextEditingController(text: config.mqttWebSocketPath);
+    _mqttUsername = TextEditingController(text: config.mqttUsername);
+    _mqttPassword = TextEditingController(text: config.mqttPassword);
+    _mqttUseWebSocket = config.mqttUseWebSocket;
+    _mqttUseTls = config.mqttUseTls;
     _printerHost = TextEditingController(text: config.printerHost);
     _printerPort = TextEditingController(text: '${config.printerPort}');
     _stationId = TextEditingController(text: config.stationId);
     _laserTcpPort = TextEditingController(text: '${config.laserTcpPort}');
     _laserTcpCommand = TextEditingController(text: config.laserTcpCommand);
+    _laserModelCommand = TextEditingController(text: config.laserModelCommand);
     _markingMode = config.markingMode;
     _printerMode = Platform.isWindows ? config.printerMode : PrinterMode.network;
     _printerWindowsName = config.printerWindowsName.isEmpty ? null : config.printerWindowsName;
     _bancadaDeviceId = config.selectedDeviceId;
+    _yieldTargetPct = config.yieldTargetPct;
+    _shiftStartHour = config.shiftStartHour;
     if (Platform.isWindows) {
       _refreshWindowsPrinters();
     }
@@ -78,11 +109,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   void dispose() {
     _mqttHost.dispose();
     _mqttPort.dispose();
+    _mqttSite.dispose();
+    _mqttWsPath.dispose();
+    _mqttUsername.dispose();
+    _mqttPassword.dispose();
     _printerHost.dispose();
     _printerPort.dispose();
     _stationId.dispose();
     _laserTcpPort.dispose();
     _laserTcpCommand.dispose();
+    _laserModelCommand.dispose();
     super.dispose();
   }
 
@@ -109,10 +145,29 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       );
       return;
     }
+    if (_markingMode == MarkingMode.laser && _laserModelCommand.text.trim().isEmpty) {
+      _showMessage(
+        'Informe o comando TCP do modelo. Padrão recomendado: ${AppConfig.defaultLaserModelCommand}',
+      );
+      return;
+    }
+    if (_markingMode == MarkingMode.laser &&
+        _laserTcpCommand.text.trim() == _laserModelCommand.text.trim()) {
+      _showMessage('Os comandos TCP do serial e do modelo devem ser diferentes.');
+      return;
+    }
 
     final config = ref.read(appConfigProvider);
     await config.setMqttHost(_mqttHost.text.trim());
-    await config.setMqttPort(int.tryParse(_mqttPort.text) ?? 1883);
+    await config.setMqttPort(int.tryParse(_mqttPort.text) ?? AppConfig.defaultMqttPort);
+    await config.setMqttSite(_mqttSite.text.trim());
+    await config.setMqttWebSocketPath(
+      _mqttWsPath.text.trim().isEmpty ? AppConfig.defaultMqttWebSocketPath : _mqttWsPath.text.trim(),
+    );
+    await config.setMqttUseWebSocket(_mqttUseWebSocket);
+    await config.setMqttUseTls(_mqttUseTls);
+    await config.setMqttUsername(_mqttUsername.text.trim());
+    await config.setMqttPassword(_mqttPassword.text);
     await config.setPrinterMode(Platform.isWindows ? _printerMode : PrinterMode.network);
     await config.setPrinterHost(_printerHost.text.trim());
     await config.setPrinterPort(int.tryParse(_printerPort.text) ?? 9100);
@@ -128,6 +183,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ? AppConfig.defaultLaserTcpCommand
         : _laserTcpCommand.text.trim();
     await config.setLaserTcpCommand(laserCommand);
+    final laserModelCommand = _laserModelCommand.text.trim().isEmpty
+        ? AppConfig.defaultLaserModelCommand
+        : _laserModelCommand.text.trim();
+    await config.setLaserModelCommand(laserModelCommand);
+    await config.setYieldTargetPct(_yieldTargetPct);
+    await config.setShiftStartHour(_shiftStartHour);
 
     if (_markingMode == MarkingMode.laser) {
       ref.read(markQueueProcessorProvider).start();
@@ -141,11 +202,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
     if (mounted) {
       if (_markingMode == MarkingMode.laser &&
-          laserCommand != AppConfig.defaultLaserTcpCommand) {
+          (laserCommand != AppConfig.defaultLaserTcpCommand ||
+              laserModelCommand != AppConfig.defaultLaserModelCommand)) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Comando personalizado salvo. Confirme que o DiatuCAD usa exatamente: $laserCommand',
+              'Comandos salvos. Confirme no DiatuCAD: serial="$laserCommand", modelo="$laserModelCommand"',
             ),
             duration: const Duration(seconds: 6),
           ),
@@ -158,26 +220,95 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
   }
 
+  Future<void> _registerDowntime() async {
+    final reason = await showDialog<String>(
+      context: context,
+      builder: (ctx) {
+        final c = TextEditingController();
+        return AlertDialog(
+          title: const Text('Registrar parada'),
+          content: TextField(
+            controller: c,
+            decoration: const InputDecoration(labelText: 'Motivo'),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, c.text.trim()),
+              child: const Text('Salvar'),
+            ),
+          ],
+        );
+      },
+    );
+    if (reason == null || reason.isEmpty) return;
+    await ref.read(databaseProvider).insertDowntime(
+          reason: reason,
+          deviceId: ref.read(appConfigProvider).selectedDeviceId,
+        );
+    ref.read(localDataRevisionProvider.notifier).state++;
+    _showMessage('Parada registrada');
+  }
+
   Future<void> _onSyncToggle(bool? value) async {
-    if (value != true) {
-      await setSyncEnabled(ref, false);
-      return;
-    }
+    try {
+      if (value != true) {
+        final cloudReady = ref.read(cloudSetupCompleteProvider);
+        if (cloudReady) {
+          _showMessage(
+            'Sync obrigatório em produção. Não é possível desativar após a configuração inicial.',
+          );
+          return;
+        }
+        await setSyncEnabled(ref, false);
+        return;
+      }
 
-    if (!isFirebaseAvailable) {
-      _showMessage(firebaseUnavailableMessage);
-      return;
-    }
+      if (!isFirebaseAvailable) {
+        _showMessage(firebaseUnavailableMessage);
+        return;
+      }
 
-    final authenticated = ref.read(isAuthenticatedProvider);
-    if (!authenticated) {
+      final authenticated = ref.read(isAuthenticatedProvider);
+      if (!authenticated) {
+        final ok = await Navigator.of(context).push<bool>(
+          MaterialPageRoute<bool>(builder: (_) => const LoginScreen()),
+        );
+        if (ok != true) return;
+        ref.invalidate(authStateProvider);
+        if (!ref.read(isAuthenticatedProvider)) return;
+      }
+
+      await AppLog.write('Sync: usuário habilitou Firestore');
+      await setSyncEnabled(ref, true);
+      if (!mounted) return;
+      _showMessage('Sincronização Firestore ativa.');
+    } catch (e, st) {
+      await AppLog.write('Sync: erro ao habilitar', error: e, stack: st);
+      if (!mounted) return;
+      _showMessage('Erro ao sincronizar: $e');
+    }
+  }
+
+  Future<void> _loginToCloud() async {
+    try {
+      if (!isFirebaseAvailable) {
+        _showMessage(firebaseUnavailableMessage);
+        return;
+      }
+      await AppLog.write('Sync: abrindo login na nuvem');
       final ok = await Navigator.of(context).push<bool>(
         MaterialPageRoute<bool>(builder: (_) => const LoginScreen()),
       );
-      if (ok != true || !ref.read(isAuthenticatedProvider)) return;
+      if (!mounted) return;
+      if (ok == true && ref.read(isAuthenticatedProvider)) {
+        _showMessage('Login na nuvem concluído. Toque em "Reprocessar todas as falhas".');
+      }
+    } catch (e, st) {
+      await AppLog.write('Sync: erro no login na nuvem', error: e, stack: st);
+      if (!mounted) return;
+      _showMessage('Erro no login: $e');
     }
-
-    await setSyncEnabled(ref, true);
   }
 
   Future<void> _syncCatalog() async {
@@ -238,6 +369,122 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       MaterialPageRoute<void>(builder: (_) => const ProvisioningWizard()),
     );
     if (mounted) setState(() {});
+  }
+
+  Future<void> _resetBancadaWifi() async {
+    final deviceId = _bancadaDeviceId;
+    if (deviceId == null) {
+      _showMessage('Selecione uma bancada');
+      return;
+    }
+
+    final mqttService = ref.read(mqttServiceProvider);
+    if (mqttService.currentState != AppMqttConnectionState.connected) {
+      _showMessage('MQTT desconectado — conecte ao broker antes de resetar a bancada');
+      return;
+    }
+
+    final device = ref.read(devicesProvider)[deviceId];
+    if (device?.estado == DeviceFsmState.testing) {
+      _showMessage('Bancada em teste — aguarde o fim do teste para resetar o Wi-Fi');
+      return;
+    }
+    if (device?.estado == DeviceFsmState.otaUpdating) {
+      _showMessage('Bancada em atualização de firmware — aguarde a conclusão');
+      return;
+    }
+
+    final confirmController = TextEditingController();
+    var clearMqtt = false;
+
+    final proceed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('Reset Wi-Fi da bancada'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                'Isso apaga as credenciais Wi-Fi na NVS da bancada. '
+                'Ela reiniciará em modo provisionamento (AP SireneValidator). '
+                'Lote e fila offline não são apagados. Digite RESET para confirmar.',
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: confirmController,
+                decoration: const InputDecoration(labelText: 'Confirmação'),
+                autofocus: true,
+              ),
+              CheckboxListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Apagar broker MQTT na bancada também'),
+                subtitle: const Text('Remove host/porta MQTT gravados na NVS do ESP32'),
+                value: clearMqtt,
+                onChanged: (v) => setDialogState(() => clearMqtt = v ?? false),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: Colors.red),
+              onPressed: () {
+                if (confirmController.text.trim() != 'RESET') {
+                  ScaffoldMessenger.of(ctx).showSnackBar(
+                    const SnackBar(content: Text('Digite RESET para confirmar')),
+                  );
+                  return;
+                }
+                Navigator.pop(ctx, true);
+              },
+              child: const Text('Resetar Wi-Fi'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    confirmController.dispose();
+    if (proceed != true || !mounted) return;
+
+    final rejection = await ref.read(devicesProvider.notifier).sendResetWifi(
+          deviceId,
+          clearMqtt: clearMqtt,
+        );
+    if (!mounted) return;
+
+    if (rejection != null) {
+      _showMessage('Reset rejeitado: $rejection');
+      return;
+    }
+
+    await ref.read(appConfigProvider).setWifiProvisioned(false);
+    ref.invalidate(wifiProvisionedProvider);
+
+    final openProvisioning = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Reset iniciado'),
+        content: const Text(
+          'A bancada está reiniciando. Conecte o PC ao AP SireneValidator '
+          'e use o assistente de provisionamento para configurar o Wi-Fi novamente.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Depois')),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Abrir assistente'),
+          ),
+        ],
+      ),
+    );
+
+    if (openProvisioning == true && mounted) {
+      await _openProvisioning();
+    }
   }
 
   Future<void> _factoryReset() async {
@@ -380,11 +627,42 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Future<void> _retryFailedSync({int? itemId}) async {
-    await retryFailedSyncItems(ref, itemId: itemId);
-    if (!mounted) return;
-    _showMessage(
-      itemId != null ? 'Item reenfileirado para sync' : 'Falhas reenfileiradas para sync',
-    );
+    if (!ref.read(isAuthenticatedProvider)) {
+      _showMessage('Faça login na nuvem antes de reprocessar a fila.');
+      return;
+    }
+    try {
+      await AppLog.write('Sync: reprocessar falhas (item=${itemId ?? 'todos'})');
+      await retryFailedSyncItems(ref, itemId: itemId);
+      if (!mounted) return;
+      _showMessage(
+        itemId != null ? 'Item reenfileirado para sync' : 'Falhas reenfileiradas para sync',
+      );
+    } catch (e, st) {
+      await AppLog.write('Sync: erro ao reprocessar', error: e, stack: st);
+      if (!mounted) return;
+      _showMessage('Erro ao reprocessar fila: $e');
+    }
+  }
+
+  Future<void> _toggleDemoMode(bool enabled) async {
+    try {
+      if (enabled) {
+        await enableDemoMode(ref);
+        if (!mounted) return;
+        setState(() => _bancadaDeviceId = kDemoDeviceId);
+        _showMessage(
+          'Modo demonstração ativo. Use Lote → iniciar OP → Autoplay no painel ao vivo.',
+        );
+      } else {
+        await disableDemoMode(ref);
+        if (!mounted) return;
+        _showMessage('Modo demonstração desativado.');
+      }
+      ref.invalidate(appConfigProvider);
+    } catch (e) {
+      _showMessage('Erro ao alterar modo demo: $e');
+    }
   }
 
   @override
@@ -396,6 +674,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final devices = ref.watch(devicesProvider);
     final activeOpAsync = ref.watch(activeOperatorProvider);
     final wifiProvisioned = ref.watch(wifiProvisionedProvider);
+    final mqttAsync = ref.watch(mqttConnectionStateProvider);
+    final mqttService = ref.watch(mqttServiceProvider);
+    final mqttConnected = resolveMqttConnectionDisplayState(
+      mqttAsync,
+      mqttService.currentState,
+    ) == AppMqttConnectionState.connected;
     final bancadas = ref.watch(bancadasMapProvider).valueOrNull ?? {};
     final deviceList = devices.values.toList()
       ..sort((a, b) {
@@ -406,466 +690,998 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       });
     final onlineCount = devices.values.where((d) => d.isOnline).length;
     final dateFmt = DateFormat('dd/MM/yyyy HH:mm');
+    final operatorName = activeOpAsync.valueOrNull?.nome ?? '—';
+    final bancadaLabel = _bancadaDeviceId != null
+        ? formatBancadaLabelFromMap(_bancadaDeviceId!, bancadas)
+        : 'Sem bancada';
 
     return Scaffold(
       appBar: screenAppBar(context, title: 'Configurações'),
-      body: ListView(
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          DesktopFormLayout(
-            child: Column(
+          SettingsStatusHeader(
+            operatorName: operatorName,
+            mqttConnected: mqttConnected,
+            bancadaLabel: bancadaLabel,
+            wifiProvisioned: wifiProvisioned,
+            syncEnabled: syncEnabled,
+            onlineBancadas: onlineCount,
+            totalBancadas: devices.length,
+          ),
+          Expanded(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final useSidebar = constraints.maxWidth >= 760;
+                if (useSidebar) {
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      SettingsCategoryNav(
+                        selected: _selectedCategory,
+                        onSelected: (c) => setState(() => _selectedCategory = c),
+                      ),
+                      const VerticalDivider(width: 1),
+                      Expanded(child: _buildCategoryPanel(
+                        syncStatus: syncStatus,
+                        failedItems: failedItems,
+                        authenticated: authenticated,
+                        syncEnabled: syncEnabled,
+                        devices: devices,
+                        activeOpAsync: activeOpAsync,
+                        wifiProvisioned: wifiProvisioned,
+                        mqttConnected: mqttConnected,
+                        bancadas: bancadas,
+                        deviceList: deviceList,
+                        onlineCount: onlineCount,
+                        dateFmt: dateFmt,
+                      )),
+                    ],
+                  );
+                }
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    SettingsCategoryNav(
+                      selected: _selectedCategory,
+                      compact: true,
+                      onSelected: (c) => setState(() => _selectedCategory = c),
+                    ),
+                    Expanded(child: _buildCategoryPanel(
+                      syncStatus: syncStatus,
+                      failedItems: failedItems,
+                      authenticated: authenticated,
+                      syncEnabled: syncEnabled,
+                      devices: devices,
+                      activeOpAsync: activeOpAsync,
+                      wifiProvisioned: wifiProvisioned,
+                      mqttConnected: mqttConnected,
+                      bancadas: bancadas,
+                      deviceList: deviceList,
+                      onlineCount: onlineCount,
+                      dateFmt: dateFmt,
+                    )),
+                  ],
+                );
+              },
+            ),
+          ),
+          _buildSaveBar(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSaveBar() {
+    return Material(
+      elevation: 8,
+      color: DipontoColors.surfaceVariant,
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Alterações em ${_selectedCategory.title} exigem salvar',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: DipontoColors.onSurface.withValues(alpha: 0.7),
+                      ),
+                ),
+              ),
+              FilledButton.icon(
+                onPressed: _save,
+                icon: const Icon(Icons.save_outlined),
+                label: const Text('Salvar configurações'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCategoryPanel({
+    required AsyncValue<SyncStatus> syncStatus,
+    required AsyncValue<List<SyncQueueData>> failedItems,
+    required bool authenticated,
+    required bool syncEnabled,
+    required Map<String, DeviceInfo> devices,
+    required AsyncValue<Operator?> activeOpAsync,
+    required bool wifiProvisioned,
+    required bool mqttConnected,
+    required Map<String, int> bancadas,
+    required List<DeviceInfo> deviceList,
+    required int onlineCount,
+    required DateFormat dateFmt,
+  }) {
+    final category = _selectedCategory;
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
+      child: Align(
+        alignment: Alignment.topLeft,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 820),
+          child: switch (category) {
+            SettingsCategory.posto => _buildPostoSection(
+                activeOpAsync: activeOpAsync,
+                devices: devices,
+                onlineCount: onlineCount,
+              ),
+            SettingsCategory.manutencao => _buildManutencaoSection(
+                wifiProvisioned: wifiProvisioned,
+                mqttConnected: mqttConnected,
+                bancadas: bancadas,
+                deviceList: deviceList,
+              ),
+            SettingsCategory.rede => _buildRedeSection(),
+            SettingsCategory.marcacao => _buildMarcacaoSection(),
+            SettingsCategory.nuvem => _buildNuvemSection(
+                syncStatus: syncStatus,
+                failedItems: failedItems,
+                authenticated: authenticated,
+                syncEnabled: syncEnabled,
+                dateFmt: dateFmt,
+              ),
+            SettingsCategory.produtividade => _buildProdutividadeSection(),
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPostoSection({
+    required AsyncValue<Operator?> activeOpAsync,
+    required Map<String, DeviceInfo> devices,
+    required int onlineCount,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SectionIntro(
+          title: _selectedCategory.title,
+          subtitle: _selectedCategory.subtitle,
+          icon: _selectedCategory.icon,
+        ),
+        ActionSectionCard(
+          icon: Icons.badge_outlined,
+          title: 'Operador ativo',
+          subtitle: 'Sessão do turno neste posto',
+          child: activeOpAsync.when(
+            loading: () => const Text('Carregando...'),
+            error: (_, __) => const Text('Erro ao carregar operador'),
+            data: (op) => Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                FormSectionCard(
-                  title: 'Operador',
-                  child: activeOpAsync.when(
-                    loading: () => const Text('Carregando...'),
-                    error: (_, __) => const Text('Erro ao carregar operador'),
-                    data: (op) => Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          leading: const Icon(Icons.badge_outlined),
-                          title: Text(op?.nome ?? '—'),
-                          subtitle: op != null ? Text('PIN ${op.codigo}') : null,
-                        ),
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: OutlinedButton.icon(
-                            onPressed: _logoutOperator,
-                            icon: const Icon(Icons.swap_horiz),
-                            label: const Text('Trocar operador'),
-                          ),
-                        ),
-                      ],
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: CircleAvatar(
+                    backgroundColor: DipontoColors.primary.withValues(alpha: 0.2),
+                    child: Text(
+                      (op?.nome.isNotEmpty == true ? op!.nome[0] : '?').toUpperCase(),
+                      style: const TextStyle(
+                        color: DipontoColors.primary,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
-                ),
-                FormSectionCard(
-                  title: 'Manutenção do posto',
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Text(
-                        _bancadaDeviceId != null
-                            ? 'Bancada: ${formatBancadaLabelFromMap(_bancadaDeviceId!, bancadas)}'
-                            : 'Nenhuma bancada vinculada',
-                        style: Theme.of(context).textTheme.titleSmall,
-                      ),
-                      const SizedBox(height: 8),
-                      if (deviceList.isEmpty)
-                        const Text('Nenhuma bancada detectada na rede MQTT.')
-                      else
-                        DropdownButtonFormField<String>(
-                          value: deviceList.any((d) => d.deviceId == _bancadaDeviceId)
-                              ? _bancadaDeviceId
-                              : null,
-                          decoration: const InputDecoration(labelText: 'Bancada vinculada'),
-                          items: [
-                            for (final d in deviceList)
-                              DropdownMenuItem(
-                                value: d.deviceId,
-                                child: Text(formatBancadaLabelFromMap(d.deviceId, bancadas)),
-                              ),
-                          ],
-                          onChanged: (v) => setState(() => _bancadaDeviceId = v),
-                        ),
-                      const SizedBox(height: 8),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: OutlinedButton(
-                          onPressed: deviceList.isEmpty ? null : _saveBancada,
-                          child: const Text('Salvar bancada'),
-                        ),
-                      ),
-                      const Divider(height: 24),
-                      ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading: Icon(
-                          wifiProvisioned ? Icons.wifi : Icons.wifi_off,
-                          color: wifiProvisioned ? DipontoColors.success : Colors.grey,
-                        ),
-                        title: Text(wifiProvisioned ? 'Wi-Fi provisionado' : 'Wi-Fi não provisionado'),
-                        subtitle: const Text('Assistente para conectar bancadas à rede da fábrica'),
-                        trailing: const Icon(Icons.chevron_right),
-                        onTap: _openProvisioning,
-                      ),
-                      const Divider(height: 24),
-                      const Text(
-                        'Reconciliação de série',
-                        style: TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                      const SizedBox(height: 8),
-                      const SerialReconciliationPanel(),
-                      const Divider(height: 24),
-                      OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.red,
-                          side: const BorderSide(color: Colors.red),
-                        ),
-                        onPressed: _factoryReset,
-                        icon: const Icon(Icons.delete_forever_outlined),
-                        label: const Text('Reset geral do posto'),
-                      ),
-                    ],
-                  ),
-                ),
-                FormSectionCard(
-                  title: 'Posto',
-                  child: Column(
-                    children: [
-                      ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading: const Icon(Icons.devices_outlined),
-                        title: Text(PortugueseLabels.navBancadas),
-                        subtitle: Text(
-                          devices.isEmpty
-                              ? 'Nenhuma bancada detectada'
-                              : '$onlineCount de ${devices.length} conectadas',
-                        ),
-                        trailing: const Icon(Icons.chevron_right),
-                        onTap: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute<void>(
-                              builder: (_) => const DevicesScreen(),
-                            ),
-                          );
-                        },
-                      ),
-                      ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading: const Icon(Icons.system_update_alt),
-                        title: const Text('Atualizar firmware'),
-                        subtitle: const Text('OTA pela rede ou gravação USB'),
-                        trailing: const Icon(Icons.chevron_right),
-                        onTap: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute<void>(
-                              builder: (_) => const FirmwareUpdateScreen(),
-                            ),
-                          );
-                        },
-                      ),
-                      ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading: const Icon(Icons.admin_panel_settings_outlined),
-                        title: const Text('Administração'),
-                        subtitle: const Text('Campanha OTA multi-bancada'),
-                        trailing: const Icon(Icons.chevron_right),
-                        onTap: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute<void>(
-                              builder: (_) => const AdminScreen(),
-                            ),
-                          );
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-                FormSectionCard(
-                  title: 'Broker MQTT',
-                  child: ResponsiveFieldRow(
-                    flexes: const [7, 3],
-                    children: [
-                      TextField(
-                        controller: _mqttHost,
-                        decoration: const InputDecoration(labelText: 'Host'),
-                      ),
-                      TextField(
-                        controller: _mqttPort,
-                        decoration: const InputDecoration(labelText: 'Porta'),
-                        keyboardType: TextInputType.number,
-                      ),
-                    ],
-                  ),
-                ),
-                FormSectionCard(
-                  title: 'Marcação de serial',
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      SegmentedButton<MarkingMode>(
-                        segments: const [
-                          ButtonSegment(
-                            value: MarkingMode.labels,
-                            label: Text('Etiquetas (Zebra)'),
-                            icon: Icon(Icons.label_outline),
-                          ),
-                          ButtonSegment(
-                            value: MarkingMode.laser,
-                            label: Text('Gravação laser (Diatu)'),
-                            icon: Icon(Icons.precision_manufacturing),
-                          ),
-                        ],
-                        selected: {_markingMode},
-                        onSelectionChanged: (selection) {
-                          setState(() => _markingMode = selection.first);
-                        },
-                      ),
-                      if (_markingMode == MarkingMode.laser) ...[
-                        const SizedBox(height: 12),
-                        TextField(
-                          controller: _laserTcpPort,
-                          decoration: const InputDecoration(
-                            labelText: 'Porta TCP (servidor no app)',
-                            helperText:
-                                'DiatuCAD conecta neste PC (127.0.0.1 se mesma máquina)',
-                          ),
-                          keyboardType: TextInputType.number,
-                        ),
-                        const SizedBox(height: 8),
-                        TextField(
-                          controller: _laserTcpCommand,
-                          decoration: InputDecoration(
-                            labelText: 'Comando TCP esperado',
-                            helperText:
-                                'Igual ao configurado no texto variável do DiatuCAD '
-                                '(padrão: ${AppConfig.defaultLaserTcpCommand})',
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        const LaserDiagnosticsPanel(),
-                        const SizedBox(height: 8),
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: OutlinedButton.icon(
-                            onPressed: _testLaserMark,
-                            icon: const Icon(Icons.bolt_outlined),
-                            label: const Text('Testar gravação'),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                if (_markingMode == MarkingMode.labels)
-                FormSectionCard(
-                  title: 'Impressora Zebra',
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      if (Platform.isWindows)
-                        SegmentedButton<PrinterMode>(
-                          segments: const [
-                            ButtonSegment(
-                              value: PrinterMode.usb,
-                              label: Text('USB (local)'),
-                              icon: Icon(Icons.usb),
-                            ),
-                            ButtonSegment(
-                              value: PrinterMode.network,
-                              label: Text('Rede'),
-                              icon: Icon(Icons.lan_outlined),
-                            ),
-                          ],
-                          selected: {_printerMode},
-                          onSelectionChanged: (selection) {
-                            setState(() => _printerMode = selection.first);
-                          },
-                        )
-                      else
-                        const Text(
-                          'Impressão USB disponível apenas no Windows. Usando modo rede.',
-                          style: TextStyle(fontSize: 13),
-                        ),
-                      const SizedBox(height: 12),
-                      if (_printerMode == PrinterMode.usb && Platform.isWindows) ...[
-                        Row(
-                          children: [
-                            Expanded(
-                              child: DropdownButtonFormField<String>(
-                                value: _windowsPrinters.contains(_printerWindowsName)
-                                    ? _printerWindowsName
-                                    : null,
-                                decoration: const InputDecoration(
-                                  labelText: 'Impressora Windows',
-                                  helperText: 'ZT230 via USB com driver Zebra ZPL',
-                                ),
-                                items: [
-                                  for (final name in _windowsPrinters)
-                                    DropdownMenuItem(value: name, child: Text(name)),
-                                ],
-                                onChanged: _windowsPrinters.isEmpty
-                                    ? null
-                                    : (value) => setState(() => _printerWindowsName = value),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            IconButton(
-                              tooltip: 'Atualizar lista',
-                              onPressed: _loadingPrinters ? null : _refreshWindowsPrinters,
-                              icon: _loadingPrinters
-                                  ? const SizedBox(
-                                      width: 20,
-                                      height: 20,
-                                      child: CircularProgressIndicator(strokeWidth: 2),
-                                    )
-                                  : const Icon(Icons.refresh),
-                            ),
-                          ],
-                        ),
-                      ] else ...[
-                        ResponsiveFieldRow(
-                          flexes: const [7, 3],
-                          children: [
-                            TextField(
-                              controller: _printerHost,
-                              decoration: const InputDecoration(labelText: 'IP'),
-                            ),
-                            TextField(
-                              controller: _printerPort,
-                              decoration: const InputDecoration(labelText: 'Porta (padrão 9100)'),
-                              keyboardType: TextInputType.number,
-                            ),
-                          ],
-                        ),
-                      ],
-                      const SizedBox(height: 8),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: OutlinedButton.icon(
-                          onPressed: _testPrint,
-                          icon: const Icon(Icons.print_outlined),
-                          label: const Text('Testar impressão'),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                FormSectionCard(
-                  title: 'Nuvem (Firestore)',
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      if (!isFirebaseAvailable)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: Text(
-                            firebaseUnavailableMessage,
-                            style: const TextStyle(color: Colors.orangeAccent, fontSize: 13),
-                          ),
-                        ),
-                      TextField(
-                        controller: _stationId,
-                        decoration: const InputDecoration(
-                          labelText: 'ID do posto (station_id)',
-                          helperText: 'Identifica este PC na nuvem',
-                        ),
-                      ),
-                      SwitchListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text('Sincronizar com Firestore'),
-                        subtitle: Text(
-                          authenticated
-                              ? 'Operador autenticado'
-                              : 'Login necessário para habilitar',
-                        ),
-                        value: syncEnabled,
-                        onChanged: isFirebaseAvailable ? _onSyncToggle : null,
-                      ),
-                      syncStatus.when(
-                        data: (status) => Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Pendentes: ${status.pending}'),
-                            Text('Falhas permanentes: ${status.failed}'),
-                            Text(
-                              status.lastSync != null
-                                  ? 'Último sync: ${dateFmt.format(status.lastSync!.toLocal())}'
-                                  : 'Último sync: —',
-                            ),
-                          ],
-                        ),
-                        loading: () => const Text('Carregando status da fila...'),
-                        error: (e, _) => Text('Erro ao ler fila: $e'),
-                      ),
-                      failedItems.when(
-                        data: (items) {
-                          if (items.isEmpty) return const SizedBox.shrink();
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              const SizedBox(height: 12),
-                              Text(
-                                'Fila com falha',
-                                style: Theme.of(context).textTheme.titleSmall,
-                              ),
-                              const SizedBox(height: 8),
-                              for (final item in items)
-                                Card(
-                                  margin: const EdgeInsets.only(bottom: 8),
-                                  child: ListTile(
-                                    dense: true,
-                                    title: Text(
-                                      item.documentPath ??
-                                          '${item.collection}/${item.documentId}',
-                                    ),
-                                    subtitle: Text(
-                                      item.lastError ?? 'Erro desconhecido',
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    trailing: TextButton(
-                                      onPressed: () => _retryFailedSync(itemId: item.id),
-                                      child: const Text('Tentar novamente'),
-                                    ),
-                                  ),
-                                ),
-                              Align(
-                                alignment: Alignment.centerLeft,
-                                child: OutlinedButton(
-                                  onPressed: () => _retryFailedSync(),
-                                  child: const Text('Reprocessar todas as falhas'),
-                                ),
-                              ),
-                            ],
-                          );
-                        },
-                        loading: () => const SizedBox.shrink(),
-                        error: (_, __) => const SizedBox.shrink(),
-                      ),
-                      if (isFirebaseAvailable && syncEnabled && authenticated) ...[
-                        const SizedBox(height: 8),
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: OutlinedButton(
-                            onPressed: _syncCatalog,
-                            child: const Text('Enviar catálogo para Firestore'),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: OutlinedButton(
-                            onPressed: _pullCatalog,
-                            child: const Text('Baixar catálogo da nuvem'),
-                          ),
-                        ),
-                      ],
-                      if (authenticated) ...[
-                        const SizedBox(height: 8),
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: OutlinedButton(
-                            onPressed: _logout,
-                            child: const Text('Sair da conta nuvem'),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
+                  title: Text(op?.nome ?? '—'),
+                  subtitle: op != null
+                      ? Text(op.isGestor ? 'Gestor do posto' : 'Operador do turno')
+                      : null,
                 ),
                 Align(
                   alignment: Alignment.centerLeft,
-                  child: ElevatedButton(
-                    onPressed: _save,
-                    child: const Text('Salvar'),
+                  child: OutlinedButton.icon(
+                    onPressed: _logoutOperator,
+                    icon: const Icon(Icons.swap_horiz),
+                    label: const Text('Trocar operador'),
                   ),
                 ),
               ],
             ),
           ),
+        ),
+        ActionSectionCard(
+          icon: Icons.devices_outlined,
+          title: PortugueseLabels.navBancadas,
+          subtitle: devices.isEmpty
+              ? 'Nenhuma bancada detectada na rede'
+              : '$onlineCount de ${devices.length} conectadas agora',
+          child: Column(
+            children: [
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(PortugueseLabels.navBancadas),
+                subtitle: Text(
+                  devices.isEmpty
+                      ? 'Nenhuma bancada detectada'
+                      : '$onlineCount de ${devices.length} conectadas',
+                ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(builder: (_) => const DevicesScreen()),
+                  );
+                },
+              ),
+              const Divider(),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.system_update_alt),
+                title: const Text('Atualizar firmware'),
+                subtitle: const Text('OTA pela rede ou gravação USB'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(builder: (_) => const FirmwareUpdateScreen()),
+                  );
+                },
+              ),
+              const Divider(),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.admin_panel_settings_outlined),
+                title: const Text('Administração'),
+                subtitle: const Text('Campanha OTA multi-bancada'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(builder: (_) => const AdminScreen()),
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildManutencaoSection({
+    required bool wifiProvisioned,
+    required bool mqttConnected,
+    required Map<String, int> bancadas,
+    required List<DeviceInfo> deviceList,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SectionIntro(
+          title: _selectedCategory.title,
+          subtitle: _selectedCategory.subtitle,
+          icon: _selectedCategory.icon,
+        ),
+        ActionSectionCard(
+          icon: Icons.link,
+          title: 'Bancada vinculada',
+          subtitle: _bancadaDeviceId != null
+              ? formatBancadaLabelFromMap(_bancadaDeviceId!, bancadas)
+              : 'Nenhuma bancada selecionada para este posto',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (deviceList.isEmpty)
+                const Text('Nenhuma bancada detectada na rede MQTT.')
+              else
+                DropdownButtonFormField<String>(
+                  value: validDropdownValue(
+                    _bancadaDeviceId,
+                    deviceList.map((d) => d.deviceId),
+                  ),
+                  decoration: const InputDecoration(labelText: 'Bancada vinculada'),
+                  items: [
+                    for (final d in deviceList)
+                      DropdownMenuItem(
+                        value: d.deviceId,
+                        child: Text(formatBancadaLabelFromMap(d.deviceId, bancadas)),
+                      ),
+                  ],
+                  onChanged: (v) => setState(() => _bancadaDeviceId = v),
+                ),
+              const SizedBox(height: 12),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: FilledButton.tonal(
+                  onPressed: deviceList.isEmpty ? null : _saveBancada,
+                  child: const Text('Salvar vínculo'),
+                ),
+              ),
+            ],
+          ),
+        ),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final twoCol = constraints.maxWidth >= 520;
+            final wifiCard = ActionSectionCard(
+              icon: Icons.wifi,
+              title: wifiProvisioned ? 'Wi-Fi provisionado' : 'Provisionar Wi-Fi',
+              subtitle: 'Conectar bancadas à rede da fábrica',
+              accentColor: wifiProvisioned ? DipontoColors.success : DipontoColors.primary,
+              trailing: Icon(
+                Icons.chevron_right,
+                color: DipontoColors.onSurface.withValues(alpha: 0.5),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    wifiProvisioned
+                        ? 'As bancadas já foram configuradas neste posto.'
+                        : 'Use o assistente para abrir o portal do ESP32.',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 12),
+                  FilledButton.icon(
+                    onPressed: _openProvisioning,
+                    icon: Icon(wifiProvisioned ? Icons.settings_ethernet : Icons.wifi_find),
+                    label: Text(wifiProvisioned ? 'Reabrir assistente' : 'Iniciar provisionamento'),
+                  ),
+                ],
+              ),
+            );
+            final resetCard = ActionSectionCard(
+              icon: Icons.wifi_find_outlined,
+              title: 'Reset Wi-Fi na NVS',
+              subtitle: 'Apaga credenciais gravadas na bancada',
+              accentColor: Colors.orangeAccent,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Text(
+                    'Envia RESET_WIFI via MQTT. A bancada reinicia em modo '
+                    'SireneValidator. Lote e fila offline não são apagados.',
+                  ),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.orangeAccent,
+                      side: const BorderSide(color: Colors.orangeAccent),
+                    ),
+                    onPressed: _bancadaDeviceId != null && mqttConnected
+                        ? _resetBancadaWifi
+                        : null,
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Reset Wi-Fi da bancada'),
+                  ),
+                  if (_bancadaDeviceId == null || !mqttConnected)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text(
+                        _bancadaDeviceId == null
+                            ? 'Selecione uma bancada acima.'
+                            : 'MQTT desconectado — não é possível enviar o comando.',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ),
+                ],
+              ),
+            );
+            if (!twoCol) {
+              return Column(children: [wifiCard, resetCard]);
+            }
+            return IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(child: wifiCard),
+                  const SizedBox(width: 16),
+                  Expanded(child: resetCard),
+                ],
+              ),
+            );
+          },
+        ),
+        ActionSectionCard(
+          icon: Icons.qr_code_scanner,
+          title: 'Reconciliação de série',
+          subtitle: 'Corrigir divergências entre app e bancada',
+          accentColor: DipontoColors.primaryLight,
+          child: const SerialReconciliationPanel(),
+        ),
+        ActionSectionCard(
+          icon: Icons.science_outlined,
+          title: 'Modo ensaio',
+          subtitle: 'Ciclos ligado/desligado para teste de resistência',
+          accentColor: Colors.amberAccent,
+          child: ListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Configurar ensaio'),
+            subtitle: const Text('Ex.: 1 min ligado, 1 min desligado, por 120 min'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(builder: (_) => const EnsaioScreen()),
+              );
+            },
+          ),
+        ),
+        ActionSectionCard(
+          icon: Icons.smart_display_outlined,
+          title: 'Modo demonstração',
+          subtitle: 'Apresentar o software sem bancada ESP32 nem MQTT',
+          accentColor: Colors.deepPurpleAccent,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                value: ref.watch(demoModeProvider),
+                onChanged: _toggleDemoMode,
+                title: const Text('Ativar demonstração'),
+                subtitle: const Text(
+                  'Cria bancada virtual ($kDemoDeviceId), inicia lotes localmente '
+                  'e permite simular testes com autoplay no painel ao vivo. '
+                  'Não envia dados à nuvem.',
+                ),
+              ),
+            ],
+          ),
+        ),
+        DangerZone(
+          title: 'Zona de perigo',
+          description:
+              'O reset geral apaga todos os dados locais deste posto (SQLite, catálogo, '
+              'histórico). Não afeta a NVS da bancada — use o reset Wi-Fi acima para isso.',
+          child: OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(
+              foregroundColor: DipontoColors.error,
+              side: const BorderSide(color: DipontoColors.error),
+            ),
+            onPressed: _factoryReset,
+            icon: const Icon(Icons.delete_forever_outlined),
+            label: const Text('Reset geral do posto'),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRedeSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SectionIntro(
+          title: _selectedCategory.title,
+          subtitle: _selectedCategory.subtitle,
+          icon: _selectedCategory.icon,
+        ),
+        ActionSectionCard(
+          icon: Icons.hub_outlined,
+          title: 'Broker MQTT',
+          subtitle: 'Conexão entre o app e as bancadas (nuvem Diponto)',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ResponsiveFieldRow(
+                flexes: const [7, 3],
+                children: [
+                  TextField(
+                    controller: _mqttHost,
+                    decoration: const InputDecoration(labelText: 'Host'),
+                  ),
+                  TextField(
+                    controller: _mqttPort,
+                    decoration: const InputDecoration(labelText: 'Porta'),
+                    keyboardType: TextInputType.number,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _mqttSite,
+                decoration: const InputDecoration(
+                  labelText: 'Ambiente MQTT (site)',
+                  helperText: 'Só assina tópicos deste site — padrão: producao',
+                ),
+              ),
+              const SizedBox(height: 12),
+              ResponsiveFieldRow(
+                flexes: const [5, 5],
+                children: [
+                  TextField(
+                    controller: _mqttWsPath,
+                    decoration: const InputDecoration(
+                      labelText: 'Basepath WebSocket',
+                      helperText: 'Ex.: ws → wss://host:443/ws',
+                    ),
+                    enabled: _mqttUseWebSocket,
+                  ),
+                  TextField(
+                    controller: _mqttUsername,
+                    decoration: const InputDecoration(labelText: 'Usuário'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _mqttPassword,
+                obscureText: !_mqttPasswordVisible,
+                decoration: InputDecoration(
+                  labelText: 'Senha',
+                  suffixIcon: IconButton(
+                    tooltip: _mqttPasswordVisible ? 'Ocultar senha' : 'Mostrar senha',
+                    icon: Icon(
+                      _mqttPasswordVisible ? Icons.visibility_off : Icons.visibility,
+                    ),
+                    onPressed: () => setState(() => _mqttPasswordVisible = !_mqttPasswordVisible),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('WebSocket'),
+                subtitle: const Text('Broker na nuvem usa WebSocket (porta 443)'),
+                value: _mqttUseWebSocket,
+                onChanged: (value) => setState(() => _mqttUseWebSocket = value),
+              ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('TLS (WSS)'),
+                subtitle: const Text('Conexão segura — recomendado na porta 443'),
+                value: _mqttUseTls,
+                onChanged: _mqttUseWebSocket
+                    ? (value) => setState(() => _mqttUseTls = value)
+                    : null,
+              ),
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: OutlinedButton.icon(
+                  onPressed: () async {
+                    await _save();
+                    if (!mounted) return;
+                    final state = ref.read(mqttServiceProvider).currentState;
+                    final ok = state == AppMqttConnectionState.connected;
+                    _showMessage(
+                      ok
+                          ? 'MQTT conectado (${ref.read(appConfigProvider).mqttUri})'
+                          : 'Falha ao conectar — verifique host, porta, usuário e senha',
+                    );
+                  },
+                  icon: const Icon(Icons.link),
+                  label: const Text('Testar conexão'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMarcacaoSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SectionIntro(
+          title: _selectedCategory.title,
+          subtitle: _selectedCategory.subtitle,
+          icon: _selectedCategory.icon,
+        ),
+        ActionSectionCard(
+          icon: Icons.tune,
+          title: 'Modo de marcação',
+          subtitle: 'Etiquetas Zebra ou gravação laser Diatu',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SegmentedButton<MarkingMode>(
+                segments: const [
+                  ButtonSegment(
+                    value: MarkingMode.labels,
+                    label: Text('Etiquetas (Zebra)'),
+                    icon: Icon(Icons.label_outline),
+                  ),
+                  ButtonSegment(
+                    value: MarkingMode.laser,
+                    label: Text('Gravação laser (Diatu)'),
+                    icon: Icon(Icons.precision_manufacturing),
+                  ),
+                ],
+                selected: {_markingMode},
+                onSelectionChanged: (selection) {
+                  setState(() => _markingMode = selection.first);
+                },
+              ),
+              if (_markingMode == MarkingMode.laser) ...[
+                const SizedBox(height: 16),
+                TextField(
+                  controller: _laserTcpPort,
+                  decoration: const InputDecoration(
+                    labelText: 'Porta TCP (servidor no app)',
+                    helperText: 'DiatuCAD conecta neste PC (127.0.0.1 se mesma máquina)',
+                  ),
+                  keyboardType: TextInputType.number,
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _laserTcpCommand,
+                  decoration: InputDecoration(
+                    labelText: 'Comando TCP do serial (DataMatrix)',
+                    helperText:
+                        'Objeto DataMatrix no DiatuCAD — padrão: ${AppConfig.defaultLaserTcpCommand}',
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _laserModelCommand,
+                  decoration: InputDecoration(
+                    labelText: 'Comando TCP do modelo (texto)',
+                    helperText:
+                        'Objeto de texto no DiatuCAD — padrão: ${AppConfig.defaultLaserModelCommand}',
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const LaserDiagnosticsPanel(),
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: OutlinedButton.icon(
+                    onPressed: _testLaserMark,
+                    icon: const Icon(Icons.bolt_outlined),
+                    label: const Text('Testar gravação'),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        if (_markingMode == MarkingMode.labels)
+          ActionSectionCard(
+            icon: Icons.print_outlined,
+            title: 'Impressora Zebra',
+            subtitle: Platform.isWindows ? 'USB local ou rede' : 'Modo rede',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (Platform.isWindows)
+                  SegmentedButton<PrinterMode>(
+                    segments: const [
+                      ButtonSegment(
+                        value: PrinterMode.usb,
+                        label: Text('USB (local)'),
+                        icon: Icon(Icons.usb),
+                      ),
+                      ButtonSegment(
+                        value: PrinterMode.network,
+                        label: Text('Rede'),
+                        icon: Icon(Icons.lan_outlined),
+                      ),
+                    ],
+                    selected: {_printerMode},
+                    onSelectionChanged: (selection) {
+                      setState(() => _printerMode = selection.first);
+                    },
+                  )
+                else
+                  const Text(
+                    'Impressão USB disponível apenas no Windows. Usando modo rede.',
+                    style: TextStyle(fontSize: 13),
+                  ),
+                const SizedBox(height: 12),
+                if (_printerMode == PrinterMode.usb && Platform.isWindows) ...[
+                  Row(
+                    children: [
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          value: _windowsPrinters.contains(_printerWindowsName)
+                              ? _printerWindowsName
+                              : null,
+                          decoration: const InputDecoration(
+                            labelText: 'Impressora Windows',
+                            helperText: 'ZT230 via USB com driver Zebra ZPL',
+                          ),
+                          items: [
+                            for (final name in _windowsPrinters)
+                              DropdownMenuItem(value: name, child: Text(name)),
+                          ],
+                          onChanged: _windowsPrinters.isEmpty
+                              ? null
+                              : (value) => setState(() => _printerWindowsName = value),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        tooltip: 'Atualizar lista',
+                        onPressed: _loadingPrinters ? null : _refreshWindowsPrinters,
+                        icon: _loadingPrinters
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.refresh),
+                      ),
+                    ],
+                  ),
+                ] else ...[
+                  ResponsiveFieldRow(
+                    flexes: const [7, 3],
+                    children: [
+                      TextField(
+                        controller: _printerHost,
+                        decoration: const InputDecoration(labelText: 'IP'),
+                      ),
+                      TextField(
+                        controller: _printerPort,
+                        decoration: const InputDecoration(labelText: 'Porta (padrão 9100)'),
+                        keyboardType: TextInputType.number,
+                      ),
+                    ],
+                  ),
+                ],
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: OutlinedButton.icon(
+                    onPressed: _testPrint,
+                    icon: const Icon(Icons.print_outlined),
+                    label: const Text('Testar impressão'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildNuvemSection({
+    required AsyncValue<SyncStatus> syncStatus,
+    required AsyncValue<List<SyncQueueData>> failedItems,
+    required bool authenticated,
+    required bool syncEnabled,
+    required DateFormat dateFmt,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SectionIntro(
+          title: _selectedCategory.title,
+          subtitle: _selectedCategory.subtitle,
+          icon: _selectedCategory.icon,
+        ),
+        ActionSectionCard(
+          icon: Icons.cloud_sync_outlined,
+          title: 'Firestore',
+          subtitle: 'Sincronização com a nuvem Diponto',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (!isFirebaseAvailable)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text(
+                    firebaseUnavailableMessage,
+                    style: const TextStyle(color: Colors.orangeAccent, fontSize: 13),
+                  ),
+                ),
+              TextField(
+                controller: _stationId,
+                decoration: const InputDecoration(
+                  labelText: 'ID do posto (station_id)',
+                  helperText: 'Identifica este PC na nuvem',
+                ),
+              ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Sincronizar com Firestore'),
+                subtitle: Text(
+                  ref.watch(cloudSetupCompleteProvider)
+                      ? (authenticated
+                          ? 'Obrigatório em produção (não pode desativar)'
+                          : 'Sync ativo — faça login na nuvem para enviar dados')
+                      : authenticated
+                          ? 'Operador autenticado'
+                          : 'Login necessário para habilitar',
+                ),
+                value: syncEnabled,
+                onChanged: isFirebaseAvailable ? _onSyncToggle : null,
+              ),
+              if (isFirebaseAvailable && syncEnabled && !authenticated) ...[
+                const SizedBox(height: 8),
+                Text(
+                  'O Firestore exige login Firebase. Sem conta, os envios ficam em '
+                  'permission-denied na fila de falhas.',
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.error,
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: FilledButton.icon(
+                    onPressed: _loginToCloud,
+                    icon: const Icon(Icons.login),
+                    label: const Text('Entrar na nuvem'),
+                  ),
+                ),
+              ],
+              syncStatus.when(
+                data: (status) => Wrap(
+                  spacing: 16,
+                  runSpacing: 8,
+                  children: [
+                    _StatPill(label: 'Pendentes', value: '${status.pending}'),
+                    _StatPill(label: 'Falhas', value: '${status.failed}'),
+                    _StatPill(
+                      label: 'Último sync',
+                      value: status.lastSync != null
+                          ? dateFmt.format(status.lastSync!.toLocal())
+                          : '—',
+                    ),
+                  ],
+                ),
+                loading: () => const Text('Carregando status da fila...'),
+                error: (e, _) => Text('Erro ao ler fila: $e'),
+              ),
+              failedItems.when(
+                data: (items) {
+                  if (items.isEmpty) return const SizedBox.shrink();
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const SizedBox(height: 16),
+                      Text('Fila com falha', style: Theme.of(context).textTheme.titleSmall),
+                      const SizedBox(height: 8),
+                      for (final item in items)
+                        Card(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          child: ListTile(
+                            dense: true,
+                            title: Text(
+                              item.documentPath ??
+                                  '${item.collection}/${item.documentId}',
+                            ),
+                            subtitle: Text(
+                              item.lastError ?? 'Erro desconhecido',
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            trailing: TextButton(
+                              onPressed: () => _retryFailedSync(itemId: item.id),
+                              child: const Text('Tentar novamente'),
+                            ),
+                          ),
+                        ),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: OutlinedButton(
+                          onPressed: () => _retryFailedSync(),
+                          child: const Text('Reprocessar todas as falhas'),
+                        ),
+                      ),
+                    ],
+                  );
+                },
+                loading: () => const SizedBox.shrink(),
+                error: (_, __) => const SizedBox.shrink(),
+              ),
+              if (isFirebaseAvailable && syncEnabled && authenticated) ...[
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    OutlinedButton(onPressed: _syncCatalog, child: const Text('Enviar catálogo')),
+                    OutlinedButton(onPressed: _pullCatalog, child: const Text('Baixar catálogo')),
+                  ],
+                ),
+              ],
+              if (authenticated) ...[
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: OutlinedButton(onPressed: _logout, child: const Text('Sair da conta nuvem')),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildProdutividadeSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SectionIntro(
+          title: _selectedCategory.title,
+          subtitle: _selectedCategory.subtitle,
+          icon: _selectedCategory.icon,
+        ),
+        ActionSectionCard(
+          icon: Icons.trending_up,
+          title: 'Metas do turno',
+          subtitle: 'Rendimento esperado e início do expediente',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('Meta de rendimento: ${_yieldTargetPct.toStringAsFixed(0)}%'),
+              Slider(
+                value: _yieldTargetPct,
+                min: 50,
+                max: 99,
+                divisions: 49,
+                label: '${_yieldTargetPct.toStringAsFixed(0)}%',
+                onChanged: (v) => setState(() => _yieldTargetPct = v),
+              ),
+              DropdownButtonFormField<int>(
+                value: _shiftStartHour,
+                decoration: const InputDecoration(labelText: 'Início do turno (hora)'),
+                items: List.generate(
+                  24,
+                  (h) => DropdownMenuItem(value: h, child: Text('$h:00')),
+                ),
+                onChanged: (v) {
+                  if (v != null) setState(() => _shiftStartHour = v);
+                },
+              ),
+            ],
+          ),
+        ),
+        ActionSectionCard(
+          icon: Icons.pause_circle_outline,
+          title: 'Paradas de produção',
+          subtitle: 'Registrar interrupções no turno',
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: OutlinedButton.icon(
+              onPressed: _registerDowntime,
+              icon: const Icon(Icons.pause_circle_outline),
+              label: const Text('Registrar parada'),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _StatPill extends StatelessWidget {
+  const _StatPill({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: DipontoColors.surfaceVariant,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: Theme.of(context).textTheme.labelSmall),
+          Text(value, style: const TextStyle(fontWeight: FontWeight.w600)),
         ],
       ),
     );

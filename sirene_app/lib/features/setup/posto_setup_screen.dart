@@ -5,6 +5,7 @@ import '../../core/config/app_config.dart';
 import '../../core/providers/core_providers.dart';
 import '../../core/theme/diponto_theme.dart';
 import '../../shared/display_labels.dart';
+import '../../shared/dropdown_value.dart';
 import '../bancadas/bancadas_provider.dart';
 import '../mqtt/mqtt_providers.dart';
 import '../provisioning/provisioning_wizard.dart';
@@ -66,8 +67,10 @@ class _PostoSetupScreenState extends ConsumerState<PostoSetupScreen> {
         return a.deviceId.compareTo(b.deviceId);
       });
 
-    _selectedDeviceId ??= ref.watch(selectedDeviceIdProvider) ??
-        (deviceList.isNotEmpty ? deviceList.first.deviceId : null);
+    final deviceIds = deviceList.map((d) => d.deviceId).toList();
+    _selectedDeviceId = validDropdownValue(_selectedDeviceId, deviceIds) ??
+        validDropdownValue(ref.watch(selectedDeviceIdProvider), deviceIds) ??
+        (deviceIds.isNotEmpty ? deviceIds.first : null);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Configurar posto')),

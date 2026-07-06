@@ -9,8 +9,24 @@ int test_url(void)
         printf("test_url: valid http rejected\n");
         return 1;
     }
-    if (!pure_ota_url_valid("https://example.com/sirene-validator.bin")) {
-        printf("test_url: valid https rejected\n");
+    if (!pure_ota_url_allowed("http://192.168.1.10/firmware.bin", NULL)) {
+        printf("test_url: private LAN http rejected\n");
+        return 1;
+    }
+    if (!pure_ota_url_allowed("https://ota.local/sirene-validator.bin", NULL)) {
+        printf("test_url: .local https rejected\n");
+        return 1;
+    }
+    if (pure_ota_url_allowed("https://example.com/sirene-validator.bin", NULL)) {
+        printf("test_url: public host accepted\n");
+        return 1;
+    }
+    if (pure_ota_url_allowed("https://evil.com/malware.bin", NULL)) {
+        printf("test_url: evil host accepted\n");
+        return 1;
+    }
+    if (!pure_ota_url_allowed("http://10.0.0.5/fw.bin", NULL)) {
+        printf("test_url: 10.x host rejected\n");
         return 1;
     }
     if (pure_ota_url_valid("ftp://bad/file.bin")) {

@@ -1,0 +1,22 @@
+﻿Diponto Sirene Gestor — Painel supervisor (versão 1.0.0)
+===========================================================
+
+App de escritório para supervisores: KPIs consolidados da fábrica via Firestore.
+
+REQUISITOS
+----------
+- Windows 10/11 (64 bits)
+- Conta Firebase com acesso ao projeto monitor-sirenv2-6d201
+- Postos com sync da nuvem configurado (alimentam o painel)
+
+USO
+---
+1. Abra pelo Menu Iniciar: Diponto Sirene Gestor
+2. Faça login com e-mail/senha Firebase
+3. Consulte KPIs, saúde dos postos, produção por OP e busca de serial
+
+Relatórios CSV salvos em Documentos\relatorios_gestor
+
+
+
+

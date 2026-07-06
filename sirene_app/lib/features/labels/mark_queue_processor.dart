@@ -2,6 +2,8 @@ import 'dart:async';
 
 import '../../core/config/app_config.dart';
 import '../../core/database/database.dart';
+import '../../core/services/app_log.dart';
+import '../serial/itf_check_digit.dart';
 import 'diatu_laser_tcp_server.dart';
 import 'laser_tcp_diagnostics.dart';
 import 'serial_marking_backend.dart';
@@ -26,6 +28,8 @@ class MarkQueueProcessor {
   Timer? _timer;
   int? _runningPort;
   String? _runningCommand;
+  String? _runningModelCommand;
+  String? _lastDeliveredSerial;
   String? lastError;
 
   bool get isServerRunning => _backend?.isRunning ?? false;
@@ -33,8 +37,17 @@ class MarkQueueProcessor {
   int? get activePort => _runningPort;
 
   void start() {
-    _timer ??= Timer.periodic(healthCheckInterval, (_) => ensureRunning());
-    unawaited(ensureRunning());
+    _timer ??= Timer.periodic(healthCheckInterval, (_) => _safeEnsureRunning());
+    unawaited(_safeEnsureRunning());
+  }
+
+  Future<void> _safeEnsureRunning() async {
+    try {
+      await ensureRunning();
+    } catch (e) {
+      lastError = formatMarkingError(e);
+      unawaited(AppLog.write('Laser TCP: $lastError'));
+    }
   }
 
   void stop() {
@@ -44,6 +57,7 @@ class MarkQueueProcessor {
     _backend = null;
     _runningPort = null;
     _runningCommand = null;
+    _runningModelCommand = null;
   }
 
   Future<void> ensureRunning() async {
@@ -54,6 +68,7 @@ class MarkQueueProcessor {
         _backend = null;
         _runningPort = null;
         _runningCommand = null;
+        _runningModelCommand = null;
       }
       return;
     }
@@ -61,6 +76,7 @@ class MarkQueueProcessor {
     if (_backend != null &&
         _runningPort == config.laserTcpPort &&
         _runningCommand == config.laserTcpCommand &&
+        _runningModelCommand == config.laserModelCommand &&
         _backend!.isRunning) {
       return;
     }
@@ -69,20 +85,23 @@ class MarkQueueProcessor {
     _backend = DiatuLaserTcpServer(
       port: config.laserTcpPort,
       commandPrefix: config.laserTcpCommand,
+      modelCommandPrefix: config.laserModelCommand,
       onRequestSerial: _serveNextSerial,
+      onRequestModel: _serveModel,
       eventLog: eventLog,
     );
     try {
       await _backend!.start();
       _runningPort = config.laserTcpPort;
       _runningCommand = config.laserTcpCommand;
+      _runningModelCommand = config.laserModelCommand;
       lastError = null;
     } catch (e) {
       lastError = formatMarkingError(e);
       _backend = null;
       _runningPort = null;
       _runningCommand = null;
-      rethrow;
+      _runningModelCommand = null;
     }
   }
 
@@ -90,7 +109,22 @@ class MarkQueueProcessor {
     final entry = await _db.peekNextPendingMark();
     if (entry == null) return null;
     await _db.markQueueDelivered(entry.id);
+    _lastDeliveredSerial = entry.serial;
     return entry.serial;
+  }
+
+  Future<String?> _serveModel() async {
+    final pending = await _db.peekNextPendingMark();
+    final serial = pending?.serial ?? _lastDeliveredSerial;
+    if (serial == null || serial.isEmpty) return null;
+
+    final idProduto = extractIdProdutoFromSerial(serial);
+    if (idProduto == null) return null;
+
+    final product = await _db.getProduct(idProduto);
+    final nome = product?.nome.trim();
+    if (nome == null || nome.isEmpty) return null;
+    return nome;
   }
 
   /// Enfileira serial de teste na frente da fila (Configurações).
@@ -111,13 +145,23 @@ class MarkQueueProcessor {
     );
   }
 
-  /// Simula cliente DiatuCAD contra o servidor local.
+  /// Simula cliente DiatuCAD contra o servidor local (comando serial).
   Future<String> simulateDiatuClient() async {
     final config = _readConfig();
     await ensureRunning();
     return simulateDiatuTcpClient(
       port: config.laserTcpPort,
       command: config.laserTcpCommand,
+    );
+  }
+
+  /// Simula cliente DiatuCAD pedindo o nome do modelo.
+  Future<String> simulateDiatuModelClient() async {
+    final config = _readConfig();
+    await ensureRunning();
+    return simulateDiatuTcpClient(
+      port: config.laserTcpPort,
+      command: config.laserModelCommand,
     );
   }
 }

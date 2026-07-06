@@ -1,6 +1,7 @@
 #include "state_machine.h"
 
 #include "esp_log.h"
+#include "ota_update.h"
 #include "pure_logic.h"
 
 static const char *TAG = "state";
@@ -49,19 +50,24 @@ static pure_state_t to_pure_state(app_state_t state)
     return (pure_state_t)state;
 }
 
+static bool ota_blocks_commands(void)
+{
+    return ota_update_is_active() || s_state == STATE_OTA_UPDATING;
+}
+
 bool state_machine_can_start_test(void)
 {
-    return pure_fsm_can_start_test(to_pure_state(s_state), false, false);
+    return pure_fsm_can_start_test(to_pure_state(s_state), false, ota_blocks_commands());
 }
 
 bool state_machine_can_accept_batch_cmd(void)
 {
-    return pure_fsm_can_accept_batch(to_pure_state(s_state), false);
+    return pure_fsm_can_accept_batch(to_pure_state(s_state), ota_blocks_commands());
 }
 
 bool state_machine_can_accept_calibration(void)
 {
-    return pure_fsm_can_accept_calibration(to_pure_state(s_state), false);
+    return pure_fsm_can_accept_calibration(to_pure_state(s_state), ota_blocks_commands());
 }
 
 bool state_machine_can_accept_ota(void)

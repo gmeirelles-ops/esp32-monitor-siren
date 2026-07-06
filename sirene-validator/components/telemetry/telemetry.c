@@ -3,12 +3,14 @@
 #include <stdio.h>
 
 #include "board_config.h"
+#include "device_id.h"
 #include "esp_log.h"
 #include "esp_task_wdt.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "mqtt_bridge.h"
+#include "mqtt_topics.h"
 
 static const char *TAG = "telemetry";
 static bool (*s_provider)(telemetry_snapshot_t *out);
@@ -32,25 +34,42 @@ static void publish_heartbeat(void)
     telemetry_snapshot_t snap = {
         .rssi = -127,
         .estado = "DESCONHECIDO",
+        .wifi_ssid = "",
         .fila = 0,
         .firmware_version = FIRMWARE_VERSION,
         .numero_op = "",
         .proximo_sequencial = 0,
         .aprovados = 0,
         .batch_active = false,
+        .queue_drops = 0,
+        .pzem_faults = 0,
+        .batch_nvs_fault = false,
+        .reset_reason = 0,
+        .time_synced = false,
+        .pzem_addr = 0,
     };
     if (s_provider) {
         s_provider(&snap);
     }
-    char json[384];
+    char json[768];
     snprintf(json, sizeof(json),
-             "{\"uptime\":%lld,\"rssi\":%d,\"estado\":\"%s\",\"fila\":%u,"
-             "\"firmware_version\":\"%s\",\"numero_op\":\"%s\","
-             "\"proximo_sequencial\":%lu,\"aprovados\":%lu}",
+             "{\"device_id\":\"%s\",\"site\":\"%s\",\"bancada\":%u,"
+             "\"uptime\":%lld,\"ts_ms\":%lld,\"rssi\":%d,\"estado\":\"%s\",\"wifi_ssid\":\"%s\","
+             "\"fila\":%u,\"fila_drops\":%lu,\"firmware_version\":\"%s\",\"numero_op\":\"%s\","
+             "\"proximo_sequencial\":%lu,\"aprovados\":%lu,\"batch_nvs_fault\":%s,"
+             "\"pzem_faults\":%lu,\"pzem_addr\":\"0x%02X\",\"reset_reason\":%d,\"time_synced\":%s}",
+             device_id_get(),
+             mqtt_topics_get_site(),
+             (unsigned)mqtt_topics_get_bancada(),
              (long long)(esp_timer_get_time() / 1000000LL),
-             snap.rssi, snap.estado, (unsigned)snap.fila, snap.firmware_version,
+             (long long)(esp_timer_get_time() / 1000LL),
+             snap.rssi, snap.estado, snap.wifi_ssid ? snap.wifi_ssid : "",
+             (unsigned)snap.fila, (unsigned long)snap.queue_drops, snap.firmware_version,
              snap.batch_active ? snap.numero_op : "",
-             (unsigned long)snap.proximo_sequencial, (unsigned long)snap.aprovados);
+             (unsigned long)snap.proximo_sequencial, (unsigned long)snap.aprovados,
+             snap.batch_nvs_fault ? "true" : "false",
+             (unsigned long)snap.pzem_faults, snap.pzem_addr, snap.reset_reason,
+             snap.time_synced ? "true" : "false");
     mqtt_bridge_publish("heartbeat", json);
 }
 

@@ -11,6 +11,15 @@ String formatBancadaLabelFromMap(String deviceId, Map<String, int> numeros) {
   return formatBancadaLabel(deviceId, numero: numeros[deviceId]);
 }
 
+/// Preferência: número vindo do firmware (`DeviceInfo.bancadaNum`), depois SQLite.
+String formatBancadaLabelForDevice(
+  String deviceId, {
+  int? bancadaNum,
+  Map<String, int> numeros = const {},
+}) {
+  return formatBancadaLabel(deviceId, numero: bancadaNum ?? numeros[deviceId]);
+}
+
 /// Rótulo de produto: "{id} — {nome}" quando o catálogo estiver disponível.
 String formatProductLabel(
   String idProduto, {

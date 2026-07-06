@@ -18,9 +18,10 @@ Substitui etiquetas Zebra por gravação permanente do serial ITF na carcaça da
 
 ### 0.2 Template de gravação
 
-1. Criar job com texto ITF 10 dígitos.
-2. Configurar **Texto variável → TCP/IP** (ver [diatu-tcp.md](./diatu-tcp.md)).
-3. Ajustar fonte/tamanho para legibilidade na carcaça ABS.
+1. Criar job com **DataMatrix** alimentado por TCP (`TCP: Give me string`) — ver [diatu-tcp.md](./diatu-tcp.md#job-com-datamatrix--texto-do-modelo).
+2. Adicionar **texto do modelo** com TCP (`TCP: model`) se quiser nome dinâmico do produto.
+3. Validar que dois objetos TCP com comandos distintos funcionam no mesmo job (F2).
+4. Ajustar tamanho do DataMatrix e fonte do texto para legibilidade na carcaça ABS.
 
 ### 0.3 Validação física
 
@@ -35,7 +36,7 @@ Sintomas comuns e soluções: [diatu-tcp.md](./diatu-tcp.md#troubleshooting).
 Resumo:
 - `ERROR:BADCMD` → comando TCP diferente entre app e DiatuCAD
 - Porta em uso → desativar **Marca de controlo TCP** no Diaotu
-- Use o painel **Diagnóstico laser** em Configurações (log + Simular DiatuCAD)
+- Use o painel **Diagnóstico laser** em Configurações (log + Simular serial / Simular modelo)
 
 ## Posto com laser vs etiquetas
 

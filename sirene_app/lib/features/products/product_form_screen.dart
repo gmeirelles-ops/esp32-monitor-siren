@@ -7,11 +7,14 @@ import '../../core/database/database.dart';
 import '../../core/theme/diponto_theme.dart';
 import '../../shared/widgets/desktop_form_layout.dart';
 import '../cloud/sync/sync_providers.dart';
-import '../mqtt/models/mqtt_messages.dart';
 import '../../shared/display_labels.dart';
+import '../../shared/dropdown_value.dart';
 import '../bancadas/bancadas_provider.dart';
+import '../mqtt/models/mqtt_messages.dart';
 import '../mqtt/mqtt_providers.dart';
+import 'device_calibration.dart';
 import 'power_limits.dart';
+import 'product_calibration_section.dart';
 
 class ProductFormScreen extends ConsumerStatefulWidget {
   const ProductFormScreen({super.key, this.existing});
@@ -99,8 +102,15 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
     }
 
     final device = ref.read(devicesProvider)[deviceId];
-    if (device?.estado != DeviceFsmState.idle) {
-      _showSnack('Dispositivo deve estar em IDLE (sem lote ativo)');
+    if (device == null) {
+      _showSnack('Dispositivo não encontrado');
+      return;
+    }
+    if (!DeviceCalibration.canCalibrate(
+      deviceOnline: device.isOnline,
+      estado: device.estado.mqttEstado,
+    )) {
+      _showSnack(DeviceCalibration.estadoHint(device.estado.mqttEstado, device.isOnline));
       return;
     }
 
@@ -163,6 +173,28 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
     }
   }
 
+  Future<void> _pickDevice(List<DeviceInfo> deviceList, Map<String, int> bancadas) async {
+    if (_measuring) return;
+    final picked = await showDialog<String>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text('Bancada para calibração'),
+        children: [
+          for (final d in deviceList)
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(ctx, d.deviceId),
+              child: Text(
+                '${formatBancadaLabelFromMap(d.deviceId, bancadas)} (${d.estado.mqttEstado})',
+              ),
+            ),
+        ],
+      ),
+    );
+    if (picked != null && mounted) {
+      setState(() => _selectedDeviceId = picked);
+    }
+  }
+
   void _showSnack(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
@@ -172,7 +204,9 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
     final devices = ref.watch(devicesProvider);
     final bancadas = ref.watch(bancadasMapProvider).valueOrNull ?? {};
     final deviceList = devices.values.toList();
-    _selectedDeviceId ??= deviceList.isNotEmpty ? deviceList.first.deviceId : null;
+    final deviceIds = deviceList.map((d) => d.deviceId).toList();
+    _selectedDeviceId = validDropdownValue(_selectedDeviceId, deviceIds) ??
+        (deviceIds.isNotEmpty ? deviceIds.first : null);
 
     ref.listen(calibrationSamplesProvider, (_, next) {
       next.whenData((event) {
@@ -216,9 +250,6 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
       });
     });
 
-    final canMeasure = _selectedDeviceId != null &&
-        devices[_selectedDeviceId]?.estado == DeviceFsmState.idle &&
-        !_measuring;
 
     return Scaffold(
       appBar: AppBar(
@@ -260,30 +291,21 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
             ),
           ),
           const SizedBox(height: 16),
-          const Text('Autocalibração', style: TextStyle(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
           if (deviceList.isEmpty)
             const Text('Nenhum dispositivo online — conecte uma bancada primeiro.')
           else
-            DropdownButtonFormField<String>(
-              initialValue: _selectedDeviceId,
-              decoration: const InputDecoration(labelText: 'Dispositivo (deve estar IDLE)'),
-              items: deviceList
-                  .map((d) => DropdownMenuItem(
-                        value: d.deviceId,
-                        child: Text(
-                          '${formatBancadaLabelFromMap(d.deviceId, bancadas)} (${d.estado.label})',
-                        ),
-                      ))
-                  .toList(),
-              onChanged: _measuring ? null : (v) => setState(() => _selectedDeviceId = v),
+            ProductCalibrationSection(
+              selectedDeviceName: _selectedDeviceId != null
+                  ? formatBancadaLabelFromMap(_selectedDeviceId!, bancadas)
+                  : null,
+              selectedDeviceId: _selectedDeviceId,
+              deviceOnline: devices[_selectedDeviceId]?.isOnline ?? false,
+              deviceEstado: devices[_selectedDeviceId]?.estado.mqttEstado,
+              calibrating: _measuring,
+              onRecalibrate: _startMeasurement,
+              onDevicePicker: () => _pickDevice(deviceList, bancadas),
+              buttonLabel: _isEditing ? 'Recalibrar peça padrão' : 'Medir peça padrão',
             ),
-          const SizedBox(height: 8),
-          ElevatedButton.icon(
-            onPressed: canMeasure ? _startMeasurement : null,
-            icon: const Icon(Icons.sensors),
-            label: Text(_isEditing ? 'Recalibrar peça padrão' : 'Medir peça padrão'),
-          ),
           if (_measuring || _samples.isNotEmpty) ...[
             const SizedBox(height: 16),
             Card(

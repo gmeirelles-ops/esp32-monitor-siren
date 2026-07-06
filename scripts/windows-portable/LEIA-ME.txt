@@ -18,6 +18,14 @@ COMO INICIAR
 2. Dê duplo clique em: Iniciar Diponto Sirene Validator.bat
    (Não copie só o .exe — a pasta app\ contém DLLs e data\ obrigatórios.)
 
+SE NÃO ABRIR
+------------
+1. Instalador setup.exe: SmartScreen → "Mais informações" → "Executar mesmo assim".
+2. Use o ZIP (não só o setup.exe) e rode Instalar no PC.bat como administrador.
+3. Rode Diagnostico-Posto.ps1 (PowerShell) nesta pasta — mostra o que falta.
+4. Instale VC++ x64: https://aka.ms/vs/17/release/vc_redist.x64.exe
+5. Log do app: Documentos\sirene_app.log
+
 PRIMEIRA CONFIGURAÇÃO
 ---------------------
 1. Abra Configurações → informe host/porta do broker MQTT.

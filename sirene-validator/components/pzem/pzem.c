@@ -27,6 +27,8 @@ static const char *TAG = "pzem";
 static pzem_fault_cb_t s_fault_cb;
 static bool s_fault;
 static uint32_t s_consecutive_errors;
+static uint32_t s_fault_count;
+static uint8_t s_slave_addr = PZEM_SLAVE_ADDR;
 
 static uint16_t modbus_crc(const uint8_t *data, size_t len)
 {
@@ -50,6 +52,9 @@ static void report_fault(bool fault)
         return;
     }
     s_fault = fault;
+    if (fault) {
+        s_fault_count++;
+    }
     if (s_fault_cb) {
         s_fault_cb(fault);
     }
@@ -71,54 +76,64 @@ static void pzem_log_rx_fail(const char *reason, const uint8_t *data, int len)
     ESP_LOGW(TAG, "leitura falhou: %s len=%d rx=[%s]", reason, len, hex);
 }
 
-static bool pzem_send_read_power(float *power_w)
+static bool pzem_try_read_at_addr(uint8_t addr, float *power_w)
 {
-    uint8_t req[8] = {PZEM_SLAVE_ADDR, 0x04, 0x00, 0x00, 0x00, PZEM_READ_ALL_REGS, 0, 0};
+    uint8_t req[8] = {addr, 0x04, 0x00, 0x00, 0x00, PZEM_READ_ALL_REGS, 0, 0};
     uint16_t crc = modbus_crc(req, 6);
     req[6] = crc & 0xFF;
     req[7] = (crc >> 8) & 0xFF;
 
     uart_flush_input(PZEM_UART_NUM);
     if (uart_write_bytes(PZEM_UART_NUM, (const char *)req, sizeof(req)) < 0) {
-        ESP_LOGW(TAG, "leitura falhou: write");
         return false;
     }
     if (uart_wait_tx_done(PZEM_UART_NUM, pdMS_TO_TICKS(100)) != ESP_OK) {
-        ESP_LOGW(TAG, "leitura falhou: tx_timeout");
         return false;
     }
     vTaskDelay(pdMS_TO_TICKS(PZEM_RESPONSE_DELAY_MS));
 
     uint8_t resp[PZEM_RESPONSE_ALL_LEN];
     int len = uart_read_bytes(PZEM_UART_NUM, resp, sizeof(resp), pdMS_TO_TICKS(PZEM_READ_TIMEOUT_MS));
-    if (len != PZEM_RESPONSE_ALL_LEN) {
-        pzem_log_rx_fail("len", resp, len);
-        return false;
-    }
-    if (resp[0] != PZEM_SLAVE_ADDR) {
-        pzem_log_rx_fail("addr", resp, len);
-        return false;
-    }
-    if (resp[1] != 0x04) {
-        pzem_log_rx_fail("func", resp, len);
+    if (len != PZEM_RESPONSE_ALL_LEN || resp[0] != addr || resp[1] != 0x04) {
+        if (!s_fault) {
+            pzem_log_rx_fail("hdr", resp, len > 0 ? len : 0);
+        }
         return false;
     }
     if (resp[2] != PZEM_READ_ALL_REGS * 2) {
-        pzem_log_rx_fail("bytecount", resp, len);
         return false;
     }
 
     uint16_t recv_crc = resp[len - 2] | (resp[len - 1] << 8);
     if (modbus_crc(resp, len - 2) != recv_crc) {
-        pzem_log_rx_fail("crc", resp, len);
         return false;
     }
 
-    /* Potência ativa: regs 0x0003–0x0004 (32-bit), 1 LSB = 0.1 W */
     uint32_t raw_power = ((uint32_t)resp[11] << 24) | ((uint32_t)resp[12] << 16) |
                          ((uint32_t)resp[9] << 8) | resp[10];
     *power_w = (float)raw_power / 10.0f;
     return true;
+}
+
+static bool pzem_detect_slave_addr(void)
+{
+    static const uint8_t candidates[] = {PZEM_SLAVE_ADDR, PZEM_SLAVE_ADDR_V3};
+    float power = 0;
+    for (size_t i = 0; i < sizeof(candidates); i++) {
+        if (pzem_try_read_at_addr(candidates[i], &power)) {
+            s_slave_addr = candidates[i];
+            ESP_LOGI(TAG, "endereco Modbus detectado: 0x%02X (%.1f W)", s_slave_addr, power);
+            return true;
+        }
+        vTaskDelay(pdMS_TO_TICKS(50));
+    }
+    ESP_LOGW(TAG, "PZEM nao respondeu em 0x01 nem 0xF8");
+    return false;
+}
+
+static bool pzem_send_read_power(float *power_w)
+{
+    return pzem_try_read_at_addr(s_slave_addr, power_w);
 }
 
 bool pzem_init(pzem_fault_cb_t fault_cb)
@@ -138,6 +153,9 @@ bool pzem_init(pzem_fault_cb_t fault_cb)
     ESP_ERROR_CHECK(uart_driver_install(PZEM_UART_NUM, 256, 0, 0, NULL, 0));
     ESP_ERROR_CHECK(uart_param_config(PZEM_UART_NUM, &cfg));
     ESP_ERROR_CHECK(uart_set_pin(PZEM_UART_NUM, PZEM_TX_PIN, PZEM_RX_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
+#if !CONFIG_DEV_MOCK_PZEM
+    pzem_detect_slave_addr();
+#endif
     return true;
 }
 
@@ -174,8 +192,15 @@ bool pzem_boot_self_test(void)
         }
     }
     ESP_LOGW(TAG, "autoteste PZEM falhou após %d tentativas", PZEM_SAMPLE_READ_RETRIES);
+    pzem_mark_fault();
     return false;
 #endif
+}
+
+void pzem_mark_fault(void)
+{
+    s_consecutive_errors = 3;
+    report_fault(true);
 }
 
 bool pzem_read_power_w(float *power_w)
@@ -206,6 +231,16 @@ void pzem_clear_fault(void)
     }
 }
 
+uint8_t pzem_get_slave_addr(void)
+{
+    return s_slave_addr;
+}
+
+uint32_t pzem_get_fault_count(void)
+{
+    return s_fault_count;
+}
+
 bool pzem_measure_cycle(uint32_t duration_sec, uint32_t inrush_discard_ms, pzem_cycle_result_t *out,
                         pzem_sample_cb_t sample_cb, void *sample_ctx)
 {
@@ -221,6 +256,10 @@ bool pzem_measure_cycle(uint32_t duration_sec, uint32_t inrush_discard_ms, pzem_
     double sum = 0;
     while (xTaskGetTickCount() < cycle_end) {
         esp_task_wdt_reset();
+        if (pzem_is_fault()) {
+            out->uart_error = true;
+            break;
+        }
         float power = 0;
         bool read_ok = false;
 #if CONFIG_DEV_MOCK_PZEM

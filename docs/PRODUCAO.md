@@ -34,6 +34,24 @@ BROKER=192.168.51.87 DEVICE_ID=<mac_hex> ./scripts/bench_calibration.sh
 
 ## 3. App Flutter (Windows)
 
+### Requisito de hardware (CPU)
+
+O app usa o motor Flutter/Dart, que exige **SSE4.1** no processador. Se o PC do posto for muito antigo, o app **abre e fecha na hora** e o Visualizador de Eventos mostra:
+
+- Código de exceção: **0xc000001d** (instrução ilegal)
+- Módulo: `sirene_app.exe`
+
+**No PC com problema**, confira o processador:
+
+```powershell
+Get-CimInstance Win32_Processor | Select-Object Name
+```
+
+Processadores **incompatíveis** (exemplos): AMD Phenom II, Intel Core 2 Duo, Atom N270/N450.  
+**Compatíveis**: Intel Core i3/i5/i7 a partir da 2ª geração (2011+), AMD Ryzen, a maioria dos PCs de escritório dos últimos 12 anos.
+
+**Solução:** usar outro PC no posto ou trocar a máquina. Não é problema de “usuário normal” do Windows nem de permissão de cadastro.
+
 ### Instalador (recomendado para PC fixo do posto)
 
 Gera `DipontoSireneValidator-<versão>-setup.exe` (wizard em português, Menu Iniciar, desinstalador):
@@ -60,21 +78,44 @@ Pré-requisito adicional: [Inno Setup 6](https://jrsoftware.org/isdl.php) (`choc
 
 > **Catálogo na nuvem:** com sync habilitado, **Baixar catálogo** traz produtos e operadores da coleção Firestore `operators/{PIN}`.
 
+> **Sync obrigatório:** na primeira execução o assistente **Configuração da nuvem** exige login Firebase, `station_id` e habilita sync. Depois disso o sync **não pode ser desligado** em Configurações. Cada posto envia heartbeat em `stations/{station_id}` para o painel gestor monitorar postos sem dados.
+
+> **Build Windows:** se a pasta do projeto tiver acentos (OneDrive), use o junction `C:\dev\diponto-sirene` — ver README.
+
+### Instalação pelo USB (posto sem baixar nuvem)
+
+Quando o PC do posto não consegue sincronizar ou baixar catálogo:
+
+1. **No PC de configuração** (onde a nuvem funciona): abra o app → Configurações → **Baixar catálogo** → feche o app.
+2. No pendrive (pasta do ZIP win64): **Exportar dados para USB.bat**
+3. **No posto**: **Instalar no PC.bat** (copia app para `C:\Diponto\SireneValidator` + catálogo SQLite).
+
+Script completo (monta pendrive + exporta):
+
+```powershell
+powershell -File scripts\preparar_usb_posto.ps1 -UsbRoot E:\ -ExportarDestePc -SemSync
+```
+
+`-SemSync` evita exigir login Firebase no posto na primeira abertura; habilite depois em Configurações.
+
+Detalhes: `scripts\windows-portable\LEIA-ME-USB-POSTO.txt`
+
 ## 4. App gestor (escritório)
 
 App separado **`sirene_manager_app`** — dashboard analítico para supervisores, lendo dados sincronizados no Firestore (sem MQTT).
 
 ```powershell
 cd sirene_manager_app
-flutterfire configure   # mesmo projeto Firebase dos postos
 flutter pub get
 flutter run -d windows
 # ou: powershell -File ..\scripts\build_manager_windows.ps1
 ```
 
-- Login com conta Firebase (gestor)
-- KPIs, gráficos 7 dias, tabela **Produção por lote** (sem coluna Ações)
-- Postos precisam ter **sync Firestore habilitado** para alimentar o painel
+- Login com conta Firebase (gestor; claim `manager` opcional via `firebase/scripts/set_manager_claim.js`)
+- KPIs consolidados, saúde dos postos (`stations`), produção por OP e operador
+- Consulta global de serial; export CSV em `Documentos\relatorios_gestor`
+- Cloud Function `aggregateProduction` (deploy: `firebase deploy --only functions`)
+- Postos precisam ter completado o **setup da nuvem** para alimentar o painel
 
 No app **operador**: botão de lote = **INICIAR**; item **Painel** removido do menu (resumo do dia na tela Lote).
 

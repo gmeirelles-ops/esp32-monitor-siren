@@ -9,6 +9,7 @@
 #include "esp_spiffs.h"
 #include "esp_task_wdt.h"
 #include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
 #include "freertos/task.h"
 #include "nvs.h"
 #include "nvs_flash.h"
@@ -16,6 +17,8 @@
 static const char *TAG = "offline_q";
 static offline_queue_publish_fn s_publish_fn;
 static TaskHandle_t s_sync_task;
+static SemaphoreHandle_t s_mu;
+static uint32_t s_drop_count;
 
 #define OFFLINE_ENTRY_MAX 512
 
@@ -27,6 +30,20 @@ typedef struct {
 
 static queue_meta_t s_meta;
 static bool s_meta_loaded;
+
+static void queue_lock(void)
+{
+    if (s_mu) {
+        xSemaphoreTake(s_mu, portMAX_DELAY);
+    }
+}
+
+static void queue_unlock(void)
+{
+    if (s_mu) {
+        xSemaphoreGive(s_mu);
+    }
+}
 
 static bool load_meta_from_nvs(queue_meta_t *meta)
 {
@@ -162,6 +179,9 @@ static bool decode_entry(const char *raw, char *topic_out, size_t topic_len, cha
 
 bool offline_queue_init(void)
 {
+    if (!s_mu) {
+        s_mu = xSemaphoreCreateMutex();
+    }
     esp_vfs_spiffs_conf_t conf = {
         .base_path = "/storage",
         .partition_label = "storage",
@@ -179,56 +199,73 @@ bool offline_queue_init(void)
 
 bool offline_queue_is_full(void)
 {
+    queue_lock();
     meta_ensure_loaded();
-    return s_meta.count >= OFFLINE_QUEUE_MAX;
+    bool full = s_meta.count >= OFFLINE_QUEUE_MAX;
+    queue_unlock();
+    return full;
 }
 
 size_t offline_queue_count(void)
 {
+    queue_lock();
     meta_ensure_loaded();
-    return s_meta.count;
+    size_t count = s_meta.count;
+    queue_unlock();
+    return count;
+}
+
+uint32_t offline_queue_drop_count(void)
+{
+    return s_drop_count;
 }
 
 bool offline_queue_push(const char *topic_suffix, const char *json)
 {
+    queue_lock();
     meta_ensure_loaded();
     if (s_meta.count >= OFFLINE_QUEUE_MAX) {
-        ESP_LOGW(TAG, "fila cheia — descartando entrada mais antiga");
-        char path[32];
-        entry_path(path, sizeof(path), s_meta.head);
-        remove(path);
-        s_meta.head = (s_meta.head + 1) % OFFLINE_QUEUE_MAX;
-        s_meta.count--;
-    }
-
-    if (!write_envelope(s_meta.tail, topic_suffix, json)) {
+        s_drop_count++;
+        ESP_LOGE(TAG, "fila cheia (%u) — mensagem NAO gravada (drops=%lu)",
+                 OFFLINE_QUEUE_MAX, (unsigned long)s_drop_count);
+        queue_unlock();
         return false;
     }
 
-    s_meta.tail = (s_meta.tail + 1) % OFFLINE_QUEUE_MAX;
-    s_meta.count++;
-    return meta_persist();
+    bool ok = false;
+    if (write_envelope(s_meta.tail, topic_suffix, json)) {
+        s_meta.tail = (s_meta.tail + 1) % OFFLINE_QUEUE_MAX;
+        s_meta.count++;
+        ok = meta_persist();
+    }
+    queue_unlock();
+    return ok;
 }
 
 bool offline_queue_peek(const char *topic_suffix, size_t topic_len, char *json, size_t json_len)
 {
+    queue_lock();
     meta_ensure_loaded();
     if (s_meta.count == 0) {
+        queue_unlock();
         return false;
     }
 
     char raw[OFFLINE_ENTRY_MAX];
-    if (!read_entry_raw(s_meta.head, raw, sizeof(raw))) {
-        return false;
+    bool ok = read_entry_raw(s_meta.head, raw, sizeof(raw));
+    if (ok) {
+        ok = decode_entry(raw, (char *)topic_suffix, topic_len, json, json_len);
     }
-
-    return decode_entry(raw, (char *)topic_suffix, topic_len, json, json_len);
+    queue_unlock();
+    return ok;
 }
 
 bool offline_queue_pop(void)
 {
+    queue_lock();
     meta_ensure_loaded();
     if (s_meta.count == 0) {
+        queue_unlock();
         return false;
     }
     char path[32];
@@ -236,7 +273,9 @@ bool offline_queue_pop(void)
     remove(path);
     s_meta.head = (s_meta.head + 1) % OFFLINE_QUEUE_MAX;
     s_meta.count--;
-    return meta_persist();
+    bool ok = meta_persist();
+    queue_unlock();
+    return ok;
 }
 
 void offline_queue_set_publish_fn(offline_queue_publish_fn fn)

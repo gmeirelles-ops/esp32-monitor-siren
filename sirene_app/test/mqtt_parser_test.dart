@@ -62,5 +62,25 @@ void main() {
     test('retorna null para JSON malformado', () {
       expect(MqttParser.tryParseJson('not json'), isNull);
     });
+
+    test('recupera teste de payload MQTT colado/corrompido', () {
+      const glued =
+          '{"tipo":"teste","ts_ms":6886992,"numero_op":"12345","id_produto":"071","ano":"26'
+          '{"tipo":"teste","ts_ms":6886992,"numero_op":"12345","id_produto":"071",'
+          '"veredito":"APROVADO","potencia_media":37.14,"sequencial":17,"aprovados_no_lote":2}';
+      final objects = MqttParser.tryParseJsonObjects(glued);
+      expect(objects, hasLength(1));
+      final test = MqttParser.parseTestResult(objects.single);
+      expect(test!.veredito, 'APROVADO');
+      expect(test.potenciaMedia, closeTo(37.14, 0.01));
+      expect(test.sequencial, 17);
+    });
+
+    test('ignora calibracao iniciado sem potencia_media', () {
+      expect(
+        MqttParser.parseCalibration('{"tipo":"calibracao","evento":"iniciado"}'),
+        isNull,
+      );
+    });
   });
 }

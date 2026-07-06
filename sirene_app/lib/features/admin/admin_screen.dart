@@ -9,6 +9,7 @@ import '../../shared/widgets/global_app_bar_actions.dart';
 import '../mqtt/mqtt_providers.dart';
 import '../firmware/firmware_providers.dart';
 import '../firmware/firmware_update_screen.dart';
+import '../firmware/ota_assist_logic.dart';
 
 class AdminScreen extends ConsumerStatefulWidget {
   const AdminScreen({super.key});
@@ -24,10 +25,19 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
   String? _otaStatus;
   bool _showAdvancedUrl = false;
   bool _busy = false;
+  int _otaPort = kDefaultOtaHttpPort;
+  late final TextEditingController _otaPortController;
+
+  @override
+  void initState() {
+    super.initState();
+    _otaPortController = TextEditingController(text: '$_otaPort');
+  }
 
   @override
   void dispose() {
     _otaUrl.dispose();
+    _otaPortController.dispose();
     super.dispose();
   }
 
@@ -62,6 +72,9 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     );
     if (confirm != true) return;
 
+    final port = int.tryParse(_otaPortController.text.trim()) ?? _otaPort;
+    _otaPort = port;
+
     final otaService = ref.read(otaAssistServiceProvider);
     final config = ref.read(appConfigProvider);
     setState(() => _busy = true);
@@ -69,6 +82,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     try {
       final url = await otaService.startServing(
         sourceBinPath: _otaBinPath!,
+        port: _otaPort,
         mqttBrokerHost: config.mqttHost,
       );
       await ref.read(devicesProvider.notifier).sendOtaCampaign(targets, url);
@@ -173,6 +187,19 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                             }),
                           ),
                       ],
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _otaPortController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'Porta HTTP local',
+                          helperText: 'Feche python no terminal se a porta 8080 estiver ocupada',
+                        ),
+                        onChanged: (v) {
+                          final p = int.tryParse(v);
+                          if (p != null && p > 0 && p < 65536) _otaPort = p;
+                        },
+                      ),
                       const SizedBox(height: 12),
                       ElevatedButton(
                         onPressed: _busy || _otaBinPath == null || _selectedDevices.isEmpty

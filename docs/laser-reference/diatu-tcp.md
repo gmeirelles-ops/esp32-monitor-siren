@@ -28,11 +28,49 @@ Referência EzCad/Diatu: [variable text TCP](https://www.linxuanlaser.com/draw-m
 
 | Direção | Conteúdo |
 |---------|----------|
-| Cliente → Servidor | String ASCII do comando configurado (ex. `TCP: Give me string`) |
-| Servidor → Cliente | Serial ITF de 10 dígitos ASCII (ex. `1232600018`) |
-| Fila vazia | `ERROR:EMPTY` |
+| Cliente → Servidor | String ASCII do comando configurado |
+| Servidor → Cliente (serial) | Serial ITF de 10 dígitos ASCII (ex. `1232600018`) |
+| Servidor → Cliente (modelo) | Nome do produto cadastrado (ex. `Sirene Modelo X`) |
+| Fila vazia / produto ausente | `ERROR:EMPTY` |
+| Comando inválido | `ERROR:BADCMD` |
+
+### Comandos padrão
+
+| Objeto no DiatuCAD | Comando TCP | Resposta do app |
+|--------------------|-------------|-----------------|
+| **DataMatrix** (serial) | `TCP: Give me string` | Serial ITF 10 dígitos |
+| **Texto** (modelo) | `TCP: model` | `Products.nome` do SKU do serial |
 
 Unicode: desativado (ASCII).
+
+## Job com DataMatrix + texto do modelo
+
+O app não desenha o layout — tudo é configurado no DiatuCAD. Para gravar **só o código** (sem texto do serial) e o **nome do modelo** ao lado:
+
+1. **Objeto DataMatrix/2D**
+   - Tipo: código DataMatrix (ou 2D equivalente no DiatuCAD).
+   - Fonte: **Texto variável → Comunicação TCP/IP**.
+   - Comando: `TCP: Give me string` (igual ao app).
+   - Não adicione objeto de texto sobre o serial — o conteúdo legível ao escanear é o serial.
+
+2. **Objeto de texto** (modelo do produto)
+   - Fonte: **Texto variável → Comunicação TCP/IP**.
+   - Comando: `TCP: model` (igual ao app em Configurações).
+   - O app resolve o nome a partir do `idProduto` embutido no serial (3 primeiros dígitos).
+
+3. **Validação obrigatória (premissa crítica)**
+   - Confirme no DiatuCAD que **dois objetos** de texto variável TCP com **comandos diferentes** funcionam no **mesmo job** ao pressionar F2.
+   - No app: **Configurações → Diagnóstico laser → Simular serial** e **Simular modelo**.
+   - Se o DiatuCAD não suportar dois comandos no mesmo job, use template fixo por produto (texto estático) ou um job por SKU.
+
+Fluxo ao pressionar F2 (cada objeto abre uma conexão TCP):
+
+```
+DiatuCAD ──"TCP: Give me string"──► App ──► "1232600018"   (DataMatrix)
+DiatuCAD ──"TCP: model"────────────► App ──► "Sirene Modelo X" (texto)
+```
+
+O comando de modelo **não consome** a fila de seriais — apenas lê o próximo pendente (ou o último entregue) para resolver o nome.
 
 ## Dois modos TCP no Diaotu (não confundir)
 
@@ -85,13 +123,14 @@ netstat -ano | findstr 9101
 ### Checklist rápido (8 passos)
 
 1. App: **Configurações → Gravação laser (Diatu)** → **Salvar**
-2. Comando app = comando DiatuCAD (padrão: `TCP: Give me string`)
-3. DiatuCAD: texto variável → TCP/IP → IP `127.0.0.1`, mesma porta
-4. **Desativar** Marca de controlo TCP no Diaotu (ou usar outra porta)
-5. Clicar **Testar gravação** (enfileira `0000000000`)
-6. No painel diagnóstico: **Simular DiatuCAD** → deve retornar `0000000000`
-7. DiatuCAD: F1 posicionar → F2 marcar
-8. Aprovar sirene real → F2 deve gravar serial ITF
+2. Comando serial app = DiatuCAD DataMatrix (padrão: `TCP: Give me string`)
+3. Comando modelo app = DiatuCAD texto (padrão: `TCP: model`)
+4. DiatuCAD: DataMatrix + texto com TCP/IP → IP `127.0.0.1`, mesma porta
+5. **Desativar** Marca de controlo TCP no Diaotu (ou usar outra porta)
+6. Clicar **Testar gravação** (enfileira `0000000000`)
+7. No painel diagnóstico: **Simular serial** e **Simular modelo**
+8. DiatuCAD: F1 posicionar → F2 marcar
+9. Aprovar sirene real → F2 deve gravar DataMatrix + modelo
 
 ### Verificar porta no Windows
 

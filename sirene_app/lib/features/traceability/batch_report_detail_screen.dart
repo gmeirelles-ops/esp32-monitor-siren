@@ -12,7 +12,10 @@ import '../bancadas/bancadas_provider.dart';
 import '../dashboard/dashboard_filters.dart';
 import '../labels/remark_serial.dart';
 import '../mqtt/mqtt_providers.dart';
-import 'batch_report_export.dart';
+import '../../shared/reports/report_context.dart';
+import '../../shared/reports/report_export_format.dart';
+import '../../shared/reports/report_pdf_export.dart';
+import '../../shared/reports/report_xml_export.dart';
 import 'report_filters.dart';
 
 class BatchReportDetailScreen extends ConsumerStatefulWidget {
@@ -71,21 +74,42 @@ class _BatchReportDetailScreenState extends ConsumerState<BatchReportDetailScree
   }
 
   Future<void> _exportDetail(List<TestResult> tests) async {
+    final format = await pickReportExportFormat(context);
+    if (format == null || !mounted) return;
+
     setState(() => _exporting = true);
     try {
       final bancadaNumeros = await ref.read(databaseProvider).getBancadaNumeros();
-      final path = await saveReportCsv(
-        'lote_${widget.numeroOp.replaceAll(RegExp(r'[^\w\-]'), '_')}',
-        formatBatchDetailCsv(
+      final ctx = await loadReportContext(ref);
+      final meta = ReportPdfMeta(
+        title: 'Detalhe do lote',
+        subtitle: 'OP ${widget.numeroOp}',
+        stationId: ctx.stationId,
+        operatorLabel: ctx.operatorLabel,
+        extraLines: ['${tests.length} testes'],
+      );
+      final safeOp = widget.numeroOp.replaceAll(RegExp(r'[^\w\-]'), '_');
+      final path = await exportReportFile(
+        format: format,
+        basename: 'lote_$safeOp',
+        buildPdf: () => buildBatchDetailPdf(
+          widget.numeroOp,
+          tests,
+          productsById: _catalog,
+          bancadaNumeros: bancadaNumeros,
+          meta: meta,
+        ),
+        buildXml: () => formatBatchDetailXml(
           widget.numeroOp,
           tests,
           productsById: _catalog,
           bancadaNumeros: bancadaNumeros,
         ),
+        openPrintDialog: format == ReportExportFormat.pdf,
       );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Relatório salvo: $path')),
+          SnackBar(content: Text('${format.label} salvo: $path')),
         );
       }
     } catch (e) {

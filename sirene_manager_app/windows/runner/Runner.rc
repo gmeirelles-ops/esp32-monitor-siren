@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "br.com.diponto" "\0"
-            VALUE "FileDescription", "Diponto Sirene Validator" "\0"
+            VALUE "CompanyName", "com.example" "\0"
+            VALUE "FileDescription", "sirene_manager_app" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "sirene_manager_app" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 Diponto. All rights reserved." "\0"
-            VALUE "OriginalFilename", "DipontoSirene.exe" "\0"
-            VALUE "ProductName", "Diponto Sirene Validator" "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 com.example. All rights reserved." "\0"
+            VALUE "OriginalFilename", "sirene_manager_app.exe" "\0"
+            VALUE "ProductName", "sirene_manager_app" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

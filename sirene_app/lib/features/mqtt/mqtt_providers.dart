@@ -8,6 +8,7 @@ import '../../core/config/app_config.dart';
 import '../../core/constants/mqtt_topics.dart';
 import '../../core/database/database.dart';
 import '../../core/providers/core_providers.dart';
+import '../../core/services/app_log.dart';
 import '../../core/utils/device_stale.dart';
 import '../cloud/auth/auth_providers.dart';
 import '../cloud/sync/sync_providers.dart';
@@ -21,9 +22,14 @@ import 'message_pump.dart';
 import '../batch/batch_live_providers.dart';
 import '../batch/batch_serial_logic.dart';
 import '../dashboard/dashboard_providers.dart';
+import '../demo/demo_constants.dart';
+import '../demo/demo_providers.dart';
+import '../ensaio/ensaio_config.dart';
+import '../ensaio/ensaio_providers.dart';
 import '../operators/operators_provider.dart';
 import 'models/mqtt_messages.dart';
 import 'mqtt_parser.dart';
+import 'mqtt_connection_config.dart';
 import 'mqtt_service.dart';
 
 export '../../core/providers/core_providers.dart'
@@ -84,27 +90,54 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
   final Map<String, DateTime> _batchStartedAt = {};
   final Map<String, int> _rejectionEpoch = {};
   final Set<String> _autoEndBatchSent = {};
+  final Map<int, String> _bancadaToDeviceId = {};
 
   void _init() {
-    final service = _ref.read(mqttServiceProvider);
-    final config = _ref.read(appConfigProvider);
+    try {
+      final service = _ref.read(mqttServiceProvider);
+      final config = _ref.read(appConfigProvider);
 
-    service.connect(config.mqttHost, config.mqttPort);
+      final mqttConfig = MqttConnectionConfig.fromAppConfig(config);
 
-    _sub = service.messages.listen((event) {
-      _messagePump.enqueue(() => _handleMessage(event));
-    });
-    _staleTimer = Timer.periodic(const Duration(seconds: 15), (_) => _checkStaleDevices());
+      unawaited(AppLog.write('MQTT: conectando ${mqttConfig.logLabel}'));
+      service.connect(mqttConfig);
+
+      _sub = service.messages.listen((event) {
+        _messagePump.enqueue(() => _handleMessage(event));
+      });
+      _staleTimer = Timer.periodic(const Duration(seconds: 15), (_) => _checkStaleDevices());
+      unawaited(AppLog.write('MQTT: listener ativo'));
+    } catch (e, st) {
+      unawaited(AppLog.write('MQTT: falha ao iniciar', error: e, stack: st));
+    }
   }
 
   void reconnect() {
     final config = _ref.read(appConfigProvider);
     final service = _ref.read(mqttServiceProvider);
-    service.connect(config.mqttHost, config.mqttPort);
+    service.connect(MqttConnectionConfig.fromAppConfig(config));
   }
 
   DeviceInfo _getOrCreate(String deviceId) {
     return state.putIfAbsent(deviceId, () => DeviceInfo(deviceId: deviceId));
+  }
+
+  int? _bancadaNumFor(String deviceId) => state[deviceId]?.bancadaNum;
+
+  String? _deviceIdForBancada(int bancadaNum) => _bancadaToDeviceId[bancadaNum];
+
+  Future<void> _publishForDevice(String deviceId, Map<String, dynamic> payload) async {
+    final bancada = _bancadaNumFor(deviceId);
+    if (bancada == null) {
+      throw StateError('Bancada não identificada para $deviceId');
+    }
+    await _ref.read(mqttServiceProvider).publishCommand(bancada, payload);
+  }
+
+  void _linkBancada(int bancadaNum, String deviceId) {
+    _bancadaToDeviceId[bancadaNum] = deviceId;
+    final device = _getOrCreate(deviceId);
+    device.bancadaNum = bancadaNum;
   }
 
   void _checkStaleDevices() {
@@ -141,6 +174,11 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
     state = {...state};
   }
 
+  /// Atualiza estado exibido (ensaio local, demo, etc.).
+  void updateDeviceEstado(String deviceId, DeviceFsmState estado) {
+    _setDeviceEstado(deviceId, estado);
+  }
+
   /// Aguarda rejeição MQTT após um comando (firmware não envia ACK explícito).
   Future<String?> waitForRejection(
     String deviceId, {
@@ -159,10 +197,31 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
 
   Future<void> _handleMessage((String, String) event) async {
     final (topic, payload) = event;
-    final deviceId = MqttTopics.extractDeviceId(topic);
-    if (deviceId == null) return;
+    final site = _ref.read(appConfigProvider).mqttSite;
+    final bancadaNum = MqttTopics.extractBancadaNum(topic, site: site);
+    if (bancadaNum == null) return;
+
+    String? deviceId;
+    if (topic.endsWith('/heartbeat')) {
+      final hb = MqttParser.parseHeartbeat(payload);
+      if (hb == null) return;
+      if (hb.site != null && hb.site!.isNotEmpty && hb.site != site) return;
+      deviceId = hb.deviceId;
+      if (deviceId == null || deviceId.isEmpty) return;
+      _linkBancada(hb.bancada ?? bancadaNum, deviceId);
+    } else {
+      deviceId = _deviceIdForBancada(bancadaNum);
+      if (deviceId == null) {
+        deviceId = await _ref.read(databaseProvider).getDeviceIdByBancadaNumero(bancadaNum);
+        if (deviceId != null) {
+          _linkBancada(bancadaNum, deviceId);
+        }
+      }
+      if (deviceId == null) return;
+    }
 
     final device = _getOrCreate(deviceId);
+    device.bancadaNum ??= bancadaNum;
     final now = DateTime.now();
 
     if (topic.endsWith('/presenca')) {
@@ -170,7 +229,7 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
       device.isOnline = online;
       device.lastSeen = now;
       if (online) {
-        await _ref.read(databaseProvider).ensureBancada(deviceId);
+        await _ref.read(databaseProvider).syncBancadaFromFirmware(deviceId, bancadaNum);
       }
       if (!online) {
         await _ref.read(firestoreSyncServiceProvider).enqueueDeviceUpdate(
@@ -193,7 +252,10 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
         device.firmwareVersion = hb.firmwareVersion;
         device.isOnline = true;
         device.lastSeen = now;
-        await _ref.read(databaseProvider).ensureBancada(deviceId);
+        await _ref.read(databaseProvider).syncBancadaFromFirmware(
+          deviceId,
+          hb.bancada ?? bancadaNum,
+        );
         if (hb.estado != DeviceFsmState.hardwareFault) {
           device.lastHardwareAlert = null;
         }
@@ -222,14 +284,34 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
         device.lastSeen = now;
       }
     } else if (topic.endsWith('/calibracao')) {
+      final service = _ref.read(mqttServiceProvider);
+      final sample = MqttParser.parseCalibrationSample(payload);
+      if (sample != null) {
+        service.emitCalibrationSample(deviceId, sample);
+        device.lastSeen = now;
+      }
       final cal = MqttParser.parseCalibration(payload);
       if (cal != null) {
         device.lastCalibration = cal.potenciaMedia;
         device.lastSeen = now;
+        service.emitCalibrationComplete(deviceId, cal);
+      }
+    } else if (topic.endsWith('/ensaio')) {
+      final ensaio = MqttParser.parseEnsaioPayload(payload);
+      if (ensaio != null) {
+        _ref.read(ensaioRemoteStatusProvider.notifier).state = (
+          deviceId: deviceId,
+          msg: ensaio,
+        );
+        if (ensaio.isCompleted || ensaio.isFailed) {
+          _setDeviceEstado(deviceId, DeviceFsmState.idle);
+        } else if (ensaio.isStarted || ensaio.isCycle) {
+          _setDeviceEstado(deviceId, DeviceFsmState.testing);
+        }
+        device.lastSeen = now;
       }
     } else if (topic.endsWith('/status')) {
-      final json = MqttParser.tryParseJson(payload);
-      if (json != null) {
+      for (final json in MqttParser.tryParseJsonObjects(payload)) {
         final rejection = MqttParser.parseRejection(json);
         if (rejection != null) {
           _emitRejection(deviceId, rejection);
@@ -311,17 +393,19 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
       operatorId: operatorId,
       isRetest: retest,
     );
-    await _ref.read(firestoreSyncServiceProvider).enqueueTestResult(
-      deviceId: deviceId,
-      test: test,
-      serial: serial,
-      operador: operadorFinal,
-      operatorCodigo: operatorCodigo,
-      tempoTesteSec: batch?.tempoTeste,
-      potenciaMin: batch?.potenciaMin,
-      potenciaMax: batch?.potenciaMax,
-      isRetest: retest,
-    );
+    if (!_ref.read(demoModeProvider)) {
+      await _ref.read(firestoreSyncServiceProvider).enqueueTestResult(
+        deviceId: deviceId,
+        test: test,
+        serial: serial,
+        operador: operadorFinal,
+        operatorCodigo: operatorCodigo,
+        tempoTesteSec: batch?.tempoTeste,
+        potenciaMin: batch?.potenciaMin,
+        potenciaMax: batch?.potenciaMax,
+        isRetest: retest,
+      );
+    }
     _ref.read(localDataRevisionProvider.notifier).state++;
     state = {...state};
 
@@ -339,10 +423,11 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
 
   static const devSimulatorOperador = 'dev-simulator';
 
-  /// Simula um ciclo de teste com potência fictícia (somente desenvolvimento).
+  /// Simula um ciclo de teste (desenvolvimento ou modo demonstração).
   Future<void> simulateTestResult(
     String deviceId, {
     bool? forceApproved,
+    double approvalRate = 0.85,
   }) async {
     final device = state[deviceId];
     final batch = device?.activeBatch;
@@ -353,7 +438,7 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
     final metrics = await _ref.read(databaseProvider).getBatchMetrics(batch.numeroOp);
     final retest = _ref.read(retestModeProvider);
     final rng = Random();
-    final approved = forceApproved ?? rng.nextBool();
+    final approved = forceApproved ?? (rng.nextDouble() < approvalRate);
     final potencia = approved
         ? batch.potenciaMin +
             rng.nextDouble() * (batch.potenciaMax - batch.potenciaMin)
@@ -379,14 +464,27 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
 
     _setDeviceEstado(deviceId, DeviceFsmState.testing);
     await Future<void>.delayed(const Duration(milliseconds: 400));
+    final useSessionOperador = _ref.read(demoModeProvider);
     await processTestResult(
       deviceId,
       test,
-      operador: devSimulatorOperador,
+      operador: useSessionOperador ? null : devSimulatorOperador,
       isRetest: retest,
     );
     _setDeviceEstado(deviceId, DeviceFsmState.batchReady);
     _ref.read(batchDevSimulatorUsedProvider.notifier).state = true;
+  }
+
+  /// Garante bancada virtual online para demonstrações.
+  void ensureDemoDevice(String deviceId) {
+    final device = _getOrCreate(deviceId);
+    device.isOnline = true;
+    device.bancadaNum = kDemoBancadaNum;
+    device.lastSeen = DateTime.now();
+    if (device.estado == DeviceFsmState.unknown) {
+      device.estado = DeviceFsmState.idle;
+    }
+    state = {...state};
   }
 
   Future<void> _maybePrintLabels(AppDatabase db) async {
@@ -487,8 +585,12 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
 
   /// Publica SET_BATCH e retorna motivo de rejeição, ou null se aceito.
   Future<String?> sendSetBatch(String deviceId, BatchConfig batch) async {
+    if (_ref.read(demoModeProvider)) {
+      return _sendSetBatchDemo(deviceId, batch);
+    }
+
     final service = _ref.read(mqttServiceProvider);
-    await service.publishCommand(deviceId, batch.toSetBatchJson());
+    await _publishForDevice(deviceId, batch.toSetBatchJson());
     final rejection = service.currentState == AppMqttConnectionState.connected
         ? await waitForRejection(deviceId)
         : null;
@@ -508,6 +610,15 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
     return null;
   }
 
+  Future<String?> _sendSetBatchDemo(String deviceId, BatchConfig batch) async {
+    _ref.read(retestModeProvider.notifier).state = batch.modoReteste;
+    _autoEndBatchSent.remove(deviceId);
+    ensureDemoDevice(deviceId);
+    setActiveBatch(deviceId, batch);
+    _setDeviceEstado(deviceId, DeviceFsmState.batchReady);
+    return null;
+  }
+
   /// Alterna modo reteste no firmware sem alterar demais parâmetros do lote.
   Future<String?> syncRetestMode(String deviceId, bool modoReteste) async {
     final device = state[deviceId];
@@ -515,8 +626,14 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
     if (batch == null) return 'Sem lote ativo';
 
     final updated = batch.copyWith(modoReteste: modoReteste);
+    if (_ref.read(demoModeProvider)) {
+      _ref.read(retestModeProvider.notifier).state = modoReteste;
+      setActiveBatch(deviceId, updated);
+      return null;
+    }
+
     final service = _ref.read(mqttServiceProvider);
-    await service.publishCommand(deviceId, updated.toSetBatchJson());
+    await _publishForDevice(deviceId, updated.toSetBatchJson());
     final rejection = service.currentState == AppMqttConnectionState.connected
         ? await waitForRejection(deviceId)
         : null;
@@ -543,12 +660,20 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
 
   /// Publica END_BATCH e retorna motivo de rejeição, ou null se aceito.
   Future<String?> sendEndBatch(String deviceId) async {
+    if (_ref.read(demoModeProvider)) {
+      _ref.read(demoAutoPlayProvider.notifier).state = false;
+      clearActiveBatch(deviceId);
+      _setDeviceEstado(deviceId, DeviceFsmState.idle);
+      _ref.read(retestModeProvider.notifier).state = false;
+      return null;
+    }
+
     final service = _ref.read(mqttServiceProvider);
     final device = state[deviceId];
     final batch = device?.activeBatch;
     final startedAt = _batchStartedAt[deviceId];
     if (service.currentState == AppMqttConnectionState.connected) {
-      await service.publishCommand(deviceId, {'cmd': 'END_BATCH'});
+      await _publishForDevice(deviceId, {'cmd': 'END_BATCH'});
       final rejection = await waitForRejection(deviceId);
       if (rejection != null) return rejection;
     }
@@ -576,19 +701,40 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
 
   Future<void> sendStartCalibration(String deviceId) async {
     final service = _ref.read(mqttServiceProvider);
-    await service.publishCommand(deviceId, {'cmd': 'START_CALIBRATION'});
+    await _publishForDevice(deviceId, {'cmd': 'START_CALIBRATION'});
+  }
+
+  Future<void> sendStartEnsaio(String deviceId, EnsaioConfig config) async {
+    await _publishForDevice(deviceId, config.toMqttPayload());
+    _setDeviceEstado(deviceId, DeviceFsmState.testing);
+  }
+
+  Future<void> sendStopEnsaio(String deviceId) async {
+    await _publishForDevice(deviceId, {'cmd': 'STOP_ENSAIO'});
+  }
+
+  /// Apaga credenciais Wi-Fi (e opcionalmente broker MQTT) na NVS da bancada.
+  /// Retorna motivo de rejeição, ou null se aceito.
+  Future<String?> sendResetWifi(String deviceId, {bool clearMqtt = false}) async {
+    final service = _ref.read(mqttServiceProvider);
+    if (service.currentState != AppMqttConnectionState.connected) {
+      return 'mqtt_desconectado';
+    }
+    await _publishForDevice(deviceId, {
+      'cmd': 'RESET_WIFI',
+      if (clearMqtt) 'clear_mqtt': true,
+    });
+    return waitForRejection(deviceId);
   }
 
   Future<void> sendOtaUpdate(String deviceId, String url) async {
-    final service = _ref.read(mqttServiceProvider);
-    await service.publishCommand(deviceId, {'cmd': 'OTA_UPDATE', 'url': url});
+    await _publishForDevice(deviceId, {'cmd': 'OTA_UPDATE', 'url': url});
   }
 
   /// Envia OTA_UPDATE para vários dispositivos (campanha).
   Future<void> sendOtaCampaign(List<String> deviceIds, String url) async {
-    final service = _ref.read(mqttServiceProvider);
     for (final deviceId in deviceIds) {
-      await service.publishCommand(deviceId, {'cmd': 'OTA_UPDATE', 'url': url});
+      await _publishForDevice(deviceId, {'cmd': 'OTA_UPDATE', 'url': url});
     }
   }
 

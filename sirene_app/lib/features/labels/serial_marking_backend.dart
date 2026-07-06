@@ -12,23 +12,30 @@ abstract class SerialMarkingBackend {
 SerialMarkingBackend createDiatuLaserBackend({
   required int port,
   required String commandPrefix,
+  required String modelCommandPrefix,
   required Future<String?> Function() onRequestSerial,
+  required Future<String?> Function() onRequestModel,
 }) {
   return DiatuLaserTcpServer(
     port: port,
     commandPrefix: commandPrefix,
+    modelCommandPrefix: modelCommandPrefix,
     onRequestSerial: onRequestSerial,
+    onRequestModel: onRequestModel,
   );
 }
 
 SerialMarkingBackend createSerialMarkingBackendFromConfig(
   AppConfig config, {
   required Future<String?> Function() onRequestSerial,
+  required Future<String?> Function() onRequestModel,
 }) {
   return createDiatuLaserBackend(
     port: config.laserTcpPort,
     commandPrefix: config.laserTcpCommand,
+    modelCommandPrefix: config.laserModelCommand,
     onRequestSerial: onRequestSerial,
+    onRequestModel: onRequestModel,
   );
 }
 

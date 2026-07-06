@@ -44,6 +44,26 @@ enum DeviceFsmState {
         return 'Desconhecido';
     }
   }
+
+  /// Valor MQTT/firmware (`IDLE`, `BATCH_READY`, …).
+  String get mqttEstado {
+    switch (this) {
+      case DeviceFsmState.provisioning:
+        return 'PROVISIONING';
+      case DeviceFsmState.idle:
+        return 'IDLE';
+      case DeviceFsmState.batchReady:
+        return 'BATCH_READY';
+      case DeviceFsmState.testing:
+        return 'TESTING';
+      case DeviceFsmState.hardwareFault:
+        return 'HARDWARE_FAULT';
+      case DeviceFsmState.otaUpdating:
+        return 'OTA_UPDATING';
+      case DeviceFsmState.unknown:
+        return '';
+    }
+  }
 }
 
 enum AppMqttConnectionState { disconnected, connecting, connected, reconnecting }
@@ -55,6 +75,9 @@ class HeartbeatMessage {
     required this.estado,
     required this.fila,
     required this.firmwareVersion,
+    this.deviceId,
+    this.bancada,
+    this.site,
   });
 
   final int uptime;
@@ -62,6 +85,9 @@ class HeartbeatMessage {
   final DeviceFsmState estado;
   final int fila;
   final String firmwareVersion;
+  final String? deviceId;
+  final int? bancada;
+  final String? site;
 }
 
 class TestResultMessage {
@@ -92,9 +118,10 @@ class RejectionMessage {
 }
 
 class OtaStatusMessage {
-  const OtaStatusMessage({required this.evento, this.detalhe});
+  const OtaStatusMessage({required this.evento, this.detalhe, this.deviceId});
   final String evento;
   final String? detalhe;
+  final String? deviceId;
 }
 
 class CalibrationSampleMessage {
@@ -121,10 +148,46 @@ class HardwareAlertMessage {
   bool get isRecovery => evento == 'recuperado';
 }
 
+class EnsaioStatusMessage {
+  const EnsaioStatusMessage({
+    required this.evento,
+    this.n,
+    this.fase,
+    this.elapsedSec = 0,
+    this.ciclos = 0,
+    this.motivo,
+    this.onSec,
+    this.offSec,
+    this.duracaoTotalSec,
+  });
+
+  final String evento;
+  final int? n;
+  final String? fase;
+  final int elapsedSec;
+  final int ciclos;
+  final String? motivo;
+  final int? onSec;
+  final int? offSec;
+  final int? duracaoTotalSec;
+
+  bool get isStarted => evento == 'iniciado';
+  bool get isCycle => evento == 'ciclo';
+  bool get isOnPhase => fase == 'ligado';
+  bool get isOffPhase => fase == 'desligado';
+  bool get isCompleted => evento == 'concluido';
+  bool get isFailed => evento == 'falha';
+  bool get isStopped => isCompleted && motivo == 'parado';
+
+  /// Compatibilidade com ciclo ativo.
+  int get ciclo => n ?? ciclos;
+}
+
 class DeviceInfo {
   DeviceInfo({required this.deviceId});
 
   final String deviceId;
+  int? bancadaNum;
   bool isOnline = false;
   DeviceFsmState estado = DeviceFsmState.unknown;
   int rssi = 0;

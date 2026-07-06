@@ -31,5 +31,12 @@ void main() {
       expect(() => calculateItfCheckDigit('12345'), throwsArgumentError);
       expect(() => calculateItfCheckDigit('12345678A'), throwsArgumentError);
     });
+
+    test('extrai idProduto do serial', () {
+      expect(extractIdProdutoFromSerial('1232600198'), '123');
+      expect(extractIdProdutoFromSerial('0012600012'), '001');
+      expect(extractIdProdutoFromSerial('12'), isNull);
+      expect(extractIdProdutoFromSerial('ABC2600198'), isNull);
+    });
   });
 }

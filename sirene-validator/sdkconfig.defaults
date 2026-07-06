@@ -9,3 +9,13 @@ CONFIG_MQTT_PROTOCOL_311=y
 CONFIG_SPIFFS_MAX_PARTITIONS=1
 CONFIG_ESP_TASK_WDT_EN=y
 CONFIG_ESP_TASK_WDT_TIMEOUT_S=30
+# OTA pela LAN (HTTP) — documentado em GUIA_COMPLETO §11
+CONFIG_ESP_HTTPS_OTA_ALLOW_HTTP=y
+# Portal Wi-Fi: browsers Windows enviam headers > 512 bytes
+CONFIG_HTTPD_MAX_REQ_HDR_LEN=2048
+CONFIG_HTTPD_MAX_URI_LEN=1024
+# Produção: preserva NVS/lote/fila após OTA (reprovisionamento: sdkconfig.defaults.provisioning)
+# CONFIG_OTA_ERASE_NVS_ON_BOOT is not set
+# MQTT TLS em broker interno com certificado autoassinado (LAN isolada)
+CONFIG_ESP_TLS_INSECURE=y
+CONFIG_ESP_TLS_SKIP_SERVER_CERT_VERIFY=y

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/database/database.dart';
 import '../../../core/providers/core_providers.dart';
+import '../../../core/services/app_log.dart';
 import '../../products/products_provider.dart';
 import '../auth/auth_providers.dart';
 import '../firebase_bootstrap.dart';
@@ -35,18 +36,20 @@ final syncEnabledProvider = StateProvider<bool>((ref) {
 
 final firestoreSyncServiceProvider = Provider<FirestoreSyncService>((ref) {
   final config = ref.watch(appConfigProvider);
+  final firebaseReady = ref.watch(firebaseReadyProvider);
   return FirestoreSyncService(
     db: ref.watch(databaseProvider),
-    isSyncEnabled: () => ref.read(syncEnabledProvider) && firebaseInitialized,
+    isSyncEnabled: () => ref.read(syncEnabledProvider) && firebaseReady,
     stationId: () => config.stationId,
   );
 });
 
 final syncQueueProcessorProvider = Provider<SyncQueueProcessor>((ref) {
+  final firebaseReady = ref.watch(firebaseReadyProvider);
   final processor = SyncQueueProcessor(
     db: ref.watch(databaseProvider),
     syncService: ref.watch(firestoreSyncServiceProvider),
-    firestore: firebaseInitialized ? FirebaseFirestore.instance : null,
+    firestore: firebaseReady ? FirebaseFirestore.instance : null,
   );
 
   ref.listen(syncEnabledProvider, (prev, next) {
@@ -64,7 +67,7 @@ final syncQueueProcessorProvider = Provider<SyncQueueProcessor>((ref) {
 
 /// Disponível apenas quando o Firebase está inicializado nesta plataforma.
 final catalogCloudServiceProvider = Provider<CatalogCloudService?>((ref) {
-  if (!firebaseInitialized) return null;
+  if (!ref.watch(firebaseReadyProvider)) return null;
   final db = ref.watch(databaseProvider);
   return CatalogCloudService(
     db: db,
@@ -119,14 +122,25 @@ Future<void> retryFailedSyncItems(WidgetRef ref, {int? itemId}) async {
   if (itemId != null) {
     await db.resetSyncAttempts(itemId);
   } else {
-    await db.resetAllFailedSyncAttempts();
+    final reset = await db.resetAllFailedSyncAttempts();
+    await AppLog.write('Sync: reenfileirando $reset falha(s)');
   }
-  await ref.read(syncQueueProcessorProvider).processQueue();
+  try {
+    await ref.read(syncQueueProcessorProvider).processQueue();
+  } catch (e, st) {
+    await AppLog.write('Sync: reprocessar falhas falhou', error: e, stack: st);
+    rethrow;
+  }
   ref.invalidate(syncStatusProvider);
   ref.invalidate(failedSyncItemsProvider);
 }
 
 Future<int> syncCatalogToCloud(WidgetRef ref) async {
+  if (isFirebaseAvailable) {
+    await ensureFirebaseReady(ref);
+    ref.invalidate(firestoreSyncServiceProvider);
+    ref.invalidate(syncQueueProcessorProvider);
+  }
   final sync = ref.read(firestoreSyncServiceProvider);
   final products = await sync.syncAllProducts();
   final operators = await sync.syncAllOperators();
@@ -140,6 +154,12 @@ Future<int> syncCatalogToCloud(WidgetRef ref) async {
 
 /// Baixa produtos e operadores da nuvem. Retorna total aplicado.
 Future<int> pullCatalogFromCloud(WidgetRef ref) async {
+  if (isFirebaseAvailable) {
+    await ensureFirebaseReady(ref);
+    ref.invalidate(catalogCloudServiceProvider);
+    ref.invalidate(firestoreSyncServiceProvider);
+    ref.invalidate(syncQueueProcessorProvider);
+  }
   final service = ref.read(catalogCloudServiceProvider);
   if (service == null) return 0;
   final result = await service.pullAll();
@@ -155,6 +175,12 @@ Future<int> pullCatalogFromCloud(WidgetRef ref) async {
 
 /// Detalhe do pull para mensagens na UI.
 Future<CatalogPullResult> pullCatalogDetailFromCloud(WidgetRef ref) async {
+  if (isFirebaseAvailable) {
+    await ensureFirebaseReady(ref);
+    ref.invalidate(catalogCloudServiceProvider);
+    ref.invalidate(firestoreSyncServiceProvider);
+    ref.invalidate(syncQueueProcessorProvider);
+  }
   final service = ref.read(catalogCloudServiceProvider);
   if (service == null) {
     return const CatalogPullResult(products: 0, operators: 0);
@@ -174,10 +200,33 @@ Future<void> setSyncEnabled(WidgetRef ref, bool enabled) async {
   final config = ref.read(appConfigProvider);
   await config.setSyncEnabled(enabled);
   ref.read(syncEnabledProvider.notifier).state = enabled;
-  if (enabled) {
-    ref.read(syncQueueProcessorProvider).start();
-    await syncCatalogToCloud(ref);
-    await ref.read(syncQueueProcessorProvider).processQueue();
+  if (!enabled) return;
+
+  if (isFirebaseAvailable) {
+    await ensureFirebaseReady(ref);
+    ref.invalidate(firestoreSyncServiceProvider);
+    ref.invalidate(syncQueueProcessorProvider);
+    ref.invalidate(catalogCloudServiceProvider);
+  }
+
+  ref.read(syncQueueProcessorProvider).start();
+
+  if (!ref.read(isAuthenticatedProvider)) {
+    await AppLog.write('Sync: ativo sem login Firebase (fila local apenas)');
+    return;
+  }
+
+  try {
+    await AppLog.write('Sync: baixando catálogo da nuvem');
     await pullCatalogFromCloud(ref);
+  } catch (e, st) {
+    await AppLog.write('Sync: pull catálogo falhou', error: e, stack: st);
+  }
+
+  try {
+    await AppLog.write('Sync: processando fila após habilitar');
+    await ref.read(syncQueueProcessorProvider).processQueue();
+  } catch (e, st) {
+    await AppLog.write('Sync: processQueue após habilitar falhou', error: e, stack: st);
   }
 }

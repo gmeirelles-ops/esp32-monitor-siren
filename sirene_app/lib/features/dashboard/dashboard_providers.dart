@@ -16,6 +16,8 @@ class DashboardData {
     required this.recentAlerts,
     required this.batchSummaries,
     required this.filterOptions,
+    required this.operatorProductivity,
+    this.oee,
     this.yieldTrendPct,
     this.reprovadosTrendPct,
   });
@@ -26,6 +28,8 @@ class DashboardData {
   final List<HardwareEvent> recentAlerts;
   final List<BatchProductionSummary> batchSummaries;
   final DashboardFilterOptions filterOptions;
+  final List<OperatorProductivity> operatorProductivity;
+  final OeeMetrics? oee;
   final double? yieldTrendPct;
   final double? reprovadosTrendPct;
 }
@@ -79,6 +83,8 @@ final dashboardDataProvider = FutureProvider<DashboardData>((ref) async {
   );
   final faults = await db.hardwareFaultCounts(since: since, deviceId: device);
   final recentAlerts = await db.recentHardwareEvents(limit: 10);
+  final operatorProductivity = await db.operatorProductivity(since: since);
+  final downtime = await db.totalDowntimeDuration(since: since);
   final batchSummaries = (op == null || op.isEmpty)
       ? await db.batchSummaryInPeriod(
           since: since,
@@ -126,6 +132,24 @@ final dashboardDataProvider = FutureProvider<DashboardData>((ref) async {
     reprovTrend = percentChange(todayReprovados, yesterdayReprovados);
   }
 
+  OeeMetrics? oee;
+  if (since != null && summary.total > 0) {
+    final periodDuration = DateTime.now().difference(since);
+    final plannedMinutes = periodDuration.inMinutes.clamp(1, 100000);
+    final downtimeMinutes = downtime.inMinutes;
+    final availability = ((plannedMinutes - downtimeMinutes) / plannedMinutes * 100)
+        .clamp(0.0, 100.0);
+    const targetPerHour = 30.0;
+    final hours = plannedMinutes / 60.0;
+    final expected = (hours * targetPerHour).clamp(1.0, 100000.0);
+    final performance = (summary.total / expected * 100).clamp(0.0, 100.0);
+    oee = OeeMetrics(
+      availabilityPct: availability,
+      performancePct: performance,
+      qualityPct: summary.yieldPct,
+    );
+  }
+
   return DashboardData(
     summary: summary,
     throughput: throughput,
@@ -133,6 +157,8 @@ final dashboardDataProvider = FutureProvider<DashboardData>((ref) async {
     recentAlerts: recentAlerts,
     batchSummaries: batchSummaries,
     filterOptions: filterOptions,
+    operatorProductivity: operatorProductivity,
+    oee: oee,
     yieldTrendPct: yieldTrend,
     reprovadosTrendPct: reprovTrend,
   );

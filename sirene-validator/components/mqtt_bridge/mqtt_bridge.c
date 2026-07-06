@@ -5,19 +5,23 @@
 
 #include "board_config.h"
 #include "device_id.h"
+#include "mqtt_topics.h"
 #include "esp_log.h"
 #include "esp_random.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "mqtt_client.h"
 #include "mqtt_config.h"
+#if CONFIG_MBEDTLS_CERTIFICATE_BUNDLE
+#include "esp_crt_bundle.h"
+#endif
 
 static const char *TAG = "mqtt";
 static esp_mqtt_client_handle_t s_client;
 static mqtt_command_cb_t s_cmd_cb;
 static mqtt_connected_cb_t s_connected_cb;
 static bool s_connected;
-static char s_presenca_topic[64];
+static char s_presenca_topic[96];
 static char s_broker_uri[128];
 static uint32_t s_reconnect_delay_ms = MQTT_RECONNECT_BASE_MS;
 static volatile bool s_reconnect_scheduled;
@@ -61,8 +65,11 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
         s_reconnect_scheduled = false;
         s_reconnect_delay_ms = MQTT_RECONNECT_BASE_MS;
         {
-            char topic[64];
-            device_id_topic(topic, sizeof(topic), "comando");
+            char topic[96];
+            if (!mqtt_topics_build(topic, sizeof(topic), "comando")) {
+                ESP_LOGE(TAG, "topico comando nao configurado");
+                break;
+            }
             esp_mqtt_client_subscribe(s_client, topic, 1);
             esp_mqtt_client_publish(s_client, s_presenca_topic, "online", 0, 1, 1);
             ESP_LOGI(TAG, "conectado, inscrito em %s", topic);
@@ -90,10 +97,21 @@ bool mqtt_bridge_init(mqtt_command_cb_t cmd_cb, mqtt_connected_cb_t connected_cb
 {
     s_cmd_cb = cmd_cb;
     s_connected_cb = connected_cb;
-    device_id_topic(s_presenca_topic, sizeof(s_presenca_topic), "presenca");
+    if (!mqtt_topics_build(s_presenca_topic, sizeof(s_presenca_topic), "presenca")) {
+        ESP_LOGE(TAG, "station_cfg ausente — configure bancada no portal");
+        return false;
+    }
 
     bool from_nvs = mqtt_config_get_uri(s_broker_uri, sizeof(s_broker_uri));
-    ESP_LOGI(TAG, "broker %s (%s)", s_broker_uri, from_nvs ? "NVS" : "fallback");
+    char mqtt_user[65] = {0};
+    char mqtt_pass[65] = {0};
+    bool has_auth = mqtt_config_load_auth(mqtt_user, sizeof(mqtt_user), mqtt_pass, sizeof(mqtt_pass));
+    bool mqtt_tls = false;
+    mqtt_config_load_tls(&mqtt_tls);
+    bool tls_transport = mqtt_tls || strncmp(s_broker_uri, "mqtts://", 8) == 0 ||
+                           strncmp(s_broker_uri, "wss://", 6) == 0;
+    ESP_LOGI(TAG, "broker %s (%s)%s%s", s_broker_uri, from_nvs ? "NVS" : "fallback",
+             has_auth ? ", auth" : "", tls_transport ? ", tls" : "");
 
     esp_mqtt_client_config_t cfg = {
         .broker.address.uri = s_broker_uri,
@@ -104,6 +122,24 @@ bool mqtt_bridge_init(mqtt_command_cb_t cmd_cb, mqtt_connected_cb_t connected_cb
         .network.disable_auto_reconnect = true,
         .network.reconnect_timeout_ms = MQTT_RECONNECT_BASE_MS,
     };
+    if (has_auth) {
+        cfg.credentials.username = mqtt_user;
+        cfg.credentials.authentication.password = mqtt_pass;
+    }
+    if (tls_transport) {
+        bool private_broker = mqtt_config_broker_is_private_lan();
+#if CONFIG_MBEDTLS_CERTIFICATE_BUNDLE
+        cfg.broker.verification.crt_bundle_attach = esp_crt_bundle_attach;
+#endif
+        if (private_broker) {
+            cfg.broker.verification.skip_cert_common_name_check = true;
+#if CONFIG_ESP_TLS_SKIP_SERVER_CERT_VERIFY
+            ESP_LOGW(TAG, "MQTT TLS broker LAN — verificacao relaxada");
+#endif
+        } else {
+            ESP_LOGI(TAG, "MQTT WSS/TLS — CA publica (crt bundle)");
+        }
+    }
     s_client = esp_mqtt_client_init(&cfg);
     if (!s_client) {
         return false;
@@ -122,8 +158,10 @@ bool mqtt_bridge_publish(const char *topic_suffix, const char *json)
     if (!s_client || !s_connected) {
         return false;
     }
-    char topic[64];
-    device_id_topic(topic, sizeof(topic), topic_suffix);
+    char topic[96];
+    if (!mqtt_topics_build(topic, sizeof(topic), topic_suffix)) {
+        return false;
+    }
     int msg_id = esp_mqtt_client_publish(s_client, topic, json, 0, 1, 0);
     return msg_id >= 0;
 }
