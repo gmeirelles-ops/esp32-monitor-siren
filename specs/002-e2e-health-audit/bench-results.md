@@ -25,14 +25,33 @@
 ## CI local (automático)
 
 ```
-./scripts/ci_local.sh — executado durante implementação
-flutter test mqtt_* + batch_set_batch_contract — PASS
+flutter test mqtt_parser_test mqtt_status_parser_test batch_set_batch_contract_test — 21/21 PASS (2026-07-07)
+ci_local.sh — não executado nesta sessão (requer ambiente Linux/WSL para host_tests)
 ```
 
 ## Observações
 
 - Validação física deve ser executada pelo operador no posto seguindo [quickstart.md](./quickstart.md).
 - Após deploy do app corrigido, repetir Fases A–E e atualizar esta tabela.
+
+## Instruções para operador (executar no posto)
+
+Siga [quickstart.md](./quickstart.md) fases A–E com estes parâmetros:
+
+| Parâmetro | Valor |
+|-----------|-------|
+| OP | 0001 |
+| Produto | 072 |
+| Limites | 35.62–43.54 W |
+| Sequencial inicial | 500 |
+| Quantidade | 108 |
+| Tempo teste | 10 s |
+
+**Critério crítico (incidente OP 0001):** 1 toque no botão = exatamente 1 teste na UI; veredito sempre APROVADO ou REPROVADO.
+
+Após executar, marque OK? nas fases A–E acima e atualize o veredicto.
+
+---
 
 ## Veredicto
 

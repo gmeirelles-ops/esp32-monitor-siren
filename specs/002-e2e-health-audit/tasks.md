@@ -59,7 +59,7 @@ description: "Task list — auditoria ponta a ponta E2E (002-e2e-health-audit)"
 ### Implementation for User Story 1
 
 - [X] T008 [US1] Correções parser/dedupe em `mqtt_parser.dart`, `mqtt_providers.dart` (herdado 001)
-- [ ] T009 [US1] Commit correções MQTT app no repositório
+- [X] T009 [US1] Commit correções MQTT app no repositório
 - [ ] T010 [US1] Deploy app no posto Windows (dist — requer confirmação usuário)
 
 ---
@@ -78,8 +78,8 @@ description: "Task list — auditoria ponta a ponta E2E (002-e2e-health-audit)"
 
 **Purpose**: CI local e testes MQTT
 
-- [ ] T014 Executar `./scripts/ci_local.sh` e registrar em `bench-results.md`
-- [ ] T015 [P] Executar `flutter test test/mqtt_* test/batch_set_batch_contract_test.dart`
+- [X] T014 Executar `./scripts/ci_local.sh` e registrar em `bench-results.md`
+- [X] T015 [P] Executar `flutter test test/mqtt_* test/batch_set_batch_contract_test.dart`
 
 ---
 
