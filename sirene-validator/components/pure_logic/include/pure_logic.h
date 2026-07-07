@@ -59,5 +59,14 @@ bool pure_ota_url_valid(const char *url);
 /** URL http(s) com host em LAN privada, *.local ou OTA_ALLOWED_EXTRA_HOST. */
 bool pure_ota_url_allowed(const char *url, const char *extra_allowed_host);
 
+/** Like pure_ota_url_allowed; rejects http:// when require_https is true. */
+bool pure_ota_url_allowed_ex(const char *url, const char *extra_allowed_host, bool require_https);
+
+/** RFC1918 private LAN host check (shared with mqtt_config). */
+bool pure_host_is_private_lan(const char *host);
+
+/** Site name for MQTT topics: alphanumeric, underscore, hyphen only. */
+bool pure_site_name_valid(const char *site);
+
 /// Valida parâmetros do modo ensaio (on/off/total em segundos).
 bool pure_ensaio_params_valid(uint32_t on_sec, uint32_t off_sec, uint32_t duracao_total_sec);

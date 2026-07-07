@@ -35,9 +35,11 @@ class _EnsaioScreenState extends ConsumerState<EnsaioScreen> {
   final _onMin = TextEditingController(text: '${EnsaioConfig.defaults.onMinutes}');
   final _offMin = TextEditingController(text: '${EnsaioConfig.defaults.offMinutes}');
   final _totalMin = TextEditingController(text: '${EnsaioConfig.defaults.totalMinutes}');
+  final _historyQuery = TextEditingController();
 
   bool _starting = false;
   bool _stopping = false;
+  bool _showAllHistory = false;
 
   @override
   void dispose() {
@@ -45,6 +47,7 @@ class _EnsaioScreenState extends ConsumerState<EnsaioScreen> {
     _onMin.dispose();
     _offMin.dispose();
     _totalMin.dispose();
+    _historyQuery.dispose();
     super.dispose();
   }
 
@@ -356,9 +359,37 @@ class _EnsaioScreenState extends ConsumerState<EnsaioScreen> {
                         );
                       }
                       final dateFmt = DateFormat('dd/MM/yyyy HH:mm');
+                      final query = _historyQuery.text.trim().toLowerCase();
+                      final filtered = records.where((r) {
+                        if (query.isEmpty) return true;
+                        return r.nome.toLowerCase().contains(query) ||
+                            ensaioStatusLabel(r.status).toLowerCase().contains(query);
+                      }).toList();
+                      final visible = _showAllHistory ? filtered : filtered.take(15).toList();
                       return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          for (final r in records.take(15))
+                          TextField(
+                            controller: _historyQuery,
+                            decoration: const InputDecoration(
+                              labelText: 'Buscar ensaio',
+                              prefixIcon: Icon(Icons.search),
+                            ),
+                            onChanged: (_) => setState(() {}),
+                          ),
+                          if (filtered.length > 15)
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: TextButton(
+                                onPressed: () => setState(() => _showAllHistory = !_showAllHistory),
+                                child: Text(
+                                  _showAllHistory
+                                      ? 'Mostrar menos'
+                                      : 'Ver todos (${filtered.length})',
+                                ),
+                              ),
+                            ),
+                          for (final r in visible)
                             ListTile(
                               contentPadding: EdgeInsets.zero,
                               leading: Icon(
@@ -447,11 +478,14 @@ class _EnsaioLiveCard extends StatelessWidget {
         children: [
           ClipRRect(
             borderRadius: BorderRadius.circular(8),
-            child: LinearProgressIndicator(
-              value: session.progress,
-              minHeight: 10,
-              backgroundColor: DipontoColors.surfaceVariant,
-              color: onPhase ? Colors.amberAccent : DipontoColors.primary,
+            child: Semantics(
+              label: 'Progresso do ensaio ${(session.progress * 100).toStringAsFixed(0)} por cento',
+              child: LinearProgressIndicator(
+                value: session.progress,
+                minHeight: 10,
+                backgroundColor: DipontoColors.surfaceVariant,
+                color: onPhase ? Colors.amberAccent : DipontoColors.primary,
+              ),
             ),
           ),
           const SizedBox(height: 12),

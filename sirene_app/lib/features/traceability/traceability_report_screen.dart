@@ -55,8 +55,8 @@ class _TraceabilityReportScreenState extends ConsumerState<TraceabilityReportScr
   }
 
   Future<void> _exportList(List<BatchReportSummary> batches) async {
-    final format = await pickReportExportFormat(context);
-    if (format == null || !mounted) return;
+    final picked = await pickReportExportOptions(context);
+    if (picked == null || !mounted) return;
 
     setState(() => _exporting = true);
     try {
@@ -68,15 +68,15 @@ class _TraceabilityReportScreenState extends ConsumerState<TraceabilityReportScr
         operatorLabel: ctx.operatorLabel,
       );
       final path = await exportReportFile(
-        format: format,
+        format: picked.format,
         basename: 'lotes',
         buildPdf: () => buildBatchListPdf(batches, filters: filters, meta: meta),
         buildXml: () => formatBatchListXml(batches, filters: filters),
-        openPrintDialog: format == ReportExportFormat.pdf,
+        openPrintDialog: picked.openPrint,
       );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${format.label} salvo: $path')),
+          SnackBar(content: Text('${picked.format.label} salvo: $path')),
         );
       }
     } catch (e) {

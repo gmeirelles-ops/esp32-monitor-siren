@@ -50,6 +50,11 @@ class DemoModeBanner extends StatelessWidget {
               ),
             ),
           ),
+          if (!compact)
+            const Text(
+              'Desative em Configurações → Manutenção',
+              style: TextStyle(fontSize: 11, color: Colors.white70),
+            ),
         ],
       ),
     );

@@ -50,5 +50,22 @@ void main() {
       await db.bumpSerialCounter(idProduto: '123', ano: '25', sequencial: 99);
       expect(await resolveProximoSequencial(db, '123', '26'), 1);
     });
+
+    test('uses sequencialInicial when counter is lower', () async {
+      expect(
+        await resolveProximoSequencial(db, '123', '26', sequencialInicial: 450),
+        450,
+      );
+      await db.bumpSerialCounter(idProduto: '123', ano: '26', sequencial: 100);
+      expect(
+        await resolveProximoSequencial(db, '123', '26', sequencialInicial: 450),
+        450,
+      );
+      await db.bumpSerialCounter(idProduto: '123', ano: '26', sequencial: 500);
+      expect(
+        await resolveProximoSequencial(db, '123', '26', sequencialInicial: 450),
+        501,
+      );
+    });
   });
 }

@@ -5,10 +5,24 @@
 #include "board_config.h"
 #include "esp_log.h"
 #include "nvs.h"
-#include "nvs_flash.h"
 #include "pure_logic.h"
 
 static const char *TAG = "batch_nvs";
+static const char *BATCH_BLOB_KEY = "blob_v1";
+
+typedef struct __attribute__((packed)) {
+    uint8_t active;
+    char numero_op[16];
+    char id_produto[4];
+    char ano[3];
+    uint32_t tempo_teste_sec;
+    float potencia_min;
+    float potencia_max;
+    uint32_t quantidade_total;
+    uint32_t proximo_sequencial;
+    uint32_t aprovados;
+    uint8_t modo_reteste;
+} batch_nvs_blob_t;
 
 static void batch_to_pure_input(const batch_context_t *ctx, pure_batch_input_t *in)
 {
@@ -39,12 +53,47 @@ static bool batch_context_valid(const batch_context_t *ctx)
     return true;
 }
 
+static void ctx_to_blob(const batch_context_t *ctx, batch_nvs_blob_t *blob)
+{
+    memset(blob, 0, sizeof(*blob));
+    blob->active = ctx->active ? 1 : 0;
+    strncpy(blob->numero_op, ctx->numero_op, sizeof(blob->numero_op) - 1);
+    strncpy(blob->id_produto, ctx->id_produto, sizeof(blob->id_produto) - 1);
+    strncpy(blob->ano, ctx->ano, sizeof(blob->ano) - 1);
+    blob->tempo_teste_sec = ctx->tempo_teste_sec;
+    blob->potencia_min = ctx->potencia_min;
+    blob->potencia_max = ctx->potencia_max;
+    blob->quantidade_total = ctx->quantidade_total;
+    blob->proximo_sequencial = ctx->proximo_sequencial;
+    blob->aprovados = ctx->aprovados;
+    blob->modo_reteste = ctx->modo_reteste ? 1 : 0;
+}
+
+static void blob_to_ctx(const batch_nvs_blob_t *blob, batch_context_t *ctx)
+{
+    memset(ctx, 0, sizeof(*ctx));
+    ctx->active = blob->active != 0;
+    strncpy(ctx->numero_op, blob->numero_op, sizeof(ctx->numero_op) - 1);
+    strncpy(ctx->id_produto, blob->id_produto, sizeof(ctx->id_produto) - 1);
+    strncpy(ctx->ano, blob->ano, sizeof(ctx->ano) - 1);
+    ctx->tempo_teste_sec = blob->tempo_teste_sec;
+    ctx->potencia_min = blob->potencia_min;
+    ctx->potencia_max = blob->potencia_max;
+    ctx->quantidade_total = blob->quantidade_total;
+    ctx->proximo_sequencial = blob->proximo_sequencial;
+    ctx->aprovados = blob->aprovados;
+    ctx->modo_reteste = blob->modo_reteste != 0;
+}
+
 bool batch_storage_save(const batch_context_t *ctx)
 {
     if (!batch_context_valid(ctx)) {
         ESP_LOGE(TAG, "recusa salvar lote invalido");
         return false;
     }
+
+    batch_nvs_blob_t blob;
+    ctx_to_blob(ctx, &blob);
 
     nvs_handle_t handle;
     esp_err_t err = nvs_open(BATCH_NVS_NAMESPACE, NVS_READWRITE, &handle);
@@ -53,18 +102,10 @@ bool batch_storage_save(const batch_context_t *ctx)
         return false;
     }
 
-    nvs_set_u8(handle, "active", ctx->active ? 1 : 0);
-    nvs_set_str(handle, "numero_op", ctx->numero_op);
-    nvs_set_str(handle, "id_produto", ctx->id_produto);
-    nvs_set_str(handle, "ano", ctx->ano);
-    nvs_set_u32(handle, "tempo_teste", ctx->tempo_teste_sec);
-    nvs_set_blob(handle, "pot_min", &ctx->potencia_min, sizeof(float));
-    nvs_set_blob(handle, "pot_max", &ctx->potencia_max, sizeof(float));
-    nvs_set_u32(handle, "qtd_total", ctx->quantidade_total);
-    nvs_set_u32(handle, "sequencial", ctx->proximo_sequencial);
-    nvs_set_u32(handle, "aprovados", ctx->aprovados);
-    nvs_set_u8(handle, "modo_reteste", ctx->modo_reteste ? 1 : 0);
-    err = nvs_commit(handle);
+    err = nvs_set_blob(handle, BATCH_BLOB_KEY, &blob, sizeof(blob));
+    if (err == ESP_OK) {
+        err = nvs_commit(handle);
+    }
     nvs_close(handle);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "nvs_commit failed: %s", esp_err_to_name(err));
@@ -81,33 +122,15 @@ bool batch_storage_load(batch_context_t *ctx)
         return false;
     }
 
-    uint8_t active = 0;
-    if (nvs_get_u8(handle, "active", &active) != ESP_OK || !active) {
-        nvs_close(handle);
+    batch_nvs_blob_t blob;
+    size_t blob_len = sizeof(blob);
+    err = nvs_get_blob(handle, BATCH_BLOB_KEY, &blob, &blob_len);
+    nvs_close(handle);
+    if (err != ESP_OK || blob_len != sizeof(blob) || !blob.active) {
         return false;
     }
 
-    size_t len = sizeof(ctx->numero_op);
-    nvs_get_str(handle, "numero_op", ctx->numero_op, &len);
-    len = sizeof(ctx->id_produto);
-    nvs_get_str(handle, "id_produto", ctx->id_produto, &len);
-    len = sizeof(ctx->ano);
-    nvs_get_str(handle, "ano", ctx->ano, &len);
-    nvs_get_u32(handle, "tempo_teste", &ctx->tempo_teste_sec);
-    size_t blob_len = sizeof(float);
-    nvs_get_blob(handle, "pot_min", &ctx->potencia_min, &blob_len);
-    blob_len = sizeof(float);
-    nvs_get_blob(handle, "pot_max", &ctx->potencia_max, &blob_len);
-    nvs_get_u32(handle, "qtd_total", &ctx->quantidade_total);
-    nvs_get_u32(handle, "sequencial", &ctx->proximo_sequencial);
-    nvs_get_u32(handle, "aprovados", &ctx->aprovados);
-    uint8_t modo_reteste = 0;
-    if (nvs_get_u8(handle, "modo_reteste", &modo_reteste) == ESP_OK) {
-        ctx->modo_reteste = modo_reteste != 0;
-    }
-    ctx->active = true;
-    nvs_close(handle);
-
+    blob_to_ctx(&blob, ctx);
     if (!batch_context_valid(ctx)) {
         ESP_LOGW(TAG, "lote NVS invalido — apagando");
         batch_storage_clear();

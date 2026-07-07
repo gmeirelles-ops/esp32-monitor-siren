@@ -62,7 +62,7 @@ Deploy industrial: [docs/DEPLOY_PRODUCTION.md](docs/DEPLOY_PRODUCTION.md).
 ./scripts/run_host_tests.sh
 ```
 
-Testa lógica pura (`pure_logic`): veredito, fila FIFO, FSM e serial.
+Testa lógica pura (`pure_logic`): veredito, FIFO, FSM, serial, URL OTA, batch, reteste, ensaio, site e hosts LAN.
 
 ## Testes em bancada
 

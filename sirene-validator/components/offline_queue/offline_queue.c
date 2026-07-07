@@ -1,5 +1,6 @@
 #include "offline_queue.h"
 
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -109,14 +110,17 @@ static bool read_entry_raw(uint32_t index, char *raw, size_t raw_len)
 static bool write_entry_raw(uint32_t index, const char *raw)
 {
     char path[32];
+    char tmp_path[36];
     entry_path(path, sizeof(path), index);
-    FILE *f = fopen(path, "w");
+    snprintf(tmp_path, sizeof(tmp_path), "%s.tmp", path);
+    FILE *f = fopen(tmp_path, "w");
     if (!f) {
         return false;
     }
     fputs(raw, f);
     fclose(f);
-    return true;
+    remove(path);
+    return rename(tmp_path, path) == 0;
 }
 
 static bool write_envelope(uint32_t index, const char *topic_suffix, const char *json)
@@ -177,6 +181,35 @@ static bool decode_entry(const char *raw, char *topic_out, size_t topic_len, cha
     return true;
 }
 
+static void rebuild_meta_from_spiffs(void)
+{
+    uint32_t count = 0;
+    uint32_t head = UINT32_MAX;
+    uint32_t tail = 0;
+    for (uint32_t i = 0; i < OFFLINE_QUEUE_MAX; i++) {
+        char path[32];
+        entry_path(path, sizeof(path), i);
+        FILE *f = fopen(path, "r");
+        if (!f) {
+            continue;
+        }
+        fclose(f);
+        if (head == UINT32_MAX) {
+            head = i;
+        }
+        tail = (i + 1) % OFFLINE_QUEUE_MAX;
+        count++;
+    }
+    if (count == 0) {
+        s_meta.head = s_meta.tail = s_meta.count = 0;
+    } else {
+        s_meta.head = head;
+        s_meta.tail = tail;
+        s_meta.count = count;
+    }
+    meta_persist();
+}
+
 bool offline_queue_init(void)
 {
     if (!s_mu) {
@@ -190,10 +223,20 @@ bool offline_queue_init(void)
     };
     esp_err_t ret = esp_vfs_spiffs_register(&conf);
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "SPIFFS mount failed: %s", esp_err_to_name(ret));
-        return false;
+        ESP_LOGE(TAG, "SPIFFS mount failed: %s — tentando format", esp_err_to_name(ret));
+        ret = esp_vfs_spiffs_register(&conf);
+        if (ret != ESP_OK) {
+            ESP_LOGE(TAG, "SPIFFS mount failed apos format: %s", esp_err_to_name(ret));
+            return false;
+        }
     }
     meta_ensure_loaded();
+    queue_lock();
+    if (s_meta.count > OFFLINE_QUEUE_MAX) {
+        ESP_LOGW(TAG, "meta NVS inconsistente — reconstruindo a partir do SPIFFS");
+        rebuild_meta_from_spiffs();
+    }
+    queue_unlock();
     return true;
 }
 
@@ -217,7 +260,10 @@ size_t offline_queue_count(void)
 
 uint32_t offline_queue_drop_count(void)
 {
-    return s_drop_count;
+    queue_lock();
+    uint32_t drops = s_drop_count;
+    queue_unlock();
+    return drops;
 }
 
 bool offline_queue_push(const char *topic_suffix, const char *json)
@@ -237,6 +283,13 @@ bool offline_queue_push(const char *topic_suffix, const char *json)
         s_meta.tail = (s_meta.tail + 1) % OFFLINE_QUEUE_MAX;
         s_meta.count++;
         ok = meta_persist();
+        if (!ok) {
+            s_meta.tail = (s_meta.tail + OFFLINE_QUEUE_MAX - 1) % OFFLINE_QUEUE_MAX;
+            s_meta.count--;
+            char path[32];
+            entry_path(path, sizeof(path), s_meta.tail);
+            remove(path);
+        }
     }
     queue_unlock();
     return ok;

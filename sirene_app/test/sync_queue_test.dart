@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:ffi';
 import 'dart:io';
 
@@ -5,7 +6,9 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqlite3/open.dart';
 import 'package:sirene_app/core/database/database.dart';
+import 'package:sirene_app/features/cloud/models/firestore_mappers.dart';
 import 'package:sirene_app/features/cloud/sync/firestore_sync_service.dart';
+import 'package:sirene_app/features/cloud/sync/sync_payload_repair.dart';
 import 'package:sirene_app/features/cloud/sync/sync_queue_processor.dart';
 import 'package:sirene_app/features/mqtt/models/mqtt_messages.dart';
 
@@ -123,6 +126,89 @@ void main() {
       expect(pending.single.id, id);
       expect(pending.single.attempts, 0);
       expect(pending.single.lastError, isNull);
+    });
+
+    test('device sem station_id é corrigido na fila e no envio', () async {
+      Map<String, dynamic>? sentPayload;
+      final sync = FirestoreSyncService(
+        db: db,
+        isSyncEnabled: () => true,
+        stationId: () => 'posto-01',
+      );
+      final id = await db.enqueueSync(
+        collection: 'devices',
+        documentId: '841fe83a5db4',
+        payload: '{"device_id":"841fe83a5db4","online":true,"updated_by_station":"posto-01"}',
+        operation: 'merge',
+      );
+      await db.markFailed(id, 'permission-denied', attempts: 5);
+
+      final repaired = await repairSyncQueuePayloads(db, 'posto-01', itemId: id);
+      expect(repaired, 1);
+
+      final processor = SyncQueueProcessor(
+        db: db,
+        syncService: sync,
+        writer: (collection, docId, data, operation, {documentPath}) async {
+          sentPayload = data;
+        },
+      );
+      await db.resetSyncAttempts(id);
+      await processor.processQueue();
+
+      expect(sentPayload?['station_id'], 'posto-01');
+      expect(await db.countPending(), 0);
+    });
+
+    test('enqueueDeviceUpdate inclui station_id no payload', () async {
+      final sync = FirestoreSyncService(
+        db: db,
+        isSyncEnabled: () => true,
+        stationId: () => 'posto-01',
+      );
+      await sync.enqueueDeviceUpdate(
+        deviceId: 'abc',
+        estado: DeviceFsmState.idle,
+        firmwareVersion: '1.0',
+        rssi: -50,
+        filaOffline: 0,
+        online: true,
+        force: true,
+      );
+      final pending = await db.getPendingItems();
+      final data = jsonDecode(pending.single.payload) as Map<String, dynamic>;
+      expect(data['station_id'], 'posto-01');
+    });
+
+    test('processa mais de um lote por ciclo quando há muitos pendentes', () async {
+      var written = 0;
+      final sync = FirestoreSyncService(
+        db: db,
+        isSyncEnabled: () => true,
+        stationId: () => 'posto-01',
+      );
+      for (var i = 0; i < 120; i++) {
+        await db.enqueueSync(
+          collection: 'products',
+          documentId: 'p$i',
+          payload: '{"id_produto":"p$i","nome":"Produto $i"}',
+          operation: 'set',
+        );
+      }
+
+      final processor = SyncQueueProcessor(
+        db: db,
+        syncService: sync,
+        itemsPerBatch: 50,
+        maxBatchesPerRun: 3,
+        writer: (collection, docId, data, operation, {documentPath}) async {
+          written++;
+        },
+      );
+      await processor.processQueue();
+
+      expect(written, 120);
+      expect(await db.countPending(), 0);
     });
   });
 }

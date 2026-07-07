@@ -192,8 +192,11 @@ static bool pure_ota_extract_host(const char *url, char *host, size_t host_len)
     return host[0] != '\0';
 }
 
-static bool pure_host_is_private_lan(const char *host)
+bool pure_host_is_private_lan(const char *host)
 {
+    if (!host || host[0] == '\0') {
+        return false;
+    }
     if (strncmp(host, "192.168.", 8) == 0) {
         return true;
     }
@@ -207,6 +210,20 @@ static bool pure_host_is_private_lan(const char *host)
         }
     }
     return false;
+}
+
+bool pure_site_name_valid(const char *site)
+{
+    if (!site || site[0] == '\0') {
+        return false;
+    }
+    for (size_t i = 0; site[i] != '\0'; i++) {
+        char c = site[i];
+        if (!isalnum((unsigned char)c) && c != '_' && c != '-') {
+            return false;
+        }
+    }
+    return true;
 }
 
 bool pure_ensaio_params_valid(uint32_t on_sec, uint32_t off_sec, uint32_t duracao_total_sec)
@@ -226,9 +243,12 @@ bool pure_ensaio_params_valid(uint32_t on_sec, uint32_t off_sec, uint32_t duraca
     return true;
 }
 
-bool pure_ota_url_allowed(const char *url, const char *extra_allowed_host)
+bool pure_ota_url_allowed_ex(const char *url, const char *extra_allowed_host, bool require_https)
 {
     if (!pure_ota_url_valid(url)) {
+        return false;
+    }
+    if (require_https && strncmp(url, "https://", 8) != 0) {
         return false;
     }
 
@@ -247,4 +267,9 @@ bool pure_ota_url_allowed(const char *url, const char *extra_allowed_host)
         return true;
     }
     return false;
+}
+
+bool pure_ota_url_allowed(const char *url, const char *extra_allowed_host)
+{
+    return pure_ota_url_allowed_ex(url, extra_allowed_host, false);
 }

@@ -62,8 +62,8 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
 
     final config = container.read(appConfigProvider);
-    expect(config.activeOperatorId, isNotNull);
     expect(container.read(sessionOperatorIdProvider), isNotNull);
+    expect(config.activeOperatorId, isNull);
   });
 
   testWidgets('PIN incorreto exibe erro', (tester) async {

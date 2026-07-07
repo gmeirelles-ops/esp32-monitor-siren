@@ -17,6 +17,11 @@ String serialPath(String numeroOp, String serial) =>
 String reprovadaPath(String numeroOp, int sequencial) =>
     'test_results/$numeroOp/$firestoreSubcollectionReprovadas/$sequencial';
 
+bool isReprovadaFirestorePath(String? documentPath) {
+  if (documentPath == null || documentPath.isEmpty) return false;
+  return documentPath.contains('/$firestoreSubcollectionReprovadas/');
+}
+
 bool isTesteAprovado(TestResultMessage test) =>
     test.veredito.toUpperCase() == 'APROVADO';
 
@@ -170,8 +175,51 @@ Map<String, dynamic> mapDevice({
     'online': online,
     'rssi': rssi,
     'fila_offline': filaOffline,
+    'station_id': stationId,
     'updated_by_station': stationId,
   };
+}
+
+/// Coleções/caminhos que exigem `station_id` nas regras do Firestore.
+bool syncPayloadRequiresStationId({
+  required String collection,
+  String? documentPath,
+}) {
+  if (collection == 'devices' ||
+      collection == 'test_results' ||
+      collection == 'stations') {
+    return true;
+  }
+  final path = documentPath?.trim() ?? '';
+  return path.startsWith('test_results/');
+}
+
+/// Injeta `station_id` em payloads antigos da fila antes do envio ao Firestore.
+Map<String, dynamic> patchSyncPayloadForFirestore({
+  required String collection,
+  required Map<String, dynamic> payload,
+  required String stationId,
+  String? documentPath,
+}) {
+  if (!syncPayloadRequiresStationId(
+    collection: collection,
+    documentPath: documentPath,
+  )) {
+    return payload;
+  }
+
+  final id = stationId.trim();
+  if (id.isEmpty) return payload;
+
+  final current = payload['station_id'];
+  if (current is String && current.trim().isNotEmpty) return payload;
+
+  final patched = Map<String, dynamic>.from(payload);
+  patched['station_id'] = id;
+  if (collection == 'devices' && !patched.containsKey('updated_by_station')) {
+    patched['updated_by_station'] = id;
+  }
+  return patched;
 }
 
 String _fsmToFirestore(DeviceFsmState estado) {
@@ -224,6 +272,7 @@ typedef ParsedProduct = ({
   int tempoTesteSec,
   DateTime? calibradoEm,
   String? calibradoDeviceId,
+  int? sequencialInicial,
 });
 
 double _asDouble(Object? v, [double fallback = 0]) {
@@ -258,6 +307,9 @@ ParsedProduct? productFromFirestore(Map<String, dynamic> data) {
     tempoTesteSec: _asInt(data['tempo_teste_sec']),
     calibradoEm: _asDateTime(data['calibrado_em']),
     calibradoDeviceId: data['calibrado_device_id'] as String?,
+    sequencialInicial: _asInt(data['sequencial_inicial'], -1) > 0
+        ? _asInt(data['sequencial_inicial'])
+        : null,
   );
 }
 
@@ -277,6 +329,8 @@ Map<String, dynamic> mapProduct({
       'calibrado_em': product.calibradoEm!.toUtc().toIso8601String(),
     if (product.calibradoDeviceId != null)
       'calibrado_device_id': product.calibradoDeviceId,
+    if (product.sequencialInicial != null && product.sequencialInicial! > 0)
+      'sequencial_inicial': product.sequencialInicial,
     'updated_at': updatedAt.toUtc().toIso8601String(),
   };
 }

@@ -96,7 +96,12 @@ class _BatchScreenState extends ConsumerState<BatchScreen> {
 
     final ano = resolveBatchYear();
     final db = ref.read(databaseProvider);
-    final proximoSequencial = await resolveProximoSequencial(db, product.idProduto, ano);
+    final proximoSequencial = await resolveProximoSequencial(
+      db,
+      product.idProduto,
+      ano,
+      sequencialInicial: product.sequencialInicial,
+    );
 
     final batch = BatchConfig(
       numeroOp: _numeroOp.text.trim(),
@@ -351,6 +356,19 @@ class _BatchScreenState extends ConsumerState<BatchScreen> {
                               controller: _quantidadeTotal,
                               decoration: const InputDecoration(labelText: 'Quantidade total'),
                               keyboardType: TextInputType.number,
+                              validator: (v) {
+                                if (v == null || v.trim().isEmpty) {
+                                  return 'Informe a quantidade';
+                                }
+                                final n = int.tryParse(v.trim());
+                                if (n == null || n < 1) {
+                                  return 'Quantidade inválida (mínimo 1)';
+                                }
+                                if (n > 100000) {
+                                  return 'Quantidade muito alta';
+                                }
+                                return null;
+                              },
                             ),
                           ],
                         ),

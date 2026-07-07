@@ -12,7 +12,7 @@ final activeOperatorsStreamProvider = StreamProvider<List<Operator>>((ref) {
   return ref.watch(databaseProvider).watchActiveOperators();
 });
 
-/// Sessão do operador na execução atual (não persiste entre aberturas do app).
+/// Sessão do operador só em memória — exige PIN a cada abertura do app.
 final sessionOperatorIdProvider = StateProvider<int?>((ref) => null);
 
 final activeOperatorProvider = FutureProvider<Operator?>((ref) async {
@@ -25,12 +25,6 @@ final activeOperatorProvider = FutureProvider<Operator?>((ref) async {
 
 Future<void> setActiveOperator(WidgetRef ref, int? operatorId) async {
   ref.read(sessionOperatorIdProvider.notifier).state = operatorId;
-  final config = ref.read(appConfigProvider);
-  if (operatorId == null) {
-    await config.clearActiveOperatorId();
-  } else {
-    await config.setActiveOperatorId(operatorId);
-  }
   ref.invalidate(activeOperatorProvider);
 }
 
@@ -40,28 +34,14 @@ Future<void> clearOperatorSession(WidgetRef ref) async {
   ref.invalidate(activeOperatorProvider);
 }
 
-/// Restaura operador logado no turno (persistido localmente).
-Future<void> restoreOperatorSessionOnStartup(WidgetRef ref) async {
-  final savedId = ref.read(appConfigProvider).activeOperatorId;
-  if (savedId == null) {
-    ref.read(sessionOperatorIdProvider.notifier).state = null;
-    ref.invalidate(activeOperatorProvider);
-    return;
-  }
-
-  final op = await ref.read(databaseProvider).getOperatorById(savedId);
-  if (op == null || !op.ativo) {
-    await ref.read(appConfigProvider).clearActiveOperatorId();
-    ref.read(sessionOperatorIdProvider.notifier).state = null;
-  } else {
-    ref.read(sessionOperatorIdProvider.notifier).state = savedId;
-  }
-  ref.invalidate(activeOperatorProvider);
+/// Sempre inicia sem operador logado (PIN obrigatório a cada abertura).
+Future<void> clearOperatorSessionOnStartup(WidgetRef ref) async {
+  await clearOperatorSession(ref);
 }
 
-/// @deprecated Use [restoreOperatorSessionOnStartup]
-Future<void> resetOperatorSessionOnStartup(WidgetRef ref) =>
-    restoreOperatorSessionOnStartup(ref);
+/// @deprecated Use [clearOperatorSessionOnStartup]
+Future<void> restoreOperatorSessionOnStartup(WidgetRef ref) =>
+    clearOperatorSessionOnStartup(ref);
 
 /// Rótulo para test_results: operador local ou fallback Firebase.
 Future<String?> resolveOperadorLabel(Ref ref) async {

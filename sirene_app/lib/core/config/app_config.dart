@@ -39,7 +39,7 @@ class AppConfig {
   static const defaultMqttUseWebSocket = true;
   static const defaultMqttUseTls = true;
   static const defaultMqttUsername = 'devices';
-  static const defaultMqttPassword = 'w1FefRLm+q1_O8H';
+  static const defaultMqttPassword = '';
   static const defaultPrinterHost = '192.168.1.50';
   static const defaultPrinterPort = 9100;
   static const defaultPrinterMode = PrinterMode.usb;
@@ -50,6 +50,7 @@ class AppConfig {
   static const laserTestSerial = '0000000000';
   static const staleDeviceTimeout = Duration(seconds: 90);
   static const defaultStationId = 'posto-01';
+  static final stationIdPattern = RegExp(r'^[a-zA-Z0-9_-]+$');
   static const defaultYieldTargetPct = 70.0;
   static const defaultShiftStartHour = 6;
 
@@ -91,6 +92,12 @@ class AppConfig {
   String get stationId => _prefs.getString('station_id') ?? defaultStationId;
   bool get syncEnabled => _prefs.getBool('sync_enabled') ?? false;
   bool get cloudSetupComplete => _prefs.getBool('cloud_setup_complete') ?? false;
+  bool get cloudSyncNeedsAttention => _prefs.getBool('cloud_sync_needs_attention') ?? false;
+  DateTime? get lastCloudSyncAt {
+    final raw = _prefs.getString('last_cloud_sync_at');
+    if (raw == null || raw.isEmpty) return null;
+    return DateTime.tryParse(raw);
+  }
   bool get demoModeEnabled => _prefs.getBool('demo_mode_enabled') ?? false;
   double get yieldTargetPct =>
       _prefs.getDouble('yield_target_pct') ?? defaultYieldTargetPct;
@@ -162,14 +169,30 @@ class AppConfig {
     }
   }
 
+  static String normalizeStationId(String value) {
+    final trimmed = value.trim();
+    return trimmed.isEmpty ? defaultStationId : trimmed;
+  }
+
+  static bool isValidStationId(String value) {
+    final normalized = normalizeStationId(value);
+    return stationIdPattern.hasMatch(normalized);
+  }
+
   Future<void> setStationId(String value) =>
-      _prefs.setString('station_id', value.trim());
+      _prefs.setString('station_id', normalizeStationId(value));
 
   Future<void> setSyncEnabled(bool value) =>
       _prefs.setBool('sync_enabled', value);
 
   Future<void> setCloudSetupComplete(bool value) =>
       _prefs.setBool('cloud_setup_complete', value);
+
+  Future<void> setCloudSyncNeedsAttention(bool value) =>
+      _prefs.setBool('cloud_sync_needs_attention', value);
+
+  Future<void> setLastCloudSyncAt(DateTime value) =>
+      _prefs.setString('last_cloud_sync_at', value.toUtc().toIso8601String());
 
   Future<void> setDemoModeEnabled(bool value) =>
       _prefs.setBool('demo_mode_enabled', value);

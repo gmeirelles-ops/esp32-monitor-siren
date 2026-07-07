@@ -16,6 +16,10 @@ CONFIG_HTTPD_MAX_REQ_HDR_LEN=2048
 CONFIG_HTTPD_MAX_URI_LEN=1024
 # Produção: preserva NVS/lote/fila após OTA (reprovisionamento: sdkconfig.defaults.provisioning)
 # CONFIG_OTA_ERASE_NVS_ON_BOOT is not set
-# MQTT TLS em broker interno com certificado autoassinado (LAN isolada)
-CONFIG_ESP_TLS_INSECURE=y
-CONFIG_ESP_TLS_SKIP_SERVER_CERT_VERIFY=y
+# TLS: verificação CA ativa (crt bundle para mqtt.diponto.com).
+# Brokers LAN autoassinados: CONFIG_SIRENE_MQTT_LAN_INSECURE_TLS em board_config.
+# CONFIG_ESP_TLS_INSECURE is not set
+# CONFIG_ESP_TLS_SKIP_SERVER_CERT_VERIFY is not set
+CONFIG_SIRENE_MQTT_LAN_INSECURE_TLS=y
+CONFIG_SIRENE_OTA_REQUIRE_HTTPS=y
+CONFIG_SIRENE_OLED_ENABLE=y

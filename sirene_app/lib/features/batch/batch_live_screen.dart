@@ -309,6 +309,11 @@ class _BatchLiveBody extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final testsAsync = ref.watch(batchLiveTestsProvider(numeroOp));
     final metricsAsync = ref.watch(batchLiveMetricsProvider(numeroOp));
+    final mqttState = resolveMqttConnectionDisplayState(
+      ref.watch(mqttConnectionStateProvider),
+      ref.read(mqttServiceProvider).currentState,
+    );
+    final mqttDisconnected = mqttState != AppMqttConnectionState.connected;
 
     return testsAsync.when(
       loading: () => const Padding(
@@ -330,6 +335,7 @@ class _BatchLiveBody extends ConsumerWidget {
               liveResult: liveResult,
               potenciaMin: batch?.potenciaMin,
               potenciaMax: batch?.potenciaMax,
+              mqttDisconnected: mqttDisconnected,
             ),
             DemoLiveControls(
               deviceId: deviceId,

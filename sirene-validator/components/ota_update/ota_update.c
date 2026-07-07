@@ -7,6 +7,7 @@
 #include "esp_log.h"
 #include "esp_ota_ops.h"
 #include "esp_partition.h"
+#include "esp_task_wdt.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "nvs_flash.h"
@@ -31,6 +32,7 @@ static void publish_status(const char *tipo, const char *detail)
 static void ota_task(void *arg)
 {
     char *url = (char *)arg;
+    esp_task_wdt_add(NULL);
     s_active = true;
     relay_set(false);
     publish_status("inicio", url);
@@ -45,6 +47,7 @@ static void ota_task(void *arg)
     };
 
     esp_err_t err = esp_https_ota(&ota_cfg);
+    esp_task_wdt_reset();
     free(url);
 
     if (err == ESP_OK) {

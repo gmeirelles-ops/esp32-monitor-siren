@@ -19,8 +19,10 @@ enum ReportExportFormat {
       };
 }
 
-Future<ReportExportFormat?> pickReportExportFormat(BuildContext context) {
-  return showDialog<ReportExportFormat>(
+Future<({ReportExportFormat format, bool openPrint})?> pickReportExportOptions(
+  BuildContext context,
+) async {
+  return showDialog<({ReportExportFormat format, bool openPrint})>(
     context: context,
     builder: (ctx) => AlertDialog(
       title: const Text('Exportar relatório'),
@@ -30,15 +32,29 @@ Future<ReportExportFormat?> pickReportExportFormat(BuildContext context) {
           onPressed: () => Navigator.pop(ctx),
           child: const Text('Cancelar'),
         ),
-        for (final format in ReportExportFormat.values)
-          FilledButton.icon(
-            onPressed: () => Navigator.pop(ctx, format),
-            icon: Icon(format.icon, size: 18),
-            label: Text(format.label),
-          ),
+        FilledButton.icon(
+          onPressed: () => Navigator.pop(ctx, (format: ReportExportFormat.pdf, openPrint: false)),
+          icon: const Icon(Icons.save_outlined, size: 18),
+          label: const Text('PDF (só salvar)'),
+        ),
+        FilledButton.icon(
+          onPressed: () => Navigator.pop(ctx, (format: ReportExportFormat.pdf, openPrint: true)),
+          icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
+          label: const Text('PDF e imprimir'),
+        ),
+        FilledButton.icon(
+          onPressed: () => Navigator.pop(ctx, (format: ReportExportFormat.xml, openPrint: false)),
+          icon: const Icon(Icons.code_outlined, size: 18),
+          label: const Text('XML'),
+        ),
       ],
     ),
   );
+}
+
+Future<ReportExportFormat?> pickReportExportFormat(BuildContext context) async {
+  final picked = await pickReportExportOptions(context);
+  return picked?.format;
 }
 
 String dashboardPeriodLabel(DashboardPeriod period) {

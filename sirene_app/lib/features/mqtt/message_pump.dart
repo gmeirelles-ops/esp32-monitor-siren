@@ -1,3 +1,5 @@
+import '../../core/services/app_log.dart';
+
 /// Encadeia handlers async para processamento FIFO (uma mensagem por vez).
 class MessagePump {
   Future<void> _chain = Future.value();
@@ -6,8 +8,8 @@ class MessagePump {
     _chain = _chain.then((_) async {
       try {
         await handler();
-      } catch (_) {
-        // Mantém a cadeia viva mesmo se um handler falhar.
+      } catch (e, st) {
+        await AppLog.write('MessagePump: handler falhou', error: e, stack: st);
       }
     });
   }

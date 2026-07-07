@@ -27,8 +27,10 @@ import 'features/settings/settings_screen.dart';
 import 'features/setup/cloud_setup_screen.dart';
 import 'features/setup/posto_setup_screen.dart';
 import 'features/traceability/traceability_report_screen.dart';
+import 'shared/widgets/app_splash_screen.dart';
 import 'shared/widgets/diponto_app_bar.dart';
 import 'shared/widgets/demo_mode_banner.dart';
+import 'shared/widgets/operational_status_shell.dart';
 import 'shared/widgets/print_failure_shell.dart';
 
 class SireneApp extends ConsumerWidget {
@@ -37,9 +39,11 @@ class SireneApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return MaterialApp(
-      title: 'Diponto Sirene Validator',
+      title: 'Diponto Validador de Sirenes',
       theme: buildDipontoTheme(),
-      builder: (context, child) => PrintFailureShell(child: child ?? const SizedBox.shrink()),
+      builder: (context, child) => OperationalStatusShell(
+        child: PrintFailureShell(child: child ?? const SizedBox.shrink()),
+      ),
       home: const AppGate(),
     );
   }
@@ -54,6 +58,9 @@ class AppGate extends ConsumerStatefulWidget {
 }
 
 class _AppGateState extends ConsumerState<AppGate> with WidgetsBindingObserver {
+  String? _bootstrapError;
+  bool _bootstrapDone = false;
+
   @override
   void initState() {
     super.initState();
@@ -63,6 +70,7 @@ class _AppGateState extends ConsumerState<AppGate> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    unawaited(clearOperatorSession(ref));
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -70,12 +78,15 @@ class _AppGateState extends ConsumerState<AppGate> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     unawaited(AppLog.write('Lifecycle: $state'));
+    if (state == AppLifecycleState.detached) {
+      unawaited(clearOperatorSession(ref));
+    }
   }
 
   Future<void> _bootstrap(WidgetRef ref) async {
     try {
       await AppLog.write('Bootstrap: início');
-      await restoreOperatorSessionOnStartup(ref);
+      await clearOperatorSessionOnStartup(ref);
       await AppLog.write('Bootstrap: sessão ok');
 
       ref.read(syncQueueProcessorProvider);
@@ -109,21 +120,58 @@ class _AppGateState extends ConsumerState<AppGate> with WidgetsBindingObserver {
         }
       }
       await AppLog.write('Bootstrap: concluído');
+      if (mounted) {
+        setState(() {
+          _bootstrapError = null;
+          _bootstrapDone = true;
+        });
+      }
     } catch (e, st) {
       await AppLog.write('Bootstrap: erro', error: e, stack: st);
+      if (mounted) {
+        setState(() => _bootstrapError = 'Falha ao iniciar serviços: $e');
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_bootstrapError != null) {
+      return Scaffold(
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.error_outline, size: 48, color: DipontoColors.error),
+                const SizedBox(height: 16),
+                Text(_bootstrapError!, textAlign: TextAlign.center),
+                const SizedBox(height: 16),
+                FilledButton(
+                  onPressed: () {
+                    setState(() => _bootstrapError = null);
+                    _bootstrap(ref);
+                  },
+                  child: const Text('Tentar novamente'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (!_bootstrapDone) {
+      return const AppSplashScreen();
+    }
+
     final activeAsync = ref.watch(activeOperatorProvider);
     final bancadaReady = ref.watch(bancadaSetupCompleteProvider);
     final cloudReady = ref.watch(cloudSetupCompleteProvider);
 
     return activeAsync.when(
-      loading: () => const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      ),
+      loading: () => const AppSplashScreen(),
       error: (e, _) => Scaffold(
         body: Center(
           child: Padding(
@@ -175,6 +223,7 @@ class _SireneAppShellState extends ConsumerState<SireneAppShell> {
       return [
         (screen: const BatchScreen(), icon: Icons.playlist_add_check, label: 'Lote'),
         labelsEntry,
+        (screen: const LookupScreen(), icon: Icons.search, label: 'Consulta'),
       ];
     }
 

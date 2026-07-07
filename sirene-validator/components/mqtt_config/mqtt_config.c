@@ -5,30 +5,11 @@
 
 #include "board_config.h"
 #include "nvs.h"
+#include "pure_logic.h"
 
 static bool open_ro(nvs_handle_t *handle)
 {
     return nvs_open(MQTT_NVS_NAMESPACE, NVS_READONLY, handle) == ESP_OK;
-}
-
-static bool host_is_private_lan(const char *host)
-{
-    if (!host || host[0] == '\0') {
-        return false;
-    }
-    if (strncmp(host, "192.168.", 8) == 0) {
-        return true;
-    }
-    if (strncmp(host, "10.", 3) == 0) {
-        return true;
-    }
-    if (strncmp(host, "172.", 4) == 0) {
-        int second = 0;
-        if (sscanf(host, "172.%d.", &second) == 1 && second >= 16 && second <= 31) {
-            return true;
-        }
-    }
-    return false;
 }
 
 static const char *mqtt_scheme_for(bool tls, uint32_t port)
@@ -126,17 +107,27 @@ bool mqtt_config_save(const char *host, uint32_t port, const char *user, const c
     if (nvs_open(MQTT_NVS_NAMESPACE, NVS_READWRITE, &handle) != ESP_OK) {
         return false;
     }
-    nvs_set_str(handle, MQTT_NVS_HOST_KEY, host);
-    nvs_set_u32(handle, MQTT_NVS_PORT_KEY, port);
-    nvs_set_u8(handle, MQTT_NVS_TLS_KEY, tls ? 1 : 0);
-    if (user && user[0] != '\0') {
-        nvs_set_str(handle, MQTT_NVS_USER_KEY, user);
-        nvs_set_str(handle, MQTT_NVS_PASS_KEY, pass ? pass : "");
-    } else {
-        nvs_erase_key(handle, MQTT_NVS_USER_KEY);
-        nvs_erase_key(handle, MQTT_NVS_PASS_KEY);
+    esp_err_t err = nvs_set_str(handle, MQTT_NVS_HOST_KEY, host);
+    if (err == ESP_OK) {
+        err = nvs_set_u32(handle, MQTT_NVS_PORT_KEY, port);
     }
-    esp_err_t err = nvs_commit(handle);
+    if (err == ESP_OK) {
+        err = nvs_set_u8(handle, MQTT_NVS_TLS_KEY, tls ? 1 : 0);
+    }
+    if (err == ESP_OK) {
+        if (user && user[0] != '\0') {
+            err = nvs_set_str(handle, MQTT_NVS_USER_KEY, user);
+            if (err == ESP_OK) {
+                err = nvs_set_str(handle, MQTT_NVS_PASS_KEY, pass ? pass : "");
+            }
+        } else {
+            nvs_erase_key(handle, MQTT_NVS_USER_KEY);
+            nvs_erase_key(handle, MQTT_NVS_PASS_KEY);
+        }
+    }
+    if (err == ESP_OK) {
+        err = nvs_commit(handle);
+    }
     nvs_close(handle);
     return err == ESP_OK;
 }
@@ -169,7 +160,7 @@ bool mqtt_config_get_uri(char *uri, size_t uri_len)
     bool tls = false;
     if (mqtt_config_load(host, sizeof(host), &port)) {
         mqtt_config_load_tls(&tls);
-        if (tls && port == MQTT_DEFAULT_PORT && host_is_private_lan(host)) {
+        if (tls && port == MQTT_DEFAULT_PORT && pure_host_is_private_lan(host)) {
             tls = false;
         }
         snprintf(uri, uri_len, "%s://%s:%lu", mqtt_scheme_for(tls, port), host, (unsigned long)port);
@@ -187,5 +178,5 @@ bool mqtt_config_broker_is_private_lan(void)
     if (!mqtt_config_load(host, sizeof(host), &port)) {
         return false;
     }
-    return host_is_private_lan(host);
+    return pure_host_is_private_lan(host);
 }

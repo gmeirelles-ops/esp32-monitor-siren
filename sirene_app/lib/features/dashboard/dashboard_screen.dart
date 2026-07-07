@@ -29,15 +29,15 @@ class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
 
   Future<void> _exportReport(BuildContext context, WidgetRef ref, DashboardData data) async {
-    final format = await pickReportExportFormat(context);
-    if (format == null || !context.mounted) return;
+    final picked = await pickReportExportOptions(context);
+    if (picked == null || !context.mounted) return;
 
     final filters = ref.read(dashboardFiltersProvider);
     final ctx = await loadReportContext(ref);
 
     try {
       final path = await exportReportFile(
-        format: format,
+        format: picked.format,
         basename: 'painel',
         buildPdf: () => buildDashboardPdf(
           data: data,
@@ -51,11 +51,11 @@ class DashboardScreen extends ConsumerWidget {
           stationId: ctx.stationId,
           operatorLabel: ctx.operatorLabel,
         ),
-        openPrintDialog: format == ReportExportFormat.pdf,
+        openPrintDialog: picked.openPrint,
       );
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${format.label} salvo: $path')),
+        SnackBar(content: Text('${picked.format.label} salvo: $path')),
       );
     } catch (e) {
       if (!context.mounted) return;

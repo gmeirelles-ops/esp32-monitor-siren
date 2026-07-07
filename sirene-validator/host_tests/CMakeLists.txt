@@ -19,6 +19,8 @@ add_executable(host_tests
     test_batch_validation.c
     test_batch_retest.c
     test_ensaio.c
+    test_site.c
+    test_host_lan.c
 )
 target_include_directories(host_tests PRIVATE .)
 target_link_libraries(host_tests pure_logic m)

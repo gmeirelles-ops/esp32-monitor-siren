@@ -4,6 +4,7 @@
 build/
 .cache/
 sdkconfig.old
+sdkconfig.defaults.local
 
 # ==========================================
 # Componentes gerenciados (baixados da internet)

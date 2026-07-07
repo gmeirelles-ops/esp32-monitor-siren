@@ -10,6 +10,9 @@ int test_batch_validation(void);
 int test_batch_retest(void);
 int test_ensaio(void);
 
+int test_site(void);
+int test_host_lan(void);
+
 int main(void)
 {
     int failures = 0;
@@ -22,6 +25,8 @@ int main(void)
     failures += test_batch_validation();
     failures += test_batch_retest();
     failures += test_ensaio();
+    failures += test_site();
+    failures += test_host_lan();
     if (failures == 0) {
         printf("ALL TESTS PASSED\n");
         return 0;

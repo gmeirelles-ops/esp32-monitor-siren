@@ -17,6 +17,7 @@
 #include "nvs.h"
 #include "esp_mac.h"
 #include "esp_random.h"
+#include "esp_timer.h"
 #include "nvs_flash.h"
 #include <stdlib.h>
 
@@ -30,6 +31,9 @@ static bool s_event_handlers_registered;
 static bool s_ap_netif_ready;
 static bool s_sta_netif_ready;
 static httpd_handle_t s_portal_server;
+static volatile bool s_reconnect_scheduled;
+static char s_portal_token[17];
+static int64_t s_last_save_attempt_us;
 
 static void wifi_event_handler(void *arg, esp_event_base_t base, int32_t id, void *data);
 
@@ -263,6 +267,7 @@ static esp_err_t wifi_start_portal_ap(void)
 static void reconnect_task(void *arg)
 {
     (void)arg;
+    s_reconnect_scheduled = false;
     uint32_t jitter = esp_random() % 500;
     vTaskDelay(pdMS_TO_TICKS(s_reconnect_delay_ms + jitter));
     esp_wifi_connect();
@@ -277,6 +282,10 @@ static void reconnect_task(void *arg)
 
 static void schedule_wifi_reconnect(void)
 {
+    if (s_reconnect_scheduled) {
+        return;
+    }
+    s_reconnect_scheduled = true;
     xTaskCreate(reconnect_task, "wifi_reconn", 2048, NULL, 4, NULL);
 }
 
@@ -305,7 +314,15 @@ void wifi_prov_apply_factory_mqtt_station(void)
     if (!mqtt_topics_is_configured() && STATION_DEFAULT_BANCADA >= 1 && STATION_DEFAULT_BANCADA <= 99) {
         mqtt_topics_save((uint8_t)STATION_DEFAULT_BANCADA, MQTT_DEFAULT_SITE);
     }
-    mqtt_config_save(MQTT_DEFAULT_HOST, MQTT_DEFAULT_PORT_TLS, MQTT_DEFAULT_USER, MQTT_DEFAULT_PASS, true);
+    if (!mqtt_config_has_stored()) {
+        mqtt_config_save(MQTT_DEFAULT_HOST, MQTT_DEFAULT_PORT_TLS, MQTT_DEFAULT_USER, MQTT_DEFAULT_PASS, true);
+    }
+}
+
+static void portal_token_generate(void)
+{
+    uint32_t r = esp_random();
+    snprintf(s_portal_token, sizeof(s_portal_token), "%08lx", (unsigned long)r);
 }
 
 static void build_portal_html(void)
@@ -336,7 +353,8 @@ static void build_portal_html(void)
     wifi_ap_record_t *records = calloc(count, sizeof(wifi_ap_record_t));
     if (records && count > 0) {
         esp_wifi_scan_get_ap_records(&count, records);
-        for (int i = 0; i < count; i++) {
+        int max_entries = 20;
+        for (int i = 0; i < count && i < max_entries; i++) {
             char escaped[80];
             char option[256];
             html_escape((const char *)records[i].ssid, escaped, sizeof(escaped));
@@ -350,12 +368,14 @@ static void build_portal_html(void)
     }
     free(records);
 
-    char footer[800];
+    char footer[900];
     snprintf(footer, sizeof(footer),
              "</select><br>SSID manual: <input name='ssid_manual' maxlength='32'><br>"
              "Senha Wi-Fi: <input name='pass' type='password' maxlength='64'><br>"
+             "<input type='hidden' name='token' value='%s'>"
              "<small>Broker MQTT e bancada já vêm do firmware.</small><br>"
-             "<button type='submit'>Salvar</button></form></body></html>");
+             "<button type='submit'>Salvar</button></form></body></html>",
+             s_portal_token);
     strncat(s_scan_html, footer, sizeof(s_scan_html) - strlen(s_scan_html) - 1);
 }
 
@@ -399,6 +419,13 @@ static esp_err_t root_get(httpd_req_t *req)
 
 static esp_err_t save_post(httpd_req_t *req)
 {
+    int64_t now = esp_timer_get_time();
+    if (s_last_save_attempt_us > 0 && (now - s_last_save_attempt_us) < 2000000LL) {
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Aguarde antes de tentar novamente.");
+        return ESP_FAIL;
+    }
+    s_last_save_attempt_us = now;
+
     char body[512];
     int received = httpd_req_recv(req, body, sizeof(body) - 1);
     if (received <= 0) {
@@ -406,6 +433,12 @@ static esp_err_t save_post(httpd_req_t *req)
         return ESP_FAIL;
     }
     body[received] = '\0';
+
+    char token[20] = {0};
+    if (!parse_form_value(body, "token", token, sizeof(token)) || strcmp(token, s_portal_token) != 0) {
+        httpd_resp_send_err(req, HTTPD_403_FORBIDDEN, "Token invalido. Recarregue a pagina.");
+        return ESP_FAIL;
+    }
 
     char ssid[33] = {0};
     char pass[65] = {0};
@@ -452,13 +485,7 @@ static void start_portal_http(void)
     httpd_uri_t save = {.uri = "/save", .method = HTTP_POST, .handler = save_post};
     httpd_register_uri_handler(s_portal_server, &root);
     httpd_register_uri_handler(s_portal_server, &save);
-    if (WIFI_AP_PASS[0] != '\0') {
-        ESP_LOGI(TAG, "portal http://%s — rede %s", WIFI_AP_IP, WIFI_AP_SSID);
-    } else {
-        char ap_pass[65] = {0};
-        wifi_prov_derive_ap_password(ap_pass, sizeof(ap_pass));
-        ESP_LOGI(TAG, "portal http://%s — rede %s senha %s (MAC)", WIFI_AP_IP, WIFI_AP_SSID, ap_pass);
-    }
+    ESP_LOGI(TAG, "portal http://%s — rede %s", WIFI_AP_IP, WIFI_AP_SSID);
 }
 
 bool wifi_prov_clear_credentials(void)
@@ -524,6 +551,8 @@ bool wifi_prov_save_credentials(const char *ssid, const char *pass)
 
 void wifi_prov_start_softap_portal(void)
 {
+    portal_token_generate();
+    s_last_save_attempt_us = 0;
     if (wifi_start_portal_ap() != ESP_OK) {
         ESP_LOGE(TAG, "falha ao iniciar AP de provisionamento");
         return;

@@ -66,6 +66,7 @@ class _CloudSetupScreenState extends ConsumerState<CloudSetupScreen> {
       ref.read(syncEnabledProvider.notifier).state = true;
       ref.read(syncQueueProcessorProvider).start();
       await config.setCloudSetupComplete(true);
+      await config.setCloudSyncNeedsAttention(false);
       ref.invalidate(appConfigProvider);
       ref.invalidate(cloudSetupCompleteProvider);
       unawaited(_syncCatalogInBackground());
@@ -79,6 +80,7 @@ class _CloudSetupScreenState extends ConsumerState<CloudSetupScreen> {
         );
         // Permite seguir mesmo com falha de permissão na nuvem.
         final config = ref.read(appConfigProvider);
+        await config.setCloudSyncNeedsAttention(true);
         if (!config.cloudSetupComplete) {
           await config.setCloudSetupComplete(true);
           ref.invalidate(appConfigProvider);
@@ -96,9 +98,11 @@ class _CloudSetupScreenState extends ConsumerState<CloudSetupScreen> {
     try {
       // Posto baixa catálogo da nuvem; envio manual fica em Configurações.
       await pullCatalogFromCloud(ref);
+      ensureSyncProcessorRunning(ref);
       await ref.read(syncQueueProcessorProvider).processQueue();
+      await ref.read(appConfigProvider).setCloudSyncNeedsAttention(false);
     } catch (_) {
-      // Catálogo pode ser sincronizado depois em Configurações.
+      await ref.read(appConfigProvider).setCloudSyncNeedsAttention(true);
     }
   }
 

@@ -21,7 +21,7 @@ class _OperatorSelectorSheet extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef sheetRef) {
     final operatorsAsync = sheetRef.watch(activeOperatorsStreamProvider);
-    final activeId = sheetRef.watch(appConfigProvider).activeOperatorId;
+    final activeId = sheetRef.watch(sessionOperatorIdProvider);
 
     return SafeArea(
       child: Padding(

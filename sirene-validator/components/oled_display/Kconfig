@@ -1,0 +1,29 @@
+menu "Sirene OLED display"
+
+config SIRENE_OLED_ENABLE
+    bool "Enable SSD1306 OLED status display (I2C)"
+    default y
+    help
+        Mostra estado FSM, OP e ultimo teste no display 128x64.
+        Desative se a placa nao tiver OLED.
+
+config SIRENE_OLED_I2C_ADDR
+    hex "SSD1306 I2C address"
+    default 0x3C
+    depends on SIRENE_OLED_ENABLE
+
+config SIRENE_OLED_SDA_GPIO
+    int "OLED I2C SDA GPIO"
+    range 0 39
+    default 21 if SIRENE_BOARD_DIPONTO
+    default 4 if SIRENE_BOARD_LEGACY_DEVKIT
+    depends on SIRENE_OLED_ENABLE
+
+config SIRENE_OLED_SCL_GPIO
+    int "OLED I2C SCL GPIO"
+    range 0 39
+    default 22 if SIRENE_BOARD_DIPONTO
+    default 15 if SIRENE_BOARD_LEGACY_DEVKIT
+    depends on SIRENE_OLED_ENABLE
+
+endmenu

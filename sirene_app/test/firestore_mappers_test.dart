@@ -19,6 +19,9 @@ void main() {
       expect(serialPath('2026001', '1232600018'),
           'test_results/2026001/seriais/1232600018');
       expect(reprovadaPath('2026001', 3), 'test_results/2026001/reprovadas/3');
+      expect(isReprovadaFirestorePath('test_results/2525/reprovadas/14'), isTrue);
+      expect(isReprovadaFirestorePath('test_results/2525/seriais/123'), isFalse);
+      expect(isReprovadaFirestorePath(null), isFalse);
     });
 
     test('mapeia documento de serial aprovado com parâmetros de teste', () {
@@ -86,6 +89,49 @@ void main() {
       expect(map['tempo_teste_sec'], 5);
       expect(map['potencia_min'], 18);
       expect(map['potencia_max'], 22);
+    });
+
+    test('mapeia device com station_id exigido pelo Firestore', () {
+      final map = mapDevice(
+        deviceId: '841fe83a5db4',
+        estado: DeviceFsmState.idle,
+        firmwareVersion: '1.0.0',
+        rssi: -55,
+        filaOffline: 0,
+        online: true,
+        stationId: 'posto-01',
+        lastSeen: DateTime.utc(2026, 7, 6, 12),
+      );
+      expect(map['station_id'], 'posto-01');
+      expect(map['updated_by_station'], 'posto-01');
+      expect(map['device_id'], '841fe83a5db4');
+    });
+
+    test('patchSyncPayloadForFirestore injeta station_id em devices antigos', () {
+      final patched = patchSyncPayloadForFirestore(
+        collection: 'devices',
+        payload: {
+          'device_id': '841fe83a5db4',
+          'updated_by_station': 'posto-01',
+          'online': true,
+        },
+        stationId: 'posto-01',
+      );
+      expect(patched['station_id'], 'posto-01');
+    });
+
+    test('patchSyncPayloadForFirestore não altera payload com station_id', () {
+      final original = {
+        'station_id': 'posto-02',
+        'numero_op': '2026001',
+      };
+      final patched = patchSyncPayloadForFirestore(
+        collection: 'test_results',
+        payload: original,
+        stationId: 'posto-01',
+        documentPath: 'test_results/2026001',
+      );
+      expect(identical(patched, original), isTrue);
     });
   });
 }

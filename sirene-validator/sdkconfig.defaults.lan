@@ -1,0 +1,4 @@
+# LAN / desenvolvimento: TLS relaxado para broker MQTT autoassinado na rede local.
+# Nao usar em builds de producao com broker cloud (use sdkconfig.defaults).
+CONFIG_ESP_TLS_INSECURE=y
+CONFIG_ESP_TLS_SKIP_SERVER_CERT_VERIFY=y

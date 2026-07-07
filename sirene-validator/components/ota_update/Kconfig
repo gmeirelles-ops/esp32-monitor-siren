@@ -9,4 +9,13 @@ config OTA_ERASE_NVS_ON_BOOT
         connecting. The device then enters Wi-Fi provisioning (AP
         SireneValidator). Disable for normal production OTA updates.
 
+config SIRENE_OTA_REQUIRE_HTTPS
+    bool "Require HTTPS URLs for OTA_UPDATE command"
+    default y
+    help
+        Rejects http:// OTA URLs from MQTT. LAN HTTP OTA still possible
+        when disabled (e.g. development). Secure Boot signing is a
+        separate manufacturing step — enable via ESP-IDF Secure Boot
+        menu when the signing pipeline is ready.
+
 endmenu

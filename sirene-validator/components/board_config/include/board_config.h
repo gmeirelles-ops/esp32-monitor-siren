@@ -2,16 +2,30 @@
 
 #include <stdint.h>
 
-/* GPIO map — ajuste conforme o hardware da placa */
+#include "sdkconfig.h"
+
+/* GPIO map — perfil escolhido em menuconfig (Sirene board config) */
+#if CONFIG_SIRENE_BOARD_LEGACY_DEVKIT
+#define GPIO_RELAY            26
+#define GPIO_BUTTON           0
+#define PZEM_TX_PIN           17
+#define PZEM_RX_PIN           16
+#else
 #define GPIO_RELAY            4
 #define GPIO_BUTTON           5
+#define PZEM_TX_PIN           27
+#define PZEM_RX_PIN           26
+#endif
 #define GPIO_LED_STATUS       25
 #define GPIO_BUZZER           33
 
+/* SSD1306 OLED (I2C) — ver Sirene OLED display em menuconfig */
+#define OLED_I2C_SDA_GPIO     CONFIG_SIRENE_OLED_SDA_GPIO
+#define OLED_I2C_SCL_GPIO     CONFIG_SIRENE_OLED_SCL_GPIO
+#define OLED_I2C_ADDR         CONFIG_SIRENE_OLED_I2C_ADDR
+
 /* UART PZEM-004T */
 #define PZEM_UART_NUM         UART_NUM_2
-#define PZEM_TX_PIN           27
-#define PZEM_RX_PIN           26
 #define PZEM_BAUD_RATE        9600
 #define PZEM_SLAVE_ADDR       0x01   /* fallback; auto-detect 0x01 ou 0xF8 no boot */
 #define PZEM_SLAVE_ADDR_V3    0xF8
@@ -32,8 +46,8 @@
 #define MQTT_NVS_TLS_KEY      "tls"
 #define MQTT_DEFAULT_PORT     1883
 #define MQTT_DEFAULT_PORT_TLS 443
-#define MQTT_DEFAULT_USER     "devices"
-#define MQTT_DEFAULT_PASS     "w1FefRLm+q1_O8H"
+#define MQTT_DEFAULT_USER     CONFIG_SIRENE_MQTT_DEFAULT_USER
+#define MQTT_DEFAULT_PASS     CONFIG_SIRENE_MQTT_DEFAULT_PASSWORD
 
 /* Identidade MQTT da bancada (tópicos producao/bancada-NN/...) */
 #define STATION_NVS_NAMESPACE    "station_cfg"
@@ -58,7 +72,7 @@
 
 /* Wi-Fi provisioning — senha AP derivada do MAC (ver wifi_prov_derive_ap_password) */
 #define WIFI_AP_SSID          "SireneValidator"
-#define WIFI_AP_PASS          "12345678"     /* vazio = senha derivada do MAC no runtime */
+#define WIFI_AP_PASS          CONFIG_SIRENE_WIFI_AP_PASSWORD
 #define WIFI_AP_IP            "192.168.4.1"
 #define WIFI_NVS_NAMESPACE    "wifi_cfg"
 #define WIFI_NVS_SSID_KEY     "ssid"
@@ -76,4 +90,4 @@
 #define MQTT_RECONNECT_MAX_MS       30000
 #define WIFI_STA_VALIDATE_TIMEOUT_MS 15000
 #define OFFLINE_SYNC_INTERVAL_MS    5000
-#define FIRMWARE_VERSION            "1.7.4"
+#define FIRMWARE_VERSION            "1.7.5"

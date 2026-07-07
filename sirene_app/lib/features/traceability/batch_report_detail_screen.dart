@@ -74,8 +74,8 @@ class _BatchReportDetailScreenState extends ConsumerState<BatchReportDetailScree
   }
 
   Future<void> _exportDetail(List<TestResult> tests) async {
-    final format = await pickReportExportFormat(context);
-    if (format == null || !mounted) return;
+    final picked = await pickReportExportOptions(context);
+    if (picked == null || !mounted) return;
 
     setState(() => _exporting = true);
     try {
@@ -90,7 +90,7 @@ class _BatchReportDetailScreenState extends ConsumerState<BatchReportDetailScree
       );
       final safeOp = widget.numeroOp.replaceAll(RegExp(r'[^\w\-]'), '_');
       final path = await exportReportFile(
-        format: format,
+        format: picked.format,
         basename: 'lote_$safeOp',
         buildPdf: () => buildBatchDetailPdf(
           widget.numeroOp,
@@ -105,11 +105,11 @@ class _BatchReportDetailScreenState extends ConsumerState<BatchReportDetailScree
           productsById: _catalog,
           bancadaNumeros: bancadaNumeros,
         ),
-        openPrintDialog: format == ReportExportFormat.pdf,
+        openPrintDialog: picked.openPrint,
       );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${format.label} salvo: $path')),
+          SnackBar(content: Text('${picked.format.label} salvo: $path')),
         );
       }
     } catch (e) {

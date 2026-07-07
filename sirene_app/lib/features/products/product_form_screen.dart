@@ -34,6 +34,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
   late final TextEditingController _potenciaRef;
   late final TextEditingController _potenciaMin;
   late final TextEditingController _potenciaMax;
+  late final TextEditingController _sequencialInicial;
 
   String? _selectedDeviceId;
   bool _measuring = false;
@@ -62,6 +63,9 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
     _potenciaMax = TextEditingController(
       text: e != null ? e.potenciaMax.toStringAsFixed(2) : '',
     );
+    _sequencialInicial = TextEditingController(
+      text: e?.sequencialInicial != null ? '${e!.sequencialInicial}' : '',
+    );
   }
 
   @override
@@ -73,6 +77,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
     _potenciaRef.dispose();
     _potenciaMin.dispose();
     _potenciaMax.dispose();
+    _sequencialInicial.dispose();
     super.dispose();
   }
 
@@ -147,6 +152,16 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
       return;
     }
 
+    final seqRaw = _sequencialInicial.text.trim();
+    int? sequencialInicial;
+    if (seqRaw.isNotEmpty) {
+      sequencialInicial = int.tryParse(seqRaw);
+      if (sequencialInicial == null || sequencialInicial < 1 || sequencialInicial > 9999) {
+        _showSnack('Sequencial inicial deve ser entre 1 e 9999');
+        return;
+      }
+    }
+
     setState(() => _saving = true);
     try {
       await db.upsertProduct(
@@ -159,6 +174,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
         tempoTesteSec: int.parse(_tempoTeste.text),
         calibradoEm: _calibratedAt ?? widget.existing?.calibradoEm,
         calibradoDeviceId: _selectedDeviceId ?? widget.existing?.calibradoDeviceId,
+        sequencialInicial: sequencialInicial,
       );
       final saved = await db.getProduct(id);
       if (saved != null) {
@@ -285,6 +301,16 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                 TextFormField(
                   controller: _tempoTeste,
                   decoration: const InputDecoration(labelText: 'Tempo de teste (s)'),
+                  keyboardType: TextInputType.number,
+                ),
+                TextFormField(
+                  controller: _sequencialInicial,
+                  decoration: const InputDecoration(
+                    labelText: 'Próximo sequencial de série',
+                    hintText: 'Ex.: 450 (deixe vazio para começar em 1)',
+                    helperText:
+                        '4 dígitos do serial ITF. Use quando a numeração não reinicia em 0001.',
+                  ),
                   keyboardType: TextInputType.number,
                 ),
               ],

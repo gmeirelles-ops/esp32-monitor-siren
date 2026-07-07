@@ -7,6 +7,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 
 import '../../core/providers/core_providers.dart';
 import '../../core/theme/diponto_theme.dart';
+import '../mqtt/mqtt_providers.dart';
 
 class ProvisioningWizard extends ConsumerStatefulWidget {
   const ProvisioningWizard({super.key});
@@ -61,7 +62,21 @@ class _ProvisioningWizardState extends ConsumerState<ProvisioningWizard> {
   }
 
   Future<void> _markProvisioned() async {
-    await ref.read(appConfigProvider).setWifiProvisioned(true);
+    final config = ref.read(appConfigProvider);
+    final deviceId = config.selectedDeviceId;
+    final devices = ref.read(devicesProvider);
+    if (deviceId == null || deviceId.isEmpty) {
+      _showMessage('Configure a bancada do posto antes de concluir o Wi-Fi.');
+      return;
+    }
+    final device = devices[deviceId];
+    if (device == null || !device.isOnline) {
+      _showMessage(
+        'A bancada ainda não apareceu no MQTT. Aguarde o reinício e a conexão à rede da fábrica.',
+      );
+      return;
+    }
+    await config.setWifiProvisioned(true);
     ref.invalidate(appConfigProvider);
     ref.invalidate(wifiProvisionedProvider);
     if (!mounted) return;
@@ -140,7 +155,12 @@ class _ProvisioningWizardState extends ConsumerState<ProvisioningWizard> {
                     label: const Text('Abrir no navegador'),
                   ),
                 ],
-                const SizedBox(height: 24),
+                const _StepTile(
+                  number: 5,
+                  title: 'Confirme no MQTT',
+                  subtitle: 'A bancada deve estar online antes de concluir',
+                ),
+                const SizedBox(height: 16),
                 OutlinedButton.icon(
                   onPressed: _markProvisioned,
                   icon: const Icon(Icons.check_circle_outline),

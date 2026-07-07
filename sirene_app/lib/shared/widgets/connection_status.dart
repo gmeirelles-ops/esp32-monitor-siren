@@ -22,14 +22,17 @@ class ConnectionStatusBadge extends ConsumerWidget {
       AppMqttConnectionState.disconnected => (DipontoColors.error, 'Desconectado'),
     };
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.2),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color),
+    return Semantics(
+      label: 'MQTT: $label',
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.2),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color),
+        ),
+        child: Text(label, style: TextStyle(color: color, fontSize: 12)),
       ),
-      child: Text(label, style: TextStyle(color: color, fontSize: 12)),
     );
   }
 }

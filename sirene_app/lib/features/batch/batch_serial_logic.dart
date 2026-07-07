@@ -7,14 +7,20 @@ String resolveBatchYear([DateTime? now]) {
   return y.toString().padLeft(2, '0');
 }
 
-/// Próximo sequencial para `SET_BATCH`, a partir do contador local.
+/// Próximo sequencial para `SET_BATCH`, a partir do contador local e do
+/// [sequencialInicial] do produto (quando os seriais não começam em 0001).
 Future<int> resolveProximoSequencial(
   AppDatabase db,
   String idProduto,
-  String ano,
-) async {
+  String ano, {
+  int? sequencialInicial,
+}) async {
   final last = await db.getLastSequencial(idProduto, ano);
-  return (last ?? 0) + 1;
+  final counterNext = (last ?? 0) + 1;
+  if (sequencialInicial == null || sequencialInicial < 1) {
+    return counterNext;
+  }
+  return counterNext > sequencialInicial ? counterNext : sequencialInicial;
 }
 
 /// Próximo sequencial a atribuir em uma aprovação, alinhado ao firmware.

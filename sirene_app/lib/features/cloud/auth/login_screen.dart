@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/services/app_log.dart';
 import '../firebase_bootstrap.dart';
+import '../sync/sync_providers.dart';
 import 'auth_providers.dart';
 import 'auth_service.dart';
 
@@ -59,7 +62,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       await AppLog.write('Login nuvem: tentando signIn');
       await service.signIn(_email.text, _password.text);
       ref.invalidate(authStateProvider);
+      ref.invalidate(firestoreSyncServiceProvider);
+      ref.invalidate(syncQueueProcessorProvider);
       await AppLog.write('Login nuvem: signIn ok');
+      if (ref.read(syncEnabledProvider)) {
+        ensureSyncProcessorRunning(ref);
+        unawaited(ref.read(syncQueueProcessorProvider).processQueue());
+      }
       widget.onSuccess?.call();
       if (mounted) Navigator.of(context).pop(true);
     } on FirebaseAuthException catch (e) {

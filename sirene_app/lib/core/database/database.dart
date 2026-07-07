@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:sqlite3_flutter_libs/sqlite3_flutter_libs.dart';
 
 import 'batch_metrics.dart';
+import '../constants/sync_constants.dart';
 import 'traceability.dart';
 import 'veredito.dart';
 
@@ -58,6 +59,8 @@ class Products extends Table {
   IntColumn get tempoTesteSec => integer().withDefault(const Constant(5))();
   DateTimeColumn get calibradoEm => dateTime().nullable()();
   TextColumn get calibradoDeviceId => text().nullable()();
+  /// Próximo sequencial mínimo de série (quando não começa em 0001).
+  IntColumn get sequencialInicial => integer().nullable()();
 
   @override
   Set<Column> get primaryKey => {idProduto};
@@ -193,7 +196,7 @@ class AppDatabase extends _$AppDatabase {
   }
 
   @override
-  int get schemaVersion => 17;
+  int get schemaVersion => 18;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -266,6 +269,9 @@ class AppDatabase extends _$AppDatabase {
           }
           if (from < 17) {
             await m.createTable(ensaioRecords);
+          }
+          if (from < 18) {
+            await _addColumnIfNotExists(m, products, products.sequencialInicial);
           }
         },
       );
@@ -677,12 +683,50 @@ class AppDatabase extends _$AppDatabase {
         .getSingleOrNull();
   }
 
+  Future<void> markQueueInProgress(int id) async {
+    await (update(markQueueEntries)..where((t) => t.id.equals(id))).write(
+      const MarkQueueEntriesCompanion(
+        status: Value('in_progress'),
+      ),
+    );
+  }
+
   Future<void> markQueueDelivered(int id) async {
     await (update(markQueueEntries)..where((t) => t.id.equals(id))).write(
       MarkQueueEntriesCompanion(
         status: const Value('delivered'),
       ),
     );
+  }
+
+  Future<void> markQueueRequeue(int id) async {
+    final row = await (select(markQueueEntries)..where((t) => t.id.equals(id)))
+        .getSingleOrNull();
+    if (row == null) return;
+    await (update(markQueueEntries)..where((t) => t.id.equals(id))).write(
+      MarkQueueEntriesCompanion(
+        status: const Value('pending'),
+        attempts: Value(row.attempts + 1),
+      ),
+    );
+  }
+
+  Future<int> requeueAllInProgressMarks() async {
+    final stuck = await (select(markQueueEntries)
+          ..where((t) => t.status.equals('in_progress')))
+        .get();
+    for (final row in stuck) {
+      await markQueueRequeue(row.id);
+    }
+    return stuck.length;
+  }
+
+  Future<MarkQueueEntry?> peekInProgressMark() {
+    return (select(markQueueEntries)
+          ..where((t) => t.status.equals('in_progress'))
+          ..orderBy([(t) => OrderingTerm.asc(t.createdAt)])
+          ..limit(1))
+        .getSingleOrNull();
   }
 
   Future<void> markQueueFailed(int id, String error) async {
@@ -752,6 +796,7 @@ class AppDatabase extends _$AppDatabase {
     required int tempoTesteSec,
     DateTime? calibradoEm,
     String? calibradoDeviceId,
+    int? sequencialInicial,
   }) async {
     await into(products).insertOnConflictUpdate(
       ProductsCompanion.insert(
@@ -764,6 +809,7 @@ class AppDatabase extends _$AppDatabase {
         tempoTesteSec: Value(tempoTesteSec),
         calibradoEm: Value(calibradoEm),
         calibradoDeviceId: Value(calibradoDeviceId),
+        sequencialInicial: Value(sequencialInicial),
       ),
     );
   }
@@ -775,6 +821,7 @@ class AppDatabase extends _$AppDatabase {
     required int tempoTesteSec,
     required double potenciaMin,
     required double potenciaMax,
+    int? sequencialInicial,
   }) async {
     await (update(products)..where((t) => t.idProduto.equals(idProduto))).write(
       ProductsCompanion(
@@ -783,6 +830,7 @@ class AppDatabase extends _$AppDatabase {
         tempoTesteSec: Value(tempoTesteSec),
         potenciaMin: Value(potenciaMin),
         potenciaMax: Value(potenciaMax),
+        sequencialInicial: Value(sequencialInicial),
       ),
     );
   }
@@ -812,7 +860,7 @@ class AppDatabase extends _$AppDatabase {
 
   Future<List<SyncQueueData>> getPendingItems({int limit = 50}) {
     return (select(syncQueue)
-          ..where((t) => t.attempts.isSmallerThanValue(5))
+          ..where((t) => t.attempts.isSmallerThanValue(syncQueueMaxAttempts))
           ..orderBy([(t) => OrderingTerm.asc(t.createdAt)])
           ..limit(limit))
         .get();
@@ -835,7 +883,7 @@ class AppDatabase extends _$AppDatabase {
     final total = countAll();
     final query = selectOnly(syncQueue)
       ..addColumns([total])
-      ..where(syncQueue.attempts.isSmallerThanValue(5));
+      ..where(syncQueue.attempts.isSmallerThanValue(syncQueueMaxAttempts));
     final row = await query.getSingle();
     return row.read(total) ?? 0;
   }
@@ -844,17 +892,34 @@ class AppDatabase extends _$AppDatabase {
     final total = countAll();
     final query = selectOnly(syncQueue)
       ..addColumns([total])
-      ..where(syncQueue.attempts.isBiggerOrEqualValue(5));
+      ..where(syncQueue.attempts.isBiggerOrEqualValue(syncQueueMaxAttempts));
     final row = await query.getSingle();
     return row.read(total) ?? 0;
   }
 
   Future<List<SyncQueueData>> getFailedSyncItems({int limit = 50}) {
     return (select(syncQueue)
-          ..where((t) => t.attempts.isBiggerOrEqualValue(5))
+          ..where((t) => t.attempts.isBiggerOrEqualValue(syncQueueMaxAttempts))
           ..orderBy([(t) => OrderingTerm.asc(t.createdAt)])
           ..limit(limit))
         .get();
+  }
+
+  Future<SyncQueueData?> getSyncQueueItem(int id) {
+    return (select(syncQueue)..where((t) => t.id.equals(id))).getSingleOrNull();
+  }
+
+  Future<List<SyncQueueData>> getAllSyncQueueItems({int limit = 500}) {
+    return (select(syncQueue)
+          ..orderBy([(t) => OrderingTerm.asc(t.createdAt)])
+          ..limit(limit))
+        .get();
+  }
+
+  Future<void> updateSyncQueuePayload(int id, String payload) async {
+    await (update(syncQueue)..where((t) => t.id.equals(id))).write(
+      SyncQueueCompanion(payload: Value(payload)),
+    );
   }
 
   Future<void> resetSyncAttempts(int id) async {
@@ -868,7 +933,7 @@ class AppDatabase extends _$AppDatabase {
 
   Future<int> resetAllFailedSyncAttempts() async {
     final failed = await (select(syncQueue)
-          ..where((t) => t.attempts.isBiggerOrEqualValue(5)))
+          ..where((t) => t.attempts.isBiggerOrEqualValue(syncQueueMaxAttempts)))
         .get();
     for (final item in failed) {
       await resetSyncAttempts(item.id);
@@ -1012,6 +1077,10 @@ class AppDatabase extends _$AppDatabase {
           ..where((t) => t.codigo.equals(codigo.trim())))
         .getSingleOrNull();
     if (existing != null) {
+      final localUpdated = existing.updatedAt;
+      if (localUpdated != null && localUpdated.isAfter(updatedAt)) {
+        return;
+      }
       await updateOperator(
         id: existing.id,
         codigo: codigo,

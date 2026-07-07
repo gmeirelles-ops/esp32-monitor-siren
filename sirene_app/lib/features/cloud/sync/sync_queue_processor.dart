@@ -3,8 +3,11 @@ import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../../../core/constants/app_version.dart';
+import '../../../core/constants/sync_constants.dart';
 import '../../../core/database/database.dart';
 import '../../../core/services/app_log.dart';
+import '../models/firestore_mappers.dart';
 import 'firestore_sync_service.dart';
 import 'station_heartbeat_service.dart';
 
@@ -30,8 +33,31 @@ Future<void> writeToFirestore(
   final converted = _convertTimestamps(data);
   if (operation == 'merge') {
     await doc.set(converted, SetOptions(merge: true));
-  } else {
-    await doc.set(converted);
+    return;
+  }
+  if (isReprovadaFirestorePath(documentPath)) {
+    await _writeImmutableReprovada(doc, converted);
+    return;
+  }
+  await doc.set(converted);
+}
+
+/// Regras Firestore: `reprovadas` só permite create (update/delete bloqueados).
+/// Re-tentativas com `set` viram update e falham com permission-denied.
+Future<void> _writeImmutableReprovada(
+  DocumentReference<Map<String, dynamic>> doc,
+  Map<String, dynamic> data,
+) async {
+  final snap = await doc.get();
+  if (snap.exists) return;
+  try {
+    await doc.set(data);
+  } on FirebaseException catch (e) {
+    if (e.code == 'permission-denied') {
+      final again = await doc.get();
+      if (again.exists) return;
+    }
+    rethrow;
   }
 }
 
@@ -59,21 +85,28 @@ class SyncQueueProcessor {
     FirebaseFirestore? firestore,
     FirestoreWriter? writer,
     StationHeartbeatService? heartbeat,
-    this.maxAttempts = 5,
-    this.interval = const Duration(seconds: 30),
+    this.maxAttempts = syncQueueMaxAttempts,
+    this.interval = const Duration(minutes: 1),
+    this.itemsPerBatch = 100,
+    this.maxBatchesPerRun = 10,
+    Future<void> Function(DateTime timestamp)? onSyncSuccess,
   })  : _db = db,
         _syncService = syncService,
         _firestore = firestore,
         _writer = writer,
-        _heartbeat = heartbeat ?? StationHeartbeatService(firestore: firestore);
+        _heartbeat = heartbeat ?? StationHeartbeatService(firestore: firestore),
+        _onSyncSuccess = onSyncSuccess;
 
   final AppDatabase _db;
   final FirestoreSyncService _syncService;
   final FirebaseFirestore? _firestore;
   final FirestoreWriter? _writer;
   final StationHeartbeatService _heartbeat;
+  final Future<void> Function(DateTime timestamp)? _onSyncSuccess;
   final int maxAttempts;
   final Duration interval;
+  final int itemsPerBatch;
+  final int maxBatchesPerRun;
 
   Timer? _timer;
   DateTime? lastSuccessfulSync;
@@ -81,11 +114,18 @@ class SyncQueueProcessor {
 
   void start() {
     _timer ??= Timer.periodic(interval, (_) => processQueue());
+    if (!_kickoffQueued) {
+      _kickoffQueued = true;
+      unawaited(processQueue());
+    }
   }
+
+  bool _kickoffQueued = false;
 
   void stop() {
     _timer?.cancel();
     _timer = null;
+    _kickoffQueued = false;
   }
 
   Future<void> processQueue() async {
@@ -93,49 +133,69 @@ class SyncQueueProcessor {
     if (_firestore == null && _writer == null) return;
 
     _processing = true;
+    var syncedThisRun = false;
     try {
       await _syncService.flushPendingDeviceUpdates();
-      final items = await _db.getPendingItems();
-      await AppLog.write('Sync: processando ${items.length} item(ns) pendente(s)');
-      for (final item in items) {
-        if (item.attempts >= maxAttempts) continue;
-        try {
-          final data = jsonDecode(item.payload) as Map<String, dynamic>;
-          final path = item.documentPath;
-          if (_writer != null) {
-            await _writer(
-              item.collection,
-              item.documentId,
-              data,
-              item.operation,
+      for (var batch = 0; batch < maxBatchesPerRun; batch++) {
+        final items = await _db.getPendingItems(limit: itemsPerBatch);
+        if (items.isEmpty) break;
+        await AppLog.write(
+          'Sync: processando ${items.length} item(ns) pendente(s) (lote ${batch + 1})',
+        );
+        for (final item in items) {
+          if (item.attempts >= maxAttempts) continue;
+          try {
+            final raw = jsonDecode(item.payload) as Map<String, dynamic>;
+            final path = item.documentPath;
+            final data = patchSyncPayloadForFirestore(
+              collection: item.collection,
+              payload: raw,
+              stationId: _syncService.stationIdForHeartbeat(),
               documentPath: path,
             );
-          } else {
-            await writeToFirestore(
-              _firestore!,
-              item.collection,
-              item.documentId,
-              data,
-              item.operation,
-              documentPath: path,
-            );
-          }
-          await _db.markSynced(item.id);
-          lastSuccessfulSync = DateTime.now();
-        } catch (e) {
-          final attempts = item.attempts + 1;
-          await _db.markFailed(item.id, e.toString(), attempts: attempts);
-          if (attempts < maxAttempts) {
-            await Future<void>.delayed(Duration(seconds: 1 << attempts.clamp(0, 4)));
+            if (_writer != null) {
+              await _writer(
+                item.collection,
+                item.documentId,
+                data,
+                item.operation,
+                documentPath: path,
+              );
+            } else {
+              await writeToFirestore(
+                _firestore!,
+                item.collection,
+                item.documentId,
+                data,
+                item.operation,
+                documentPath: path,
+              );
+            }
+            await _db.markSynced(item.id);
+            syncedThisRun = true;
+            lastSuccessfulSync = DateTime.now();
+          } catch (e) {
+            final attempts = item.attempts + 1;
+            await _db.markFailed(item.id, e.toString(), attempts: attempts);
+            if (attempts < maxAttempts) {
+              await Future<void>.delayed(Duration(seconds: 1 << attempts.clamp(0, 4)));
+            }
           }
         }
+        if (items.length < itemsPerBatch) break;
       }
-      if (lastSuccessfulSync != null) {
+      if (syncedThisRun && lastSuccessfulSync != null) {
+        try {
+          await _onSyncSuccess?.call(lastSuccessfulSync!);
+        } catch (_) {
+          // Persistência do timestamp é opcional.
+        }
         try {
           await _heartbeat.recordHeartbeat(
             stationId: _syncService.stationIdForHeartbeat(),
             pendingQueue: await _db.countPending(),
             failedQueue: await _db.countFailed(),
+            appVersion: kAppVersion,
           );
         } catch (_) {
           // Heartbeat opcional; não interrompe a fila.

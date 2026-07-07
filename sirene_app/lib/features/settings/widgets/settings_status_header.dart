@@ -30,7 +30,7 @@ class SettingsStatusHeader extends StatelessWidget {
         StatusChipData(icon: Icons.badge_outlined, label: operatorName, color: DipontoColors.primary),
         StatusChipData(
           icon: Icons.podcasts_outlined,
-          label: mqttConnected ? 'MQTT conectado' : 'MQTT offline',
+          label: mqttConnected ? 'MQTT conectado' : 'MQTT desconectado',
           color: mqttConnected ? DipontoColors.success : DipontoColors.error,
         ),
         StatusChipData(
@@ -50,7 +50,7 @@ class SettingsStatusHeader extends StatelessWidget {
         ),
         StatusChipData(
           icon: syncEnabled ? Icons.cloud_done_outlined : Icons.cloud_off_outlined,
-          label: syncEnabled ? 'Sync ativo' : 'Sync off',
+          label: syncEnabled ? 'Sync ativo' : 'Sync desligado',
           color: syncEnabled ? DipontoColors.success : Colors.grey,
         ),
       ],

@@ -1,0 +1,8 @@
+# Perfil GPIO v1.1.4 (devkit com OLED integrado — rele 26, botao 0, PZEM 17/16).
+# Uso: copie para sdkconfig.defaults.local ou merge manual:
+#   idf.py -DSDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.defaults.legacy" build
+#
+CONFIG_SIRENE_BOARD_LEGACY_DEVKIT=y
+CONFIG_SIRENE_OLED_ENABLE=y
+CONFIG_SIRENE_OLED_SDA_GPIO=4
+CONFIG_SIRENE_OLED_SCL_GPIO=15

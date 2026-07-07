@@ -9,9 +9,11 @@
 #include "esp_log.h"
 #include "esp_random.h"
 #include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
 #include "freertos/task.h"
 #include "mqtt_client.h"
 #include "mqtt_config.h"
+#include "sdkconfig.h"
 #if CONFIG_MBEDTLS_CERTIFICATE_BUNDLE
 #include "esp_crt_bundle.h"
 #endif
@@ -20,11 +22,12 @@ static const char *TAG = "mqtt";
 static esp_mqtt_client_handle_t s_client;
 static mqtt_command_cb_t s_cmd_cb;
 static mqtt_connected_cb_t s_connected_cb;
-static bool s_connected;
+static volatile bool s_connected;
 static char s_presenca_topic[96];
 static char s_broker_uri[128];
 static uint32_t s_reconnect_delay_ms = MQTT_RECONNECT_BASE_MS;
 static volatile bool s_reconnect_scheduled;
+static SemaphoreHandle_t s_pub_mu;
 
 static void mqtt_reconnect_task(void *arg)
 {
@@ -95,6 +98,9 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
 
 bool mqtt_bridge_init(mqtt_command_cb_t cmd_cb, mqtt_connected_cb_t connected_cb)
 {
+    if (!s_pub_mu) {
+        s_pub_mu = xSemaphoreCreateMutex();
+    }
     s_cmd_cb = cmd_cb;
     s_connected_cb = connected_cb;
     if (!mqtt_topics_build(s_presenca_topic, sizeof(s_presenca_topic), "presenca")) {
@@ -133,8 +139,10 @@ bool mqtt_bridge_init(mqtt_command_cb_t cmd_cb, mqtt_connected_cb_t connected_cb
 #endif
         if (private_broker) {
             cfg.broker.verification.skip_cert_common_name_check = true;
-#if CONFIG_ESP_TLS_SKIP_SERVER_CERT_VERIFY
-            ESP_LOGW(TAG, "MQTT TLS broker LAN — verificacao relaxada");
+#if CONFIG_SIRENE_MQTT_LAN_INSECURE_TLS && CONFIG_ESP_TLS_SKIP_SERVER_CERT_VERIFY
+            ESP_LOGW(TAG, "MQTT TLS broker LAN — verificacao relaxada (perfil LAN)");
+#elif CONFIG_SIRENE_MQTT_LAN_INSECURE_TLS
+            ESP_LOGW(TAG, "MQTT TLS broker LAN — use sdkconfig.defaults.lan para cert autoassinado");
 #endif
         } else {
             ESP_LOGI(TAG, "MQTT WSS/TLS — CA publica (crt bundle)");
@@ -162,7 +170,13 @@ bool mqtt_bridge_publish(const char *topic_suffix, const char *json)
     if (!mqtt_topics_build(topic, sizeof(topic), topic_suffix)) {
         return false;
     }
+    if (s_pub_mu) {
+        xSemaphoreTake(s_pub_mu, portMAX_DELAY);
+    }
     int msg_id = esp_mqtt_client_publish(s_client, topic, json, 0, 1, 0);
+    if (s_pub_mu) {
+        xSemaphoreGive(s_pub_mu);
+    }
     return msg_id >= 0;
 }
 

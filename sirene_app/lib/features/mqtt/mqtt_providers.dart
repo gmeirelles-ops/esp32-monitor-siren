@@ -19,6 +19,7 @@ import '../labels/serial_marking_backend.dart';
 import '../labels/zpl_generator.dart';
 import '../serial/itf_check_digit.dart';
 import 'message_pump.dart';
+import 'mqtt_status_parser.dart';
 import '../batch/batch_live_providers.dart';
 import '../batch/batch_serial_logic.dart';
 import '../dashboard/dashboard_providers.dart';
@@ -311,18 +312,14 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
         device.lastSeen = now;
       }
     } else if (topic.endsWith('/status')) {
-      for (final json in MqttParser.tryParseJsonObjects(payload)) {
-        final rejection = MqttParser.parseRejection(json);
-        if (rejection != null) {
-          _emitRejection(deviceId, rejection);
-          device.lastSeen = now;
-        }
-
-        final test = MqttParser.parseTestResult(json);
-        if (test != null) {
-          await processTestResult(deviceId, test);
-          device.lastSeen = now;
-        }
+      final parsed = parseMqttStatusPayload(payload);
+      for (final rejection in parsed.rejections) {
+        _emitRejection(deviceId, rejection);
+        device.lastSeen = now;
+      }
+      for (final test in parsed.tests) {
+        await processTestResult(deviceId, test);
+        device.lastSeen = now;
       }
     }
 

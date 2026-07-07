@@ -17,6 +17,8 @@ typedef MqttMessageHandler = void Function(String topic, String payload);
 class MqttService {
   MqttService();
 
+  String? lastConnectError;
+
   static MqttService? _active;
 
   /// Chamado pelo handler global quando o pacote MQTT falha no socket.
@@ -172,15 +174,18 @@ class MqttService {
       await _client!.connect(config.username, config.password);
       if (_client!.connectionStatus?.state == MqttConnectionState.connected) {
         _backoffSeconds = 1;
+        lastConnectError = null;
         _setState(AppMqttConnectionState.connected);
         unawaited(AppLog.write('MQTT: conectado'));
       } else {
+        lastConnectError = 'código ${_client!.connectionStatus?.returnCode}';
         unawaited(AppLog.write(
           'MQTT: falha na conexão (${_client!.connectionStatus?.returnCode})',
         ));
         _scheduleReconnect();
       }
     } catch (e, st) {
+      lastConnectError = e.toString();
       unawaited(AppLog.write('MQTT: erro ao conectar', error: e, stack: st));
       _scheduleReconnect();
     } finally {

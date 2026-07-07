@@ -43,6 +43,7 @@ class CatalogCloudService {
         tempoTesteSec: parsed.tempoTesteSec,
         calibradoEm: parsed.calibradoEm,
         calibradoDeviceId: parsed.calibradoDeviceId,
+        sequencialInicial: parsed.sequencialInicial,
       );
       applied++;
     }

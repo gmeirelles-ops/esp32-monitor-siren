@@ -1775,6 +1775,17 @@ class $ProductsTable extends Products with TableInfo<$ProductsTable, Product> {
         type: DriftSqlType.string,
         requiredDuringInsert: false,
       );
+  static const VerificationMeta _sequencialInicialMeta = const VerificationMeta(
+    'sequencialInicial',
+  );
+  @override
+  late final GeneratedColumn<int> sequencialInicial = GeneratedColumn<int>(
+    'sequencial_inicial',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     idProduto,
@@ -1786,6 +1797,7 @@ class $ProductsTable extends Products with TableInfo<$ProductsTable, Product> {
     tempoTesteSec,
     calibradoEm,
     calibradoDeviceId,
+    sequencialInicial,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -1884,6 +1896,15 @@ class $ProductsTable extends Products with TableInfo<$ProductsTable, Product> {
         ),
       );
     }
+    if (data.containsKey('sequencial_inicial')) {
+      context.handle(
+        _sequencialInicialMeta,
+        sequencialInicial.isAcceptableOrUnknown(
+          data['sequencial_inicial']!,
+          _sequencialInicialMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -1929,6 +1950,10 @@ class $ProductsTable extends Products with TableInfo<$ProductsTable, Product> {
         DriftSqlType.string,
         data['${effectivePrefix}calibrado_device_id'],
       ),
+      sequencialInicial: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}sequencial_inicial'],
+      ),
     );
   }
 
@@ -1948,6 +1973,9 @@ class Product extends DataClass implements Insertable<Product> {
   final int tempoTesteSec;
   final DateTime? calibradoEm;
   final String? calibradoDeviceId;
+
+  /// Próximo sequencial mínimo de série (quando não começa em 0001).
+  final int? sequencialInicial;
   const Product({
     required this.idProduto,
     required this.nome,
@@ -1958,6 +1986,7 @@ class Product extends DataClass implements Insertable<Product> {
     required this.tempoTesteSec,
     this.calibradoEm,
     this.calibradoDeviceId,
+    this.sequencialInicial,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -1974,6 +2003,9 @@ class Product extends DataClass implements Insertable<Product> {
     }
     if (!nullToAbsent || calibradoDeviceId != null) {
       map['calibrado_device_id'] = Variable<String>(calibradoDeviceId);
+    }
+    if (!nullToAbsent || sequencialInicial != null) {
+      map['sequencial_inicial'] = Variable<int>(sequencialInicial);
     }
     return map;
   }
@@ -1993,6 +2025,9 @@ class Product extends DataClass implements Insertable<Product> {
       calibradoDeviceId: calibradoDeviceId == null && nullToAbsent
           ? const Value.absent()
           : Value(calibradoDeviceId),
+      sequencialInicial: sequencialInicial == null && nullToAbsent
+          ? const Value.absent()
+          : Value(sequencialInicial),
     );
   }
 
@@ -2013,6 +2048,7 @@ class Product extends DataClass implements Insertable<Product> {
       calibradoDeviceId: serializer.fromJson<String?>(
         json['calibradoDeviceId'],
       ),
+      sequencialInicial: serializer.fromJson<int?>(json['sequencialInicial']),
     );
   }
   @override
@@ -2028,6 +2064,7 @@ class Product extends DataClass implements Insertable<Product> {
       'tempoTesteSec': serializer.toJson<int>(tempoTesteSec),
       'calibradoEm': serializer.toJson<DateTime?>(calibradoEm),
       'calibradoDeviceId': serializer.toJson<String?>(calibradoDeviceId),
+      'sequencialInicial': serializer.toJson<int?>(sequencialInicial),
     };
   }
 
@@ -2041,6 +2078,7 @@ class Product extends DataClass implements Insertable<Product> {
     int? tempoTesteSec,
     Value<DateTime?> calibradoEm = const Value.absent(),
     Value<String?> calibradoDeviceId = const Value.absent(),
+    Value<int?> sequencialInicial = const Value.absent(),
   }) => Product(
     idProduto: idProduto ?? this.idProduto,
     nome: nome ?? this.nome,
@@ -2053,6 +2091,9 @@ class Product extends DataClass implements Insertable<Product> {
     calibradoDeviceId: calibradoDeviceId.present
         ? calibradoDeviceId.value
         : this.calibradoDeviceId,
+    sequencialInicial: sequencialInicial.present
+        ? sequencialInicial.value
+        : this.sequencialInicial,
   );
   Product copyWithCompanion(ProductsCompanion data) {
     return Product(
@@ -2079,6 +2120,9 @@ class Product extends DataClass implements Insertable<Product> {
       calibradoDeviceId: data.calibradoDeviceId.present
           ? data.calibradoDeviceId.value
           : this.calibradoDeviceId,
+      sequencialInicial: data.sequencialInicial.present
+          ? data.sequencialInicial.value
+          : this.sequencialInicial,
     );
   }
 
@@ -2093,7 +2137,8 @@ class Product extends DataClass implements Insertable<Product> {
           ..write('toleranciaPct: $toleranciaPct, ')
           ..write('tempoTesteSec: $tempoTesteSec, ')
           ..write('calibradoEm: $calibradoEm, ')
-          ..write('calibradoDeviceId: $calibradoDeviceId')
+          ..write('calibradoDeviceId: $calibradoDeviceId, ')
+          ..write('sequencialInicial: $sequencialInicial')
           ..write(')'))
         .toString();
   }
@@ -2109,6 +2154,7 @@ class Product extends DataClass implements Insertable<Product> {
     tempoTesteSec,
     calibradoEm,
     calibradoDeviceId,
+    sequencialInicial,
   );
   @override
   bool operator ==(Object other) =>
@@ -2122,7 +2168,8 @@ class Product extends DataClass implements Insertable<Product> {
           other.toleranciaPct == this.toleranciaPct &&
           other.tempoTesteSec == this.tempoTesteSec &&
           other.calibradoEm == this.calibradoEm &&
-          other.calibradoDeviceId == this.calibradoDeviceId);
+          other.calibradoDeviceId == this.calibradoDeviceId &&
+          other.sequencialInicial == this.sequencialInicial);
 }
 
 class ProductsCompanion extends UpdateCompanion<Product> {
@@ -2135,6 +2182,7 @@ class ProductsCompanion extends UpdateCompanion<Product> {
   final Value<int> tempoTesteSec;
   final Value<DateTime?> calibradoEm;
   final Value<String?> calibradoDeviceId;
+  final Value<int?> sequencialInicial;
   final Value<int> rowid;
   const ProductsCompanion({
     this.idProduto = const Value.absent(),
@@ -2146,6 +2194,7 @@ class ProductsCompanion extends UpdateCompanion<Product> {
     this.tempoTesteSec = const Value.absent(),
     this.calibradoEm = const Value.absent(),
     this.calibradoDeviceId = const Value.absent(),
+    this.sequencialInicial = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   ProductsCompanion.insert({
@@ -2158,6 +2207,7 @@ class ProductsCompanion extends UpdateCompanion<Product> {
     this.tempoTesteSec = const Value.absent(),
     this.calibradoEm = const Value.absent(),
     this.calibradoDeviceId = const Value.absent(),
+    this.sequencialInicial = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : idProduto = Value(idProduto),
        nome = Value(nome),
@@ -2174,6 +2224,7 @@ class ProductsCompanion extends UpdateCompanion<Product> {
     Expression<int>? tempoTesteSec,
     Expression<DateTime>? calibradoEm,
     Expression<String>? calibradoDeviceId,
+    Expression<int>? sequencialInicial,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -2186,6 +2237,7 @@ class ProductsCompanion extends UpdateCompanion<Product> {
       if (tempoTesteSec != null) 'tempo_teste_sec': tempoTesteSec,
       if (calibradoEm != null) 'calibrado_em': calibradoEm,
       if (calibradoDeviceId != null) 'calibrado_device_id': calibradoDeviceId,
+      if (sequencialInicial != null) 'sequencial_inicial': sequencialInicial,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -2200,6 +2252,7 @@ class ProductsCompanion extends UpdateCompanion<Product> {
     Value<int>? tempoTesteSec,
     Value<DateTime?>? calibradoEm,
     Value<String?>? calibradoDeviceId,
+    Value<int?>? sequencialInicial,
     Value<int>? rowid,
   }) {
     return ProductsCompanion(
@@ -2212,6 +2265,7 @@ class ProductsCompanion extends UpdateCompanion<Product> {
       tempoTesteSec: tempoTesteSec ?? this.tempoTesteSec,
       calibradoEm: calibradoEm ?? this.calibradoEm,
       calibradoDeviceId: calibradoDeviceId ?? this.calibradoDeviceId,
+      sequencialInicial: sequencialInicial ?? this.sequencialInicial,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -2246,6 +2300,9 @@ class ProductsCompanion extends UpdateCompanion<Product> {
     if (calibradoDeviceId.present) {
       map['calibrado_device_id'] = Variable<String>(calibradoDeviceId.value);
     }
+    if (sequencialInicial.present) {
+      map['sequencial_inicial'] = Variable<int>(sequencialInicial.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -2264,6 +2321,7 @@ class ProductsCompanion extends UpdateCompanion<Product> {
           ..write('tempoTesteSec: $tempoTesteSec, ')
           ..write('calibradoEm: $calibradoEm, ')
           ..write('calibradoDeviceId: $calibradoDeviceId, ')
+          ..write('sequencialInicial: $sequencialInicial, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -7410,6 +7468,7 @@ typedef $$ProductsTableCreateCompanionBuilder =
       Value<int> tempoTesteSec,
       Value<DateTime?> calibradoEm,
       Value<String?> calibradoDeviceId,
+      Value<int?> sequencialInicial,
       Value<int> rowid,
     });
 typedef $$ProductsTableUpdateCompanionBuilder =
@@ -7423,6 +7482,7 @@ typedef $$ProductsTableUpdateCompanionBuilder =
       Value<int> tempoTesteSec,
       Value<DateTime?> calibradoEm,
       Value<String?> calibradoDeviceId,
+      Value<int?> sequencialInicial,
       Value<int> rowid,
     });
 
@@ -7477,6 +7537,11 @@ class $$ProductsTableFilterComposer
 
   ColumnFilters<String> get calibradoDeviceId => $composableBuilder(
     column: $table.calibradoDeviceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get sequencialInicial => $composableBuilder(
+    column: $table.sequencialInicial,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -7534,6 +7599,11 @@ class $$ProductsTableOrderingComposer
     column: $table.calibradoDeviceId,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<int> get sequencialInicial => $composableBuilder(
+    column: $table.sequencialInicial,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$ProductsTableAnnotationComposer
@@ -7585,6 +7655,11 @@ class $$ProductsTableAnnotationComposer
     column: $table.calibradoDeviceId,
     builder: (column) => column,
   );
+
+  GeneratedColumn<int> get sequencialInicial => $composableBuilder(
+    column: $table.sequencialInicial,
+    builder: (column) => column,
+  );
 }
 
 class $$ProductsTableTableManager
@@ -7624,6 +7699,7 @@ class $$ProductsTableTableManager
                 Value<int> tempoTesteSec = const Value.absent(),
                 Value<DateTime?> calibradoEm = const Value.absent(),
                 Value<String?> calibradoDeviceId = const Value.absent(),
+                Value<int?> sequencialInicial = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => ProductsCompanion(
                 idProduto: idProduto,
@@ -7635,6 +7711,7 @@ class $$ProductsTableTableManager
                 tempoTesteSec: tempoTesteSec,
                 calibradoEm: calibradoEm,
                 calibradoDeviceId: calibradoDeviceId,
+                sequencialInicial: sequencialInicial,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -7648,6 +7725,7 @@ class $$ProductsTableTableManager
                 Value<int> tempoTesteSec = const Value.absent(),
                 Value<DateTime?> calibradoEm = const Value.absent(),
                 Value<String?> calibradoDeviceId = const Value.absent(),
+                Value<int?> sequencialInicial = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => ProductsCompanion.insert(
                 idProduto: idProduto,
@@ -7659,6 +7737,7 @@ class $$ProductsTableTableManager
                 tempoTesteSec: tempoTesteSec,
                 calibradoEm: calibradoEm,
                 calibradoDeviceId: calibradoDeviceId,
+                sequencialInicial: sequencialInicial,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0

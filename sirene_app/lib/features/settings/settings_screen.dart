@@ -22,6 +22,7 @@ import '../devices/devices_screen.dart';
 import '../cloud/auth/login_screen.dart';
 import '../operators/operators_provider.dart';
 import '../cloud/firebase_bootstrap.dart';
+import '../cloud/sync/sync_payload_repair.dart';
 import '../cloud/sync/sync_providers.dart';
 import '../demo/demo_constants.dart';
 import '../demo/demo_providers.dart';
@@ -38,8 +39,9 @@ import '../bancadas/bancadas_provider.dart';
 import '../provisioning/provisioning_wizard.dart';
 import 'serial_reconciliation_panel.dart';
 import 'settings_category.dart';
-import 'widgets/settings_action_card.dart';
 import 'widgets/settings_category_nav.dart';
+import 'widgets/settings_action_card.dart';
+import 'panels/settings_nuvem_panel.dart';
 import 'widgets/settings_section_intro.dart';
 import 'widgets/settings_status_header.dart';
 
@@ -157,6 +159,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       return;
     }
 
+    final stationId = AppConfig.normalizeStationId(_stationId.text);
+    if (!AppConfig.isValidStationId(stationId)) {
+      _showMessage(
+        'ID do posto inválido. Use letras, números, hífen ou underscore (ex.: posto-01).',
+      );
+      return;
+    }
+
     final config = ref.read(appConfigProvider);
     await config.setMqttHost(_mqttHost.text.trim());
     await config.setMqttPort(int.tryParse(_mqttPort.text) ?? AppConfig.defaultMqttPort);
@@ -174,9 +184,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     if (_printerWindowsName != null) {
       await config.setPrinterWindowsName(_printerWindowsName!);
     }
-    await config.setStationId(_stationId.text.trim().isEmpty
-        ? AppConfig.defaultStationId
-        : _stationId.text.trim());
+    await config.setStationId(stationId);
     await config.setMarkingMode(_markingMode);
     await config.setLaserTcpPort(int.tryParse(_laserTcpPort.text) ?? AppConfig.defaultLaserTcpPort);
     final laserCommand = _laserTcpCommand.text.trim().isEmpty
@@ -199,6 +207,22 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     ref.invalidate(appConfigProvider);
     ref.read(devicesProvider.notifier).reconnect();
     ref.invalidate(syncStatusProvider);
+
+    if (ref.read(syncEnabledProvider) && ref.read(isAuthenticatedProvider)) {
+      try {
+        final db = ref.read(databaseProvider);
+        final repaired = await repairSyncQueuePayloads(db, stationId);
+        if (repaired > 0) {
+          await AppLog.write('Sync: corrigiu station_id em $repaired item(ns) ao salvar posto');
+        }
+        ensureSyncProcessorRunning(ref);
+        await ref.read(syncQueueProcessorProvider).processQueue();
+        ref.invalidate(syncStatusProvider);
+        ref.invalidate(failedSyncItemsProvider);
+      } catch (e, st) {
+        await AppLog.write('Sync: processQueue após salvar posto falhou', error: e, stack: st);
+      }
+    }
 
     if (mounted) {
       if (_markingMode == MarkingMode.laser &&
@@ -302,7 +326,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       );
       if (!mounted) return;
       if (ok == true && ref.read(isAuthenticatedProvider)) {
-        _showMessage('Login na nuvem concluído. Toque em "Reprocessar todas as falhas".');
+        ref.invalidate(firestoreSyncServiceProvider);
+        ref.invalidate(syncQueueProcessorProvider);
+        await kickSyncQueue(ref);
+        if (!mounted) return;
+        _showMessage('Login na nuvem concluído. Sincronização automática retomada.');
       }
     } catch (e, st) {
       await AppLog.write('Sync: erro no login na nuvem', error: e, stack: st);
@@ -322,6 +350,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
     final count = await syncCatalogToCloud(ref);
     if (!mounted) return;
+    await kickSyncQueue(ref);
+    if (!mounted) return;
     _showMessage(
       count > 0
           ? '$count produto(s) enfileirado(s) para o Firestore'
@@ -339,6 +369,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       return;
     }
     final result = await pullCatalogDetailFromCloud(ref);
+    if (!mounted) return;
+    await kickSyncQueue(ref);
     if (!mounted) return;
     if (result.total == 0) {
       _showMessage('Nenhum produto ou operador na nuvem');
@@ -837,12 +869,20 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ),
             SettingsCategory.rede => _buildRedeSection(),
             SettingsCategory.marcacao => _buildMarcacaoSection(),
-            SettingsCategory.nuvem => _buildNuvemSection(
+            SettingsCategory.nuvem => SettingsNuvemPanel(
+                category: _selectedCategory,
+                stationIdController: _stationId,
                 syncStatus: syncStatus,
                 failedItems: failedItems,
                 authenticated: authenticated,
                 syncEnabled: syncEnabled,
                 dateFmt: dateFmt,
+                onSyncToggle: _onSyncToggle,
+                onLogin: _loginToCloud,
+                onLogout: _logout,
+                onSyncCatalog: _syncCatalog,
+                onPullCatalog: _pullCatalog,
+                onRetryFailed: _retryFailedSync,
               ),
             SettingsCategory.produtividade => _buildProdutividadeSection(),
           },
@@ -1449,163 +1489,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
-  Widget _buildNuvemSection({
-    required AsyncValue<SyncStatus> syncStatus,
-    required AsyncValue<List<SyncQueueData>> failedItems,
-    required bool authenticated,
-    required bool syncEnabled,
-    required DateFormat dateFmt,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        SectionIntro(
-          title: _selectedCategory.title,
-          subtitle: _selectedCategory.subtitle,
-          icon: _selectedCategory.icon,
-        ),
-        ActionSectionCard(
-          icon: Icons.cloud_sync_outlined,
-          title: 'Firestore',
-          subtitle: 'Sincronização com a nuvem Diponto',
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (!isFirebaseAvailable)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Text(
-                    firebaseUnavailableMessage,
-                    style: const TextStyle(color: Colors.orangeAccent, fontSize: 13),
-                  ),
-                ),
-              TextField(
-                controller: _stationId,
-                decoration: const InputDecoration(
-                  labelText: 'ID do posto (station_id)',
-                  helperText: 'Identifica este PC na nuvem',
-                ),
-              ),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Sincronizar com Firestore'),
-                subtitle: Text(
-                  ref.watch(cloudSetupCompleteProvider)
-                      ? (authenticated
-                          ? 'Obrigatório em produção (não pode desativar)'
-                          : 'Sync ativo — faça login na nuvem para enviar dados')
-                      : authenticated
-                          ? 'Operador autenticado'
-                          : 'Login necessário para habilitar',
-                ),
-                value: syncEnabled,
-                onChanged: isFirebaseAvailable ? _onSyncToggle : null,
-              ),
-              if (isFirebaseAvailable && syncEnabled && !authenticated) ...[
-                const SizedBox(height: 8),
-                Text(
-                  'O Firestore exige login Firebase. Sem conta, os envios ficam em '
-                  'permission-denied na fila de falhas.',
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.error,
-                    fontSize: 13,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: FilledButton.icon(
-                    onPressed: _loginToCloud,
-                    icon: const Icon(Icons.login),
-                    label: const Text('Entrar na nuvem'),
-                  ),
-                ),
-              ],
-              syncStatus.when(
-                data: (status) => Wrap(
-                  spacing: 16,
-                  runSpacing: 8,
-                  children: [
-                    _StatPill(label: 'Pendentes', value: '${status.pending}'),
-                    _StatPill(label: 'Falhas', value: '${status.failed}'),
-                    _StatPill(
-                      label: 'Último sync',
-                      value: status.lastSync != null
-                          ? dateFmt.format(status.lastSync!.toLocal())
-                          : '—',
-                    ),
-                  ],
-                ),
-                loading: () => const Text('Carregando status da fila...'),
-                error: (e, _) => Text('Erro ao ler fila: $e'),
-              ),
-              failedItems.when(
-                data: (items) {
-                  if (items.isEmpty) return const SizedBox.shrink();
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      const SizedBox(height: 16),
-                      Text('Fila com falha', style: Theme.of(context).textTheme.titleSmall),
-                      const SizedBox(height: 8),
-                      for (final item in items)
-                        Card(
-                          margin: const EdgeInsets.only(bottom: 8),
-                          child: ListTile(
-                            dense: true,
-                            title: Text(
-                              item.documentPath ??
-                                  '${item.collection}/${item.documentId}',
-                            ),
-                            subtitle: Text(
-                              item.lastError ?? 'Erro desconhecido',
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            trailing: TextButton(
-                              onPressed: () => _retryFailedSync(itemId: item.id),
-                              child: const Text('Tentar novamente'),
-                            ),
-                          ),
-                        ),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: OutlinedButton(
-                          onPressed: () => _retryFailedSync(),
-                          child: const Text('Reprocessar todas as falhas'),
-                        ),
-                      ),
-                    ],
-                  );
-                },
-                loading: () => const SizedBox.shrink(),
-                error: (_, __) => const SizedBox.shrink(),
-              ),
-              if (isFirebaseAvailable && syncEnabled && authenticated) ...[
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    OutlinedButton(onPressed: _syncCatalog, child: const Text('Enviar catálogo')),
-                    OutlinedButton(onPressed: _pullCatalog, child: const Text('Baixar catálogo')),
-                  ],
-                ),
-              ],
-              if (authenticated) ...[
-                const SizedBox(height: 8),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: OutlinedButton(onPressed: _logout, child: const Text('Sair da conta nuvem')),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
   Widget _buildProdutividadeSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1659,31 +1542,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _StatPill extends StatelessWidget {
-  const _StatPill({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: DipontoColors.surfaceVariant,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label, style: Theme.of(context).textTheme.labelSmall),
-          Text(value, style: const TextStyle(fontWeight: FontWeight.w600)),
-        ],
-      ),
     );
   }
 }

@@ -5,6 +5,8 @@ import '../config/app_config.dart';
 import '../database/database.dart';
 import '../providers/core_providers.dart';
 import '../../features/cloud/auth/auth_providers.dart';
+import '../../features/cloud/sync/sync_providers.dart';
+import '../../features/mqtt/mqtt_providers.dart';
 import '../../features/operators/operators_provider.dart';
 
 /// Apaga dados locais do posto: SQLite, prefs operacionais, bancada e Wi-Fi.
@@ -36,8 +38,13 @@ class FactoryResetService {
     ref.invalidate(appConfigProvider);
     ref.invalidate(bancadaSetupCompleteProvider);
     ref.invalidate(wifiProvisionedProvider);
+    ref.invalidate(cloudSetupCompleteProvider);
+    ref.invalidate(syncEnabledProvider);
     ref.invalidate(databaseProvider);
     ref.invalidate(activeOperatorProvider);
+    ref.invalidate(devicesProvider);
+    ref.invalidate(syncQueueProcessorProvider);
+    ref.invalidate(syncStatusProvider);
   }
 }
 

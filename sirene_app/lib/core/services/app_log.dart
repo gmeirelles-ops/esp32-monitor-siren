@@ -27,7 +27,9 @@ class AppLog {
   }
 }
 
-void installGlobalErrorHandlers() {
+void installGlobalErrorHandlers({
+  bool Function(Object error, StackTrace stack)? onAsyncError,
+}) {
   FlutterError.onError = (details) {
     FlutterError.presentError(details);
     AppLog.write(
@@ -37,6 +39,7 @@ void installGlobalErrorHandlers() {
   };
 
   PlatformDispatcher.instance.onError = (error, stack) {
+    onAsyncError?.call(error, stack);
     AppLog.write('Uncaught async error', error: error, stack: stack);
     return true;
   };

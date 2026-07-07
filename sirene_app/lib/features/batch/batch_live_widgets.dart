@@ -20,6 +20,7 @@ class BatchLiveLastTestHero extends StatelessWidget {
     this.liveResult,
     this.potenciaMin,
     this.potenciaMax,
+    this.mqttDisconnected = false,
   });
 
   final DeviceFsmState estado;
@@ -27,6 +28,7 @@ class BatchLiveLastTestHero extends StatelessWidget {
   final TestResultMessage? liveResult;
   final double? potenciaMin;
   final double? potenciaMax;
+  final bool mqttDisconnected;
 
   @override
   Widget build(BuildContext context) {
@@ -48,12 +50,16 @@ class BatchLiveLastTestHero extends StatelessWidget {
     final latest = _resolveLatest();
     if (latest == null) {
       return _HeroShell(
-        accent: DipontoColors.primary,
-        icon: Icons.touch_app,
-        title: 'Pressione o botão no dispositivo',
-        subtitle: estado == DeviceFsmState.batchReady
-            ? 'O teste só inicia pelo botão físico da bancada'
-            : estado.label,
+        accent: mqttDisconnected ? DipontoColors.error : DipontoColors.primary,
+        icon: mqttDisconnected ? Icons.cloud_off : Icons.touch_app,
+        title: mqttDisconnected
+            ? 'MQTT desconectado'
+            : 'Pressione o botão no dispositivo',
+        subtitle: mqttDisconnected
+            ? 'Testes não chegam até o broker reconectar'
+            : estado == DeviceFsmState.batchReady
+                ? 'O teste só inicia pelo botão físico da bancada'
+                : estado.label,
         child: const SizedBox.shrink(),
       );
     }
@@ -62,34 +68,37 @@ class BatchLiveLastTestHero extends StatelessWidget {
     final accent = approved ? DipontoColors.success : DipontoColors.error;
     final dateFmt = DateFormat('HH:mm:ss');
 
-    return _HeroShell(
-      accent: accent,
-      icon: approved ? Icons.check_circle_outline : Icons.cancel_outlined,
-      title: latest.veredito,
-      subtitle: 'Seq ${latest.sequencial}'
-          '${latest.serial != null ? ' · ${latest.serial}' : ''}'
-          '${latest.timestamp != null ? ' · ${dateFmt.format(latest.timestamp!.toLocal())}' : ''}',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '${latest.potenciaMedia.toStringAsFixed(2)} W',
-            style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: accent,
-                ),
-          ),
-          if (potenciaMin != null && potenciaMax != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text(
-                'Faixa: ${potenciaMin!.toStringAsFixed(1)}–${potenciaMax!.toStringAsFixed(1)} W',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: DipontoColors.onSurface.withValues(alpha: 0.65),
-                    ),
-              ),
+    return Semantics(
+      label: 'Último teste: ${latest.veredito}, ${latest.potenciaMedia.toStringAsFixed(2)} watts',
+      child: _HeroShell(
+        accent: accent,
+        icon: approved ? Icons.check_circle_outline : Icons.cancel_outlined,
+        title: latest.veredito,
+        subtitle: 'Seq ${latest.sequencial}'
+            '${latest.serial != null ? ' · ${latest.serial}' : ''}'
+            '${latest.timestamp != null ? ' · ${dateFmt.format(latest.timestamp!.toLocal())}' : ''}',
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '${latest.potenciaMedia.toStringAsFixed(2)} W',
+              style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: accent,
+                  ),
             ),
-        ],
+            if (potenciaMin != null && potenciaMax != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  'Faixa: ${potenciaMin!.toStringAsFixed(1)}–${potenciaMax!.toStringAsFixed(1)} W',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: DipontoColors.onSurface.withValues(alpha: 0.65),
+                      ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }

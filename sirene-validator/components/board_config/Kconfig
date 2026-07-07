@@ -1,0 +1,46 @@
+menu "Sirene board config"
+
+choice SIRENE_BOARD_PROFILE
+    prompt "GPIO profile (hardware da placa)"
+    default SIRENE_BOARD_DIPONTO
+    help
+        Diponto producao: rele GPIO4, botao GPIO5, PZEM 27/26.
+        Legacy devkit (v1.1.4): rele GPIO26, botao GPIO0, PZEM 17/16 —
+        use se o OLED integrado parou apos atualizar (SDA livre no GPIO4).
+
+config SIRENE_BOARD_DIPONTO
+    bool "Diponto producao (rele 4, botao 5)"
+
+config SIRENE_BOARD_LEGACY_DEVKIT
+    bool "Legacy devkit v1.1.4 (rele 26, botao 0)"
+
+endchoice
+
+config SIRENE_MQTT_DEFAULT_USER
+    string "MQTT default username (factory NVS)"
+    default "devices"
+    help
+        Written to NVS on first provisioning when mqtt_cfg is empty.
+        Override via menuconfig or sdkconfig.defaults.local (not committed).
+
+config SIRENE_MQTT_DEFAULT_PASSWORD
+    string "MQTT default password (factory NVS)"
+    default ""
+    help
+        Required for production builds. Set in sdkconfig.defaults.local
+        or idf.py menuconfig. Never commit real passwords to Git.
+
+config SIRENE_WIFI_AP_PASSWORD
+    string "Wi-Fi AP password (provisioning)"
+    default ""
+    help
+        Empty = derive from device MAC (sv + 6 hex). Non-empty = fixed AP password.
+
+config SIRENE_MQTT_LAN_INSECURE_TLS
+    bool "Allow insecure TLS for private-LAN MQTT brokers"
+    default y
+    help
+        Self-signed certificates on LAN brokers skip server verification
+        only when the broker host is RFC1918. Cloud brokers always use CA bundle.
+
+endmenu

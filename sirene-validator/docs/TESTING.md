@@ -22,7 +22,9 @@ Executar lógica pura sem hardware:
 cd sirene-validator && ./scripts/run_host_tests.sh
 ```
 
-Cobre: veredito de potência, anel FIFO, transições da FSM, composição do serial de 10 dígitos, validação de URL OTA (whitelist LAN) e cota de lote (`quantidade_total`).
+Cobre: veredito de potência, anel FIFO, transições da FSM, composição do serial de 10 dígitos, validação de URL OTA (whitelist LAN + HTTPS), cota de lote, ensaio, reteste, validação de `site` e hosts RFC1918.
+
+Tópicos MQTT de produção: `{site}/bancada-{NN}/{suffix}` (ex.: `producao/bancada-01/comando`). O `device_id` aparece apenas dentro do JSON dos payloads.
 
 ## MQTT com autenticação (firmware 1.6.0+)
 
@@ -101,7 +103,7 @@ BROKER=192.168.1.100 DEVICE_ID=aabbccddeeff ./scripts/bench_reconnect.sh
 
 ### 10.1b Reset Wi-Fi sob demanda (firmware 1.4.6+)
 
-1. Com dispositivo online no MQTT, publique em `sirene/<device_id>/comando`:
+1. Com dispositivo online no MQTT, publique em `producao/bancada-01/comando`:
 
 ```json
 { "cmd": "RESET_WIFI" }
@@ -114,7 +116,7 @@ BROKER=192.168.1.100 DEVICE_ID=aabbccddeeff ./scripts/bench_reconnect.sh
 
 ## 10.2 Ciclo aprovado/reprovado e sequencial
 
-1. Publique `SET_BATCH` em `sirene/<device_id>/comando`:
+1. Publique `SET_BATCH` em `producao/bancada-01/comando`:
 
 ```json
 {
@@ -150,7 +152,7 @@ BROKER=192.168.1.100 DEVICE_ID=aabbccddeeff ./scripts/bench_reconnect.sh
 
 ## 10.8 Robustez de fila, comandos e cota (firmware 1.4+)
 
-1. **Fila offline com tópico:** desligue o broker, force falha PZEM (alerta) ou conclua calibração offline; reconecte e confirme que alertas vão para `sirene/<device_id>/alerta` e calibração (incluindo `calibracao_amostra`) para `calibracao`, não para `status`.
+1. **Fila offline com tópico:** desligue o broker, force falha PZEM (alerta) ou conclua calibração offline; reconecte e confirme que alertas vão para `producao/bancada-01/alerta` e calibração (incluindo `calibracao_amostra`) para `calibracao`, não para `status`.
 2. **Comando obsoleto:** com teste em andamento (`TESTING`), publique `END_BATCH` ou `SET_BATCH` — deve haver rejeição imediata em `status` com motivo `cmd_durante_teste`, sem encerrar o lote após o teste.
 3. **Cota de lote:** configure `SET_BATCH` com `quantidade_total: 2`, aprove duas peças; o firmware deve publicar `{"tipo":"batch","evento":"encerrado","motivo":"cota_atingida"}` e ir para `IDLE` automaticamente.
 4. **ACK de SET_BATCH:** após `SET_BATCH` válido, confirme `{"tipo":"batch","evento":"configurado",...}` em `status`.
@@ -169,7 +171,7 @@ BROKER=192.168.1.100 DEVICE_ID=aabbccddeeff ./scripts/bench_reconnect.sh
 
 ## 10.5b PZEM_PROBE remoto
 
-1. Com PZEM conectado e sem teste em andamento, publique em `sirene/<device_id>/comando`:
+1. Com PZEM conectado e sem teste em andamento, publique em `producao/bancada-01/comando`:
    ```json
    { "cmd": "PZEM_PROBE" }
    ```
@@ -191,10 +193,40 @@ BROKER=192.168.1.100 DEVICE_ID=aabbccddeeff ./scripts/bench_reconnect.sh
 
 Validar com App Web os tópicos:
 
-- `sirene/<device_id>/comando` — `SET_BATCH`, `END_BATCH`, `START_CALIBRATION`, `PZEM_PROBE`, `OTA_UPDATE`
-- `sirene/<device_id>/status` — resultados e rejeições
-- `sirene/<device_id>/calibracao` — amostras `calibracao_amostra` + média `calibracao`
-- `sirene/<device_id>/alerta` — falhas de hardware
+- `producao/bancada-01/comando` — `SET_BATCH`, `END_BATCH`, `CANCEL_BATCH`, `START_CALIBRATION`, `START_ENSAIO`, `STOP_ENSAIO`, `PZEM_PROBE`, `OTA_UPDATE`, `RESET_WIFI`, `SET_BANCADA`
+- `producao/bancada-01/status` — resultados e rejeições
+- `producao/bancada-01/calibracao` — amostras `calibracao_amostra` + média `calibracao`
+- `producao/bancada-01/ensaio` — ciclos do modo ensaio
+- `producao/bancada-01/alerta` — falhas de hardware
+
+## 10.9 Modo ensaio (START_ENSAIO / STOP_ENSAIO)
+
+1. Com dispositivo em `IDLE` ou `BATCH_READY`, publique em `producao/bancada-01/comando`:
+
+```json
+{
+  "cmd": "START_ENSAIO",
+  "on_sec": 5,
+  "off_sec": 3,
+  "duracao_total_sec": 60
+}
+```
+
+2. Confirme eventos em `producao/bancada-01/ensaio` (`iniciado`, `ciclo`, `concluido`).
+3. Durante ensaio, publique `{ "cmd": "STOP_ENSAIO" }` ou pressione o botão — deve parar com `motivo: "parado"`.
+4. Durante `TESTING` de lote, `START_ENSAIO` deve ser rejeitado.
+
+## 10.10 Modo reteste (`modo_reteste`)
+
+1. Configure lote com `"modo_reteste": true` no `SET_BATCH`.
+2. Aprove uma peça — `aprovados` e `proximo_sequencial` **não** devem incrementar.
+3. Reprovação não altera contadores (comportamento igual ao modo normal para reprovados).
+
+## 10.11 SET_BANCADA e CANCEL_BATCH
+
+1. `{ "cmd": "SET_BANCADA", "bancada": 2, "site": "producao" }` — reinicia com novos tópicos.
+2. `site` inválido (ex. `foo/bar`) deve ser rejeitado.
+3. `{ "cmd": "CANCEL_BATCH" }` encerra lote ativo (equivalente a `END_BATCH`).
 
 ## 11. OTA remoto (`OTA_UPDATE`)
 
@@ -202,14 +234,16 @@ Validar com App Web os tópicos:
 
 1. `idf.py build` → `build/sirene-validator.bin`
 2. Sirva o binário na LAN: `cd build && python3 -m http.server 8080`
-3. Descubra `device_id` via `mosquitto_sub -t 'sirene/+/heartbeat'`
-4. Publique em `sirene/<device_id>/comando`:
+3. Descubra a bancada via `mosquitto_sub -t 'producao/bancada-+/heartbeat'`
+4. Publique em `producao/bancada-01/comando`:
 
 ```json
-{ "cmd": "OTA_UPDATE", "url": "http://192.168.1.10:8080/sirene-validator.bin" }
+{ "cmd": "OTA_UPDATE", "url": "https://192.168.1.10:8080/sirene-validator.bin" }
 ```
 
-5. Confirme progresso/falha em `sirene/<device_id>/status` (JSON com `tipo: "ota"`)
+> Produção exige URL `https://` (`CONFIG_SIRENE_OTA_REQUIRE_HTTPS`). Para HTTP na LAN de desenvolvimento, desabilite em menuconfig → OTA update.
+
+5. Confirme progresso/falha em `producao/bancada-01/status` (JSON com `tipo: "ota"`)
 6. Após reboot, verifique `firmware_version` no heartbeat (ex.: `"1.4.1"`)
 
 Ou use o script:
@@ -225,10 +259,10 @@ DEVICE_ID=<id> ./scripts/serve_firmware_and_ota.sh
 
 ## 12. Telemetria (presença + heartbeat)
 
-1. Conecte o dispositivo ao broker e assine `sirene/<device_id>/presenca` (retained).
+1. Conecte o dispositivo ao broker e assine `producao/bancada-01/presenca` (retained).
 2. Após conexão MQTT, confirme payload `online` retido.
 3. Desligue o ESP32 abruptamente (sem `disconnect`) — o broker deve publicar LWT `offline` retido.
-4. Assine `sirene/<device_id>/heartbeat` e confirme publicação periódica com `uptime`, `rssi`, `estado`, `fila`, `firmware_version`.
+4. Assine `producao/bancada-01/heartbeat` e confirme publicação periódica com `uptime`, `rssi`, `estado`, `fila`, `firmware_version`.
 
 ## 13. Reconexão Wi-Fi/MQTT e watchdog
 

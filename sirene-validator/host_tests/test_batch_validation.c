@@ -70,6 +70,18 @@ int test_batch_validation(void)
     in.proximo_sequencial = 0;
     expect_false(pure_batch_fields_valid(&in), "sequencial zero");
 
+    in = valid_batch();
+    in.quantidade_total = 0;
+    expect_false(pure_batch_fields_valid(&in), "quantidade zero");
+
+    in = valid_batch();
+    in.tempo_teste_sec = 121;
+    expect_false(pure_batch_fields_valid(&in), "tempo_teste > 120");
+
+    expect_false(pure_batch_fields_valid(NULL), "null input");
+
+    expect_false(pure_batch_same_op(NULL, "x"), "same_op null a");
+
     if (failures) {
         printf("test_batch_validation FAILED (%d)\n", failures);
         return 1;
