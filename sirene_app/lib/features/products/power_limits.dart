@@ -7,6 +7,9 @@ class PowerLimits {
 
 double _round2(double value) => double.parse(value.toStringAsFixed(2));
 
+/// Arredonda potência para 2 casas — alinhado ao firmware (`%.2f`).
+double roundPowerLimit(double value) => _round2(value);
+
 PowerLimits calcularLimites(double ref, double toleranciaPct) {
   final factor = toleranciaPct / 100;
   return PowerLimits(

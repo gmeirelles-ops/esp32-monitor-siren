@@ -7,6 +7,7 @@ import '../../shared/display_labels.dart';
 import '../../shared/portuguese_labels.dart';
 import '../../shared/widgets/diponto_app_bar.dart';
 import '../bancadas/bancadas_provider.dart';
+import '../../shared/widgets/rejection_labels.dart';
 import '../mqtt/mqtt_providers.dart';
 import '../firmware/firmware_update_screen.dart';
 
@@ -55,13 +56,25 @@ class DeviceDetailScreen extends ConsumerWidget {
                 subtitle: Text(device.lastHardwareAlert!),
               ),
             ),
+          if (device.lastNvsFault != null)
+            Card(
+              color: Colors.orange.withValues(alpha: 0.15),
+              child: ListTile(
+                leading: const Icon(Icons.storage_outlined, color: Colors.orange),
+                title: const Text('Falha NVS do lote'),
+                subtitle: Text(
+                  device.lastNvsFault!.detalhe ??
+                      formatRejectionMotivo(device.lastNvsFault!.evento),
+                ),
+              ),
+            ),
           if (device.lastRejection != null)
             Card(
               color: DipontoColors.primary.withValues(alpha: 0.12),
               child: ListTile(
                 leading: const Icon(Icons.info_outline, color: DipontoColors.primary),
                 title: const Text('Última rejeição MQTT'),
-                subtitle: Text(device.lastRejection!.motivo),
+                subtitle: Text(formatRejectionMotivo(device.lastRejection!.motivo)),
               ),
             ),
           if (device.lastCalibration != null)

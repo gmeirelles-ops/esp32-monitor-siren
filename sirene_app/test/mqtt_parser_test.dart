@@ -63,6 +63,13 @@ void main() {
       expect(MqttParser.tryParseJson('not json'), isNull);
     });
 
+    test('sanitizeCorruptedJson remove valor vazio órfão', () {
+      expect(
+        MqttParser.sanitizeCorruptedJson('"072","","veredito"'),
+        '"072","veredito"',
+      );
+    });
+
     test('recupera teste de payload MQTT colado/corrompido', () {
       const glued =
           '{"tipo":"teste","ts_ms":6886992,"numero_op":"12345","id_produto":"071","ano":"26'
@@ -81,6 +88,33 @@ void main() {
         MqttParser.parseCalibration('{"tipo":"calibracao","evento":"iniciado"}'),
         isNull,
       );
+    });
+
+    test('parseia evento batch configurado', () {
+      final json = MqttParser.tryParseJson(
+        '{"tipo":"batch","evento":"configurado","numero_op":"12345","estado":"BATCH_READY"}',
+      )!;
+      final batch = MqttParser.parseBatchEvent(json);
+      expect(batch, isNotNull);
+      expect(batch!.isConfigured, isTrue);
+      expect(batch.numeroOp, '12345');
+      expect(batch.estado, 'BATCH_READY');
+    });
+
+    test('parseia alerta batch_nvs_fault', () {
+      final alert = MqttParser.parseNvsFaultAlert(
+        '{"tipo":"alerta","evento":"batch_nvs_fault","detalhe":"falha ao persistir lote"}',
+      );
+      expect(alert, isNotNull);
+      expect(alert!.isBatchNvsFault, isTrue);
+      expect(alert.detalhe, 'falha ao persistir lote');
+    });
+
+    test('rejeita teste sem veredito válido', () {
+      final json = MqttParser.tryParseJson(
+        '{"tipo":"teste","numero_op":"1","id_produto":"072","ano":"26","veredito":"","potencia_media":40,"sequencial":500,"aprovados_no_lote":1}',
+      )!;
+      expect(MqttParser.parseTestResult(json), isNull);
     });
   });
 }

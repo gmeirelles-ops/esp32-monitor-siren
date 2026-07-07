@@ -63,6 +63,10 @@ typedef DeviceRejectionEvent = ({String deviceId, RejectionMessage rejection});
 
 final latestRejectionProvider = StateProvider<DeviceRejectionEvent?>((ref) => null);
 
+typedef DeviceNvsFaultEvent = ({String deviceId, NvsFaultAlertMessage alert});
+
+final latestNvsFaultProvider = StateProvider<DeviceNvsFaultEvent?>((ref) => null);
+
 typedef DuplicateSerialEvent = ({String deviceId, String serial});
 
 final duplicateSerialProvider = StateProvider<DuplicateSerialEvent?>((ref) => null);
@@ -90,6 +94,7 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
   final MessagePump _messagePump = MessagePump();
   final Map<String, DateTime> _batchStartedAt = {};
   final Map<String, int> _rejectionEpoch = {};
+  final Map<String, int> _batchAckEpoch = {};
   final Set<String> _autoEndBatchSent = {};
   final Map<int, String> _bancadaToDeviceId = {};
 
@@ -169,6 +174,21 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
     );
   }
 
+  void _emitBatchConfigured(String deviceId, BatchEventMessage event) {
+    if (!event.isConfigured) return;
+    _batchAckEpoch[deviceId] = (_batchAckEpoch[deviceId] ?? 0) + 1;
+    _setDeviceEstado(deviceId, DeviceFsmState.batchReady);
+  }
+
+  void _emitNvsFault(String deviceId, NvsFaultAlertMessage alert) {
+    final device = _getOrCreate(deviceId);
+    device.lastNvsFault = alert;
+    _ref.read(latestNvsFaultProvider.notifier).state = (
+      deviceId: deviceId,
+      alert: alert,
+    );
+  }
+
   void _setDeviceEstado(String deviceId, DeviceFsmState estado) {
     final device = _getOrCreate(deviceId);
     device.estado = estado;
@@ -194,6 +214,22 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
       await Future<void>.delayed(const Duration(milliseconds: 200));
     }
     return null;
+  }
+
+  /// Aguarda ACK `batch/configurado` ou estado `BATCH_READY` após SET_BATCH.
+  Future<bool> waitForBatchConfigured(
+    String deviceId, {
+    Duration timeout = const Duration(seconds: 8),
+  }) async {
+    final epochBefore = _batchAckEpoch[deviceId] ?? 0;
+    final deadline = DateTime.now().add(timeout);
+    while (DateTime.now().isBefore(deadline)) {
+      if ((_batchAckEpoch[deviceId] ?? 0) > epochBefore) return true;
+      final estado = state[deviceId]?.estado;
+      if (estado == DeviceFsmState.batchReady) return true;
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+    }
+    return state[deviceId]?.estado == DeviceFsmState.batchReady;
   }
 
   Future<void> _handleMessage((String, String) event) async {
@@ -270,6 +306,11 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
         );
       }
     } else if (topic.endsWith('/alerta')) {
+      final nvsFault = MqttParser.parseNvsFaultAlert(payload);
+      if (nvsFault != null) {
+        _emitNvsFault(deviceId, nvsFault);
+        device.lastSeen = now;
+      }
       final alert = MqttParser.parseHardwareAlert(payload);
       if (alert != null) {
         if (alert.isRecovery) {
@@ -313,8 +354,25 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
       }
     } else if (topic.endsWith('/status')) {
       final parsed = parseMqttStatusPayload(payload);
+      if (parsed.tests.isEmpty &&
+          parsed.rejections.isEmpty &&
+          payload.trim().isNotEmpty &&
+          payload.contains('"tipo"')) {
+        final preview = payload.trim();
+        final clipped = preview.length > 200 ? '${preview.substring(0, 200)}…' : preview;
+        unawaited(AppLog.write('MQTT status: payload não parseado ($topic): $clipped'));
+      }
       for (final rejection in parsed.rejections) {
         _emitRejection(deviceId, rejection);
+        device.lastSeen = now;
+      }
+      for (final batchEvent in parsed.batchEvents) {
+        if (batchEvent.isConfigured) {
+          _emitBatchConfigured(deviceId, batchEvent);
+        } else if (batchEvent.isEnded) {
+          clearActiveBatch(deviceId);
+          _setDeviceEstado(deviceId, DeviceFsmState.idle);
+        }
         device.lastSeen = now;
       }
       for (final test in parsed.tests) {
@@ -337,6 +395,13 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
     device.lastTestResult = test;
 
     final db = _ref.read(databaseProvider);
+    if (await db.testExistsForOpSequencial(test.numeroOp, test.sequencial)) {
+      unawaited(AppLog.write(
+        'MQTT: teste duplicado ignorado OP=${test.numeroOp} seq=${test.sequencial}',
+      ));
+      return;
+    }
+
     final operadorFinal =
         operador ?? await resolveOperadorLabel(_ref);
     final operatorId = await resolveOperatorId(_ref);
@@ -592,6 +657,13 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
         ? await waitForRejection(deviceId)
         : null;
     if (rejection != null) return rejection;
+
+    if (service.currentState == AppMqttConnectionState.connected) {
+      final configured = await waitForBatchConfigured(deviceId);
+      if (!configured) {
+        return 'batch_sem_confirmacao';
+      }
+    }
 
     _ref.read(retestModeProvider.notifier).state = batch.modoReteste;
     _autoEndBatchSent.remove(deviceId);

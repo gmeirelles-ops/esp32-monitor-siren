@@ -6,33 +6,40 @@
 #
 # Variáveis opcionais:
 #   BROKER=192.168.51.87
-#   DEVICE_ID=aabbccddeeff
-#   SKIP_MQTT=1          — só mostra checklist
-#   CREATE_OPERATOR=1    — tenta criar operador via Auth API
+#   MQTT_SITE=producao
+#   BANCADA=03              — número da bancada (1–99)
+#   DEVICE_ID=bancada-03    — legado; derivado de BANCADA se omitido
+#   SKIP_MQTT=1             — só mostra checklist
+#   CREATE_OPERATOR=1       — tenta criar operador via Auth API
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BROKER="${BROKER:-192.168.51.87}"
-DEVICE_ID="${DEVICE_ID:-aabbccddeeff}"
+MQTT_SITE="${MQTT_SITE:-producao}"
+BANCADA="${BANCADA:-03}"
+BANCADA_PADDED="$(printf '%02d' "$BANCADA")"
+TOPIC_BASE="${MQTT_SITE}/bancada-${BANCADA_PADDED}"
+DEVICE_ID="${DEVICE_ID:-bancada-${BANCADA_PADDED}}"
 PROJECT_ID="${FIREBASE_PROJECT_ID:-monitor-sirenv2-6d201}"
 API_KEY="${FIREBASE_API_KEY:-AIzaSyDPty7URXLaLyyvqQUSYZOXmreq-Ql__bg}"
 
 # Dados do teste de fábrica (ajuste se necessário)
-NUMERO_OP="${NUMERO_OP:-2026099}"
-ID_PRODUTO="${ID_PRODUTO:-123}"
+NUMERO_OP="${NUMERO_OP:-0001}"
+ID_PRODUTO="${ID_PRODUTO:-072}"
 ANO="${ANO:-26}"
-SEQUENCIAL="${SEQUENCIAL:-1}"
+SEQUENCIAL="${SEQUENCIAL:-500}"
 STATION_ID="${STATION_ID:-posto-D1}"
 
 OPERATOR_EMAIL="${OPERATOR_EMAIL:-operador.teste@diponto.com.br}"
 OPERATOR_PASSWORD="${OPERATOR_PASSWORD:-SireneTeste2026!}"
 
-PRODUCT_NOME="${PRODUCT_NOME:-Sirene teste E2E 20W}"
+PRODUCT_NOME="${PRODUCT_NOME:-Sirene produto 072 E2E}"
 
 echo "=============================================="
 echo " E2E Diponto Sirene — verificação completa"
 echo "=============================================="
 echo "Broker MQTT:  $BROKER"
+echo "Tópico base:  $TOPIC_BASE/"
 echo "Device ID:    $DEVICE_ID"
 echo "Firebase:     $PROJECT_ID"
 echo "OP / produto: $NUMERO_OP / $ID_PRODUTO"
@@ -76,9 +83,9 @@ echo "No app → Produtos → Novo produto:"
 echo "  ID produto:     $ID_PRODUTO"
 echo "  Nome:           $PRODUCT_NOME"
 echo "  Tolerância:     10 %"
-echo "  Tempo teste:    5 s"
-echo "  Potência ref:   20,00 W  (ou use autocalibração)"
-echo "  Min / Max:      18,00 / 22,00 W"
+echo "  Tempo teste:    10 s"
+echo "  Potência ref:   39,58 W  (ou use autocalibração)"
+echo "  Min / Max:      35,62 / 43,54 W"
 echo ""
 echo "Linux: grava só no SQLite local."
 echo "Windows + sync: Configurações → Nuvem → login → sync ON →"
@@ -104,29 +111,29 @@ fi
 # --- 4. MQTT SET_BATCH ---
 step "4. MQTT — SET_BATCH (simula lote configurado)"
 SET_BATCH_JSON=$(cat <<EOF
-{"cmd":"SET_BATCH","numero_op":"${NUMERO_OP}","id_produto":"${ID_PRODUTO}","ano":"${ANO}","tempo_teste":5,"potencia_min":18.0,"potencia_max":22.0,"quantidade_total":10,"proximo_sequencial":${SEQUENCIAL}}
+{"cmd":"SET_BATCH","numero_op":"${NUMERO_OP}","id_produto":"${ID_PRODUTO}","ano":"${ANO}","tempo_teste":10,"potencia_min":35.62,"potencia_max":43.54,"quantidade_total":108,"proximo_sequencial":${SEQUENCIAL},"modo_reteste":false}
 EOF
 )
 echo "$SET_BATCH_JSON"
-mosquitto_pub -h "$BROKER" -t "sirene/${DEVICE_ID}/comando" -m "$SET_BATCH_JSON"
-echo "✓ Publicado em sirene/${DEVICE_ID}/comando"
+mosquitto_pub -h "$BROKER" -t "${TOPIC_BASE}/comando" -m "$SET_BATCH_JSON"
+echo "✓ Publicado em ${TOPIC_BASE}/comando"
 sleep 1
 
 # --- 5. Heartbeat ---
 step "5. MQTT — heartbeat (dispositivo online)"
-HB_JSON='{"uptime":3600,"rssi":-58,"estado":"BATCH_READY","fila":0,"firmware_version":"1.3.0"}'
-mosquitto_pub -h "$BROKER" -t "sirene/${DEVICE_ID}/heartbeat" -m "$HB_JSON"
-echo "✓ Publicado heartbeat BATCH_READY"
+HB_JSON='{"uptime":3600,"rssi":-58,"estado":"BATCH_READY","fila":0,"firmware_version":"1.7.5","bancada":'"${BANCADA}"'}'
+mosquitto_pub -h "$BROKER" -t "${TOPIC_BASE}/heartbeat" -m "$HB_JSON"
+echo "✓ Publicado heartbeat BATCH_READY (firmware 1.7.5)"
 
 # --- 6. Resultado teste ---
 step "6. MQTT — resultado de teste APROVADO"
 TEST_JSON=$(cat <<EOF
-{"tipo":"teste","numero_op":"${NUMERO_OP}","id_produto":"${ID_PRODUTO}","ano":"${ANO}","veredito":"APROVADO","potencia_media":20.12,"sequencial":${SEQUENCIAL},"aprovados_no_lote":1}
+{"tipo":"teste","numero_op":"${NUMERO_OP}","id_produto":"${ID_PRODUTO}","ano":"${ANO}","veredito":"APROVADO","potencia_media":39.58,"sequencial":${SEQUENCIAL},"aprovados_no_lote":1,"bancada":${BANCADA}}
 EOF
 )
 echo "$TEST_JSON"
-mosquitto_pub -h "$BROKER" -t "sirene/${DEVICE_ID}/status" -m "$TEST_JSON"
-echo "✓ Publicado em sirene/${DEVICE_ID}/status"
+mosquitto_pub -h "$BROKER" -t "${TOPIC_BASE}/status" -m "$TEST_JSON"
+echo "✓ Publicado em ${TOPIC_BASE}/status"
 
 # --- 7. Verificação ---
 step "7. O que verificar"
@@ -139,7 +146,8 @@ echo ""
 echo "NO FIRESTORE (somente build Windows + sync ligado):"
 echo "  https://console.firebase.google.com/project/${PROJECT_ID}/firestore"
 echo "  □ products/${ID_PRODUTO}"
-echo "  □ test_results/${NUMERO_OP}_${SEQUENCIAL}"
+echo "  □ test_results/${NUMERO_OP} (documento lote)"
+echo "  □ test_results/${NUMERO_OP}/seriais/{serial}"
 echo "  □ devices/${DEVICE_ID}"
 echo "  □ batches/${NUMERO_OP}"
 echo ""

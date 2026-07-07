@@ -117,6 +117,32 @@ class RejectionMessage {
   final String motivo;
 }
 
+class BatchEventMessage {
+  const BatchEventMessage({
+    required this.evento,
+    this.numeroOp,
+    this.motivo,
+    this.estado,
+  });
+
+  final String evento;
+  final String? numeroOp;
+  final String? motivo;
+  final String? estado;
+
+  bool get isConfigured => evento == 'configurado';
+  bool get isEnded => evento == 'encerrado';
+}
+
+class NvsFaultAlertMessage {
+  const NvsFaultAlertMessage({required this.evento, this.detalhe});
+
+  final String evento;
+  final String? detalhe;
+
+  bool get isBatchNvsFault => evento == 'batch_nvs_fault';
+}
+
 class OtaStatusMessage {
   const OtaStatusMessage({required this.evento, this.detalhe, this.deviceId});
   final String evento;
@@ -197,6 +223,7 @@ class DeviceInfo {
   DateTime? lastSeen;
   String? lastHardwareAlert;
   RejectionMessage? lastRejection;
+  NvsFaultAlertMessage? lastNvsFault;
   double? lastCalibration;
   BatchConfig? activeBatch;
   TestResultMessage? lastTestResult;

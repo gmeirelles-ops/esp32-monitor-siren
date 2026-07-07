@@ -9,6 +9,10 @@ String resolveBatchYear([DateTime? now]) {
 
 /// Próximo sequencial para `SET_BATCH`, a partir do contador local e do
 /// [sequencialInicial] do produto (quando os seriais não começam em 0001).
+///
+/// O firmware, ao receber `SET_BATCH` na mesma OP, preserva o sequencial
+/// corrente e só avança se o payload trouxer valor maior (`max(atual, payload)`)
+/// — ver `batch_cmd.c` em sirene-validator.
 Future<int> resolveProximoSequencial(
   AppDatabase db,
   String idProduto,

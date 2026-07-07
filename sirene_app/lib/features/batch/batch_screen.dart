@@ -18,6 +18,7 @@ import '../demo/demo_providers.dart';
 import '../demo/demo_service.dart';
 import '../mqtt/models/mqtt_messages.dart';
 import '../mqtt/mqtt_providers.dart';
+import '../products/power_limits.dart';
 import '../products/products_provider.dart';
 import '../setup/posto_setup_screen.dart';
 import 'batch_live_screen.dart';
@@ -108,8 +109,8 @@ class _BatchScreenState extends ConsumerState<BatchScreen> {
       idProduto: product.idProduto,
       ano: ano,
       tempoTeste: product.tempoTesteSec,
-      potenciaMin: product.potenciaMin,
-      potenciaMax: product.potenciaMax,
+      potenciaMin: roundPowerLimit(product.potenciaMin),
+      potenciaMax: roundPowerLimit(product.potenciaMax),
       quantidadeTotal: int.parse(_quantidadeTotal.text),
       proximoSequencial: proximoSequencial,
     );

@@ -18,15 +18,15 @@ O endereço do broker MQTT SHALL ser resolvido em tempo de execução a partir d
 - **WHEN** a NVS contém host `192.168.51.87` e porta `1883`
 - **THEN** o cliente MQTT utiliza a URI `mqtt://192.168.51.87:1883`
 
-### Requirement: Tópicos endereçados por dispositivo
-O dispositivo SHALL usar tópicos MQTT que incluam um identificador único (`device_id`) derivado do seu endereço MAC, permitindo múltiplos dispositivos na mesma linha sem colisão.
+### Requirement: Tópicos endereçados por bancada
+O dispositivo SHALL usar tópicos MQTT no padrão `{site}/bancada-{NN}/{suffix}`, onde `site` vem da NVS (padrão `producao`), `NN` é o número da bancada (01–99, zero-padded) e `device_id` (MAC) aparece apenas nos payloads JSON.
 
 #### Scenario: Estrutura dos tópicos
 - **WHEN** o dispositivo conecta ao broker
-- **THEN** ele assina o tópico de comando `sirene/<device_id>/comando` e publica em `sirene/<device_id>/status`, `sirene/<device_id>/calibracao` e `sirene/<device_id>/alerta`
+- **THEN** ele assina `{site}/bancada-{NN}/comando` e publica em `{site}/bancada-{NN}/status`, `{site}/bancada-{NN}/calibracao`, `{site}/bancada-{NN}/alerta`, `{site}/bancada-{NN}/heartbeat` e `{site}/bancada-{NN}/presenca`
 
 ### Requirement: Contrato do comando SET_BATCH
-O dispositivo SHALL aceitar, no tópico `sirene/<device_id>/comando`, um payload JSON de configuração de lote com `cmd` igual a `SET_BATCH` contendo `numero_op`, `id_produto`, `ano`, `tempo_teste` (em segundos), `potencia_min`, `potencia_max`, `quantidade_total`, `proximo_sequencial` e campo opcional `modo_reteste` (boolean, padrão `false`). Comandos recebidos durante teste ou calibração SHALL ser rejeitados imediatamente, sem enfileiramento para processamento posterior.
+O dispositivo SHALL aceitar, no tópico `{site}/bancada-{NN}/comando`, um payload JSON de configuração de lote com `cmd` igual a `SET_BATCH` contendo `numero_op`, `id_produto`, `ano`, `tempo_teste` (em segundos), `potencia_min`, `potencia_max`, `quantidade_total`, `proximo_sequencial` e campo opcional `modo_reteste` (boolean, padrão `false`). Comandos recebidos durante teste ou calibração SHALL ser rejeitados imediatamente, sem enfileiramento para processamento posterior.
 
 #### Scenario: Payload SET_BATCH válido
 - **WHEN** chega no tópico de comando um JSON com `cmd: "SET_BATCH"` e todos os campos obrigatórios (`numero_op`, `id_produto`, `ano`, `tempo_teste`, `potencia_min`, `potencia_max`, `quantidade_total`, `proximo_sequencial`)
@@ -56,28 +56,28 @@ O dispositivo SHALL aceitar um comando `END_BATCH` que encerra o lote ativo, lim
 - **THEN** o dispositivo rejeita o comando imediatamente, mantém o lote até a conclusão do teste corrente, não enfileira o comando e publica rejeição em `status`
 
 ### Requirement: Publicação de status de teste
-O dispositivo SHALL publicar em `sirene/<device_id>/status` o resultado de cada teste, incluindo `numero_op`, veredito (`APROVADO`/`REPROVADO`), `potencia_media`, `sequencial` e `aprovados_no_lote`.
+O dispositivo SHALL publicar em `{site}/bancada-{NN}/status` o resultado de cada teste, incluindo `numero_op`, veredito (`APROVADO`/`REPROVADO`), `potencia_media`, `sequencial` e `aprovados_no_lote`.
 
 #### Scenario: Resultado de teste publicado
 - **WHEN** um teste é concluído com conexão disponível
 - **THEN** o dispositivo publica em `status` uma mensagem JSON contendo o veredito, a potência média, o sequencial e a OP associados
 
 ### Requirement: Publicação do resultado de calibração
-O dispositivo SHALL publicar em `sirene/<device_id>/calibracao` a potência média de referência ao concluir um ciclo de calibração.
+O dispositivo SHALL publicar em `{site}/bancada-{NN}/calibracao` a potência média de referência ao concluir um ciclo de calibração.
 
 #### Scenario: Resultado de calibração publicado
 - **WHEN** um ciclo `START_CALIBRATION` é concluído
 - **THEN** o dispositivo publica em `calibracao` a potência média medida para preenchimento no cadastro de produtos
 
 ### Requirement: Publicação de alerta de hardware
-O dispositivo SHALL publicar em `sirene/<device_id>/alerta` uma mensagem de falha sempre que detectar perda de comunicação com hardware crítico.
+O dispositivo SHALL publicar em `{site}/bancada-{NN}/alerta` uma mensagem de falha sempre que detectar perda de comunicação com hardware crítico.
 
 #### Scenario: Alerta de falha de hardware
 - **WHEN** o dispositivo detecta perda de comunicação UART com o PZEM-004T
 - **THEN** o dispositivo publica em `alerta` uma mensagem JSON identificando a falha de hardware
 
 ### Requirement: Contrato do comando OTA_UPDATE
-O dispositivo SHALL aceitar, no tópico `sirene/<device_id>/comando`, um payload JSON com `cmd` igual a `OTA_UPDATE` contendo a `url` da imagem de firmware.
+O dispositivo SHALL aceitar, no tópico `{site}/bancada-{NN}/comando`, um payload JSON com `cmd` igual a `OTA_UPDATE` contendo a `url` da imagem de firmware.
 
 #### Scenario: Payload OTA_UPDATE válido
 - **WHEN** chega um JSON com `cmd: "OTA_UPDATE"` e `url` não vazia
@@ -92,10 +92,10 @@ O dispositivo SHALL publicar presença e heartbeat em tópicos dedicados endere�
 
 #### Scenario: Tópicos de telemetria
 - **WHEN** o dispositivo está conectado ao broker
-- **THEN** ele utiliza `sirene/<device_id>/presenca` para presença (online/offline via LWT) e `sirene/<device_id>/heartbeat` para o heartbeat periódico
+- **THEN** ele utiliza `{site}/bancada-{NN}/presenca` para presença (online/offline via LWT) e `{site}/bancada-{NN}/heartbeat` para o heartbeat periódico
 
 ### Requirement: Publicação de amostras de calibração em tempo real
-O dispositivo SHALL publicar amostras periódicas de potência no tópico `sirene/<device_id>/calibracao` durante o ciclo de `START_CALIBRATION`, além da mensagem final com a média.
+O dispositivo SHALL publicar amostras periódicas de potência no tópico `{site}/bancada-{NN}/calibracao` durante o ciclo de `START_CALIBRATION`, além da mensagem final com a média.
 
 #### Scenario: Amostra publicada durante calibração
 - **WHEN** o ciclo de calibração está em andamento após o descarte de inrush

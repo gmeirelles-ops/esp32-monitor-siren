@@ -1386,6 +1386,14 @@ class AppDatabase extends _$AppDatabase {
     });
   }
 
+  /// Evita reprocessar o mesmo teste (MQTT duplicado / fila offline do firmware).
+  Future<bool> testExistsForOpSequencial(String numeroOp, int sequencial) async {
+    final row = await (select(testResults)
+          ..where((t) => t.numeroOp.equals(numeroOp) & t.sequencial.equals(sequencial)))
+        .getSingleOrNull();
+    return row != null;
+  }
+
   Future<bool> serialExists(String serial) async {
     final row = await (select(testResults)..where((t) => t.serial.equals(serial)))
         .getSingleOrNull();

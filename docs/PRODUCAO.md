@@ -1,6 +1,6 @@
 # Checklist de Produção — Diponto Sirene Validator
 
-Guia para colocar firmware v1.3.0 + app Flutter em operação no posto.
+Guia para colocar firmware v1.7.5 + app Flutter em operação no posto.
 
 ## 1. Infraestrutura de rede
 
@@ -23,7 +23,7 @@ Guia para colocar firmware v1.3.0 + app Flutter em operação no posto.
 4. Provisione via portal `http://192.168.4.1` (AP `SireneValidator`):
    - Wi-Fi: SSID + senha
    - **Broker MQTT (opcional):** host + porta — se vazio, usa fallback de `board_config.h`
-5. Confirme nos logs: `device_id=... firmware=1.3.0` e `broker mqtt://... (NVS|fallback)`
+5. Confirme nos logs: `device_id=... firmware=1.7.5` e `broker mqtt://... (NVS|fallback)`
 
 ### Smoke test MQTT
 

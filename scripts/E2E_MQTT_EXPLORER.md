@@ -6,20 +6,21 @@ Conecte o **MQTT Explorer** ao broker e deixe o **app Flutter aberto** na mesma 
 
 | Campo | Valor |
 |-------|--------|
-| Host | `192.168.51.87` |
-| Port | `1883` |
+| Host | `192.168.51.87` ou `mqtt.diponto.com` |
+| Port | `1883` ou `443` (WSS) |
 | Protocol | MQTT v3.1.1 |
-| User / Password | (vazio) |
+| User / Password | (conforme broker) |
 
 ## Assinar (para ver o que o app também vê)
 
-Adicione estas assinaturas wildcard:
+Adicione estas assinaturas wildcard (site padrão `producao`):
 
-- `sirene/+/heartbeat`
-- `sirene/+/status`
-- `sirene/+/presenca`
+- `producao/+/heartbeat`
+- `producao/+/status`
+- `producao/+/presenca`
+- `producao/+/alerta`
 
-Substitua `DEVICE_ID` pelo MAC do ESP32 em hex (12 caracteres), ex.: `aabbccddeeff`.
+Substitua `NN` pelo número da bancada com zero à esquerda (ex.: `03` → `producao/bancada-03/...`).
 
 ---
 
@@ -28,8 +29,8 @@ Substitua `DEVICE_ID` pelo MAC do ESP32 em hex (12 caracteres), ex.: `aabbccddee
 ### 0. Antes — no app
 
 1. **Produtos** → cadastre ID `123`, nome `Sirene teste E2E 20W`, ref 20 W, min 18, max 22 W.
-2. **Configurações** → broker `192.168.51.87:1883`, `station_id` = `posto-D1`.
-3. (Windows) Nuvem → login `operador.teste@diponto.com.br` / `SireneTeste2026!` → sync ON.
+2. **Configurações** → broker e site MQTT (`producao`), bancada do posto configurada.
+3. (Windows) Nuvem → login → sync ON.
 
 ---
 
@@ -38,7 +39,7 @@ Substitua `DEVICE_ID` pelo MAC do ESP32 em hex (12 caracteres), ex.: `aabbccddee
 **Publicar em:**
 
 ```
-sirene/aabbccddeeff/comando
+producao/bancada-03/comando
 ```
 
 **Payload (JSON, uma linha):**
@@ -47,7 +48,7 @@ sirene/aabbccddeeff/comando
 {"cmd":"SET_BATCH","numero_op":"2026099","id_produto":"123","ano":"26","tempo_teste":5,"potencia_min":18.0,"potencia_max":22.0,"quantidade_total":10,"proximo_sequencial":1}
 ```
 
-No app: dispositivo deve ir para **Lote pronto** (se ESP32 real estiver na rede).  
+No app: dispositivo deve ir para **Lote pronto** (ACK `tipo:batch` ou heartbeat `BATCH_READY`).  
 Só com app + Explorer (sem ESP32): pule para o passo 3 — o app processa `status` e `heartbeat` direto.
 
 ---
@@ -57,13 +58,13 @@ Só com app + Explorer (sem ESP32): pule para o passo 3 — o app processa `stat
 **Publicar em:**
 
 ```
-sirene/aabbccddeeff/heartbeat
+producao/bancada-03/heartbeat
 ```
 
 **Payload:**
 
 ```json
-{"uptime":3600,"rssi":-58,"estado":"BATCH_READY","fila":0,"firmware_version":"1.3.0"}
+{"device_id":"aabbccddeeff","site":"producao","bancada":3,"uptime":3600,"rssi":-58,"estado":"BATCH_READY","fila":0,"firmware_version":"1.7.5"}
 ```
 
 No app: dispositivo aparece em **Dispositivos**, estado *Lote pronto*.
@@ -75,7 +76,7 @@ No app: dispositivo aparece em **Dispositivos**, estado *Lote pronto*.
 **Publicar em:**
 
 ```
-sirene/aabbccddeeff/status
+producao/bancada-03/status
 ```
 
 **Payload:**
@@ -95,7 +96,7 @@ No app:
 
 ### 4. (Opcional) Presença offline/online
 
-**Publicar em** `sirene/aabbccddeeff/presenca`:
+**Publicar em** `producao/bancada-03/presenca`:
 
 - `online` — dispositivo online
 - `offline` — dispositivo offline (LWT)
@@ -104,7 +105,7 @@ No app:
 
 ### 5. END_BATCH (opcional)
 
-**Publicar em** `sirene/aabbccddeeff/comando`:
+**Publicar em** `producao/bancada-03/comando`:
 
 ```json
 {"cmd":"END_BATCH"}

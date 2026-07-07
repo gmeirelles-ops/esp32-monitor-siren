@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
+
 import 'models/mqtt_messages.dart';
 
 class MqttParseException implements Exception {
@@ -21,15 +23,21 @@ class MqttParser {
     }
   }
 
+  /// Remove artefatos de JSON colado (ex.: `","","` sem chave).
+  @visibleForTesting
+  static String sanitizeCorruptedJson(String json) {
+    return json.replaceAll(',"",', ',');
+  }
+
   /// Quando o broker entrega JSON colado/corrompido, tenta recuperar o último objeto válido.
   static List<Map<String, dynamic>> tryParseJsonObjects(String payload) {
     final trimmed = payload.trim();
     if (trimmed.isEmpty) return const [];
 
-    final whole = tryParseJson(trimmed);
+    final whole = tryParseJson(trimmed) ?? tryParseJson(sanitizeCorruptedJson(trimmed));
     if (whole != null) return [whole];
 
-    final recovered = <Map<String, dynamic>>[];
+    // Um payload MQTT = um evento lógico; prioridade teste > rejeição > batch.
     for (final tipo in [
       'teste',
       'rejeicao',
@@ -41,11 +49,9 @@ class MqttParser {
       'ensaio',
     ]) {
       final obj = _tryParseLastTypedObject(trimmed, tipo);
-      if (obj != null) {
-        recovered.add(obj);
-      }
+      if (obj != null) return [obj];
     }
-    return recovered;
+    return const [];
   }
 
   static Map<String, dynamic>? _tryParseLastTypedObject(String payload, String tipo) {
@@ -63,7 +69,35 @@ class MqttParser {
     final tail = payload.substring(idx);
     final end = tail.lastIndexOf('}');
     if (end < 0) return null;
-    return tryParseJson(tail.substring(0, end + 1));
+    final candidate = tail.substring(0, end + 1);
+    final parsed =
+        tryParseJson(candidate) ?? tryParseJson(sanitizeCorruptedJson(candidate));
+    if (parsed == null) return null;
+
+    if (tipo == 'teste') {
+      final ano = parsed['ano'];
+      if (ano == null || (ano is String && ano.isEmpty)) {
+        final inferred = _inferAnoFromGluedPrefix(payload, idx);
+        if (inferred != null) {
+          parsed['ano'] = inferred;
+        }
+      }
+    }
+    return parsed;
+  }
+
+  /// Recupera `ano` do primeiro objeto quando dois JSONs de teste vêm colados.
+  static String? _inferAnoFromGluedPrefix(String payload, int objectStart) {
+    final prefix = payload.substring(0, objectStart);
+    final anchor = prefix.lastIndexOf('"ano":"');
+    if (anchor < 0) return null;
+    final digits = StringBuffer();
+    for (var i = anchor + '"ano":"'.length; i < prefix.length && digits.length < 2; i++) {
+      final code = prefix.codeUnitAt(i);
+      if (code < 0x30 || code > 0x39) break;
+      digits.writeCharCode(code);
+    }
+    return digits.length == 2 ? digits.toString() : null;
   }
 
   static HeartbeatMessage? parseHeartbeat(String payload) {
@@ -83,13 +117,17 @@ class MqttParser {
 
   static TestResultMessage? parseTestResult(Map<String, dynamic> json) {
     if (json['tipo'] != 'teste') return null;
+    final veredito = (json['veredito'] as String? ?? '').trim().toUpperCase();
+    if (veredito != 'APROVADO' && veredito != 'REPROVADO') return null;
+    final sequencial = (json['sequencial'] as num?)?.toInt() ?? 0;
+    if (sequencial <= 0) return null;
     return TestResultMessage(
       numeroOp: json['numero_op'] as String? ?? '',
       idProduto: json['id_produto'] as String? ?? '',
       ano: json['ano'] as String? ?? '',
-      veredito: json['veredito'] as String? ?? '',
+      veredito: veredito,
       potenciaMedia: (json['potencia_media'] as num?)?.toDouble() ?? 0,
-      sequencial: (json['sequencial'] as num?)?.toInt() ?? 0,
+      sequencial: sequencial,
       aprovadosNoLote: (json['aprovados_no_lote'] as num?)?.toInt() ?? 0,
     );
   }
@@ -97,6 +135,28 @@ class MqttParser {
   static RejectionMessage? parseRejection(Map<String, dynamic> json) {
     if (json['tipo'] != 'rejeicao') return null;
     return RejectionMessage(motivo: json['motivo'] as String? ?? 'desconhecido');
+  }
+
+  static BatchEventMessage? parseBatchEvent(Map<String, dynamic> json) {
+    if (json['tipo'] != 'batch') return null;
+    return BatchEventMessage(
+      evento: json['evento'] as String? ?? '',
+      numeroOp: json['numero_op'] as String?,
+      motivo: json['motivo'] as String?,
+      estado: json['estado'] as String?,
+    );
+  }
+
+  static NvsFaultAlertMessage? parseNvsFaultAlert(String payload) {
+    final json = tryParseJson(payload);
+    if (json == null) return null;
+    if (json['tipo'] != 'alerta') return null;
+    final evento = json['evento'] as String? ?? '';
+    if (evento != 'batch_nvs_fault') return null;
+    return NvsFaultAlertMessage(
+      evento: evento,
+      detalhe: json['detalhe'] as String?,
+    );
   }
 
   static OtaStatusMessage? parseOtaStatus(Map<String, dynamic> json, {String? deviceId}) {

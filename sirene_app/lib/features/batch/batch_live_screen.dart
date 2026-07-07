@@ -7,6 +7,7 @@ import '../../shared/display_labels.dart';
 import '../../shared/portuguese_labels.dart';
 import '../../shared/widgets/action_section_card.dart';
 import '../../shared/widgets/demo_mode_banner.dart';
+import '../../shared/widgets/rejection_labels.dart';
 import '../../shared/widgets/screen_app_bar.dart';
 import '../../shared/widgets/screen_page_layout.dart';
 import '../../shared/widgets/section_intro.dart';
@@ -130,7 +131,21 @@ class _BatchLiveScreenState extends ConsumerState<BatchLiveScreen> {
 
     ref.listen(latestRejectionProvider, (prev, next) {
       if (next != null && next.deviceId == widget.deviceId) {
-        _showSnack('Rejeição: ${next.rejection.motivo}');
+        _showSnack('Rejeição: ${formatRejectionMotivo(next.rejection.motivo)}');
+      }
+    });
+
+    ref.listen(latestNvsFaultProvider, (prev, next) {
+      if (next != null && next.deviceId == widget.deviceId) {
+        _showSnack(
+          'Alerta: ${next.alert.detalhe ?? formatRejectionMotivo(next.alert.evento)}',
+        );
+      }
+    });
+
+    ref.listen(duplicateSerialProvider, (prev, next) {
+      if (next != null && next.deviceId == widget.deviceId) {
+        _showSnack('Serial duplicado ${next.serial} — etiqueta não emitida');
       }
     });
 
@@ -221,6 +236,8 @@ class _BatchLiveScreenState extends ConsumerState<BatchLiveScreen> {
               ),
               children: [
                 if (demoMode) const DemoModeBanner(compact: true),
+                if (device?.lastNvsFault != null)
+                  _NvsFaultBanner(alert: device!.lastNvsFault!),
                 if (device?.lastRejection != null)
                   _RejectionBanner(motivo: device!.lastRejection!.motivo),
                 _BatchLiveBody(
@@ -450,7 +467,47 @@ class _RejectionBanner extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text('Última rejeição MQTT', style: TextStyle(fontWeight: FontWeight.w600)),
-                Text(motivo),
+                Text(formatRejectionMotivo(motivo)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _NvsFaultBanner extends StatelessWidget {
+  const _NvsFaultBanner({required this.alert});
+
+  final NvsFaultAlertMessage alert;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.orange.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.orange.withValues(alpha: 0.5)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.storage_outlined, color: Colors.orange),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Falha de memória do lote (NVS)',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+                Text(
+                  alert.detalhe ?? formatRejectionMotivo(alert.evento),
+                ),
               ],
             ),
           ),

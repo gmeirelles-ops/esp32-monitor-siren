@@ -9,9 +9,9 @@ Monorepo do sistema de validação de sirenes em linha de produção: firmware E
 ```
   ┌──────────────┐     MQTT (Mosquitto)      ┌─────────────────┐
   │ ESP32        │◄────────────────────────►│ App Flutter     │
-  │ sirene-      │   sirene/<id>/status      │ sirene_app      │
-  │ validator    │   heartbeat, alerta,      │ (Windows posto) │
-  └──────────────┘   calibracao, comando     └────────┬────────┘
+  │ sirene-      │   {site}/bancada-NN/      │ sirene_app      │
+  │ validator    │   status, heartbeat,      │ (Windows posto) │
+  └──────────────┘   alerta, comando         └────────┬────────┘
          │                                            │
          │ Wi-Fi / portal 192.168.4.1                 │ SQLite local
          ▼                                            ▼
