@@ -3,9 +3,10 @@ import 'package:sirene_app/features/firmware/usb_flash_logic.dart';
 
 void main() {
   group('buildAppOnlyFlashArgs', () {
-    test('inclui offset 0x20000', () {
+    test('inclui offset 0x20000 e --no-stub', () {
       final args = buildAppOnlyFlashArgs(comPort: 'COM3', appBinPath: r'C:\fw\sirene-validator.bin');
       expect(args, contains('COM3'));
+      expect(args, contains('--no-stub'));
       expect(args, contains(FirmwareFlashOffsets.appImage));
       expect(args.last, r'C:\fw\sirene-validator.bin');
     });

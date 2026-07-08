@@ -16,11 +16,14 @@ void main() {
     test('parseia resultado de teste', () {
       final json = MqttParser.tryParseJson(
         '{"tipo":"teste","numero_op":"2026001","id_produto":"123","ano":"26",'
-        '"veredito":"APROVADO","potencia_media":20.15,"sequencial":1,"aprovados_no_lote":1}',
+        '"veredito":"APROVADO","potencia_media":20.15,"sequencial":1,"aprovados_no_lote":1,'
+        '"ts_ms":6886992,"ts_unix":1710000000}',
       )!;
       final test = MqttParser.parseTestResult(json);
       expect(test!.isApproved, isTrue);
       expect(test.potenciaMedia, closeTo(20.15, 0.01));
+      expect(test.tsMs, 6886992);
+      expect(test.tsUnix, 1710000000);
     });
 
     test('parseia rejeição', () {
@@ -49,6 +52,14 @@ void main() {
       expect(sample, isNotNull);
       expect(sample!.potenciaW, closeTo(20.1, 0.01));
       expect(sample.elapsedMs, 1500);
+    });
+
+    test('parseia resultado final de calibracao priorizando potencia_media', () {
+      final cal = MqttParser.parseCalibration(
+        '{"tipo":"calibracao","evento":"concluido","potencia_max":105.40,"potencia_media":81.19}',
+      );
+      expect(cal, isNotNull);
+      expect(cal!.potenciaMedia, closeTo(81.19, 0.01));
     });
 
     test('parseia resultado final de calibração', () {

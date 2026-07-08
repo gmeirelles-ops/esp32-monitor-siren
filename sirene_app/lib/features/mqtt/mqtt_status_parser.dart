@@ -18,14 +18,20 @@ MqttStatusParseResult parseMqttStatusPayload(String payload) {
   final rejections = <RejectionMessage>[];
   final tests = <TestResultMessage>[];
   final batchEvents = <BatchEventMessage>[];
-  for (final json in MqttParser.tryParseJsonObjects(payload)) {
-    final rejection = MqttParser.parseRejection(json);
-    if (rejection != null) rejections.add(rejection);
+
+  for (final json in MqttParser.tryParseAllTestObjects(payload)) {
     final test = MqttParser.parseTestResult(json);
     if (test != null) tests.add(test);
+  }
+
+  for (final json in MqttParser.tryParseJsonObjects(payload)) {
+    if (json['tipo'] == 'teste') continue;
+    final rejection = MqttParser.parseRejection(json);
+    if (rejection != null) rejections.add(rejection);
     final batch = MqttParser.parseBatchEvent(json);
     if (batch != null) batchEvents.add(batch);
   }
+
   return MqttStatusParseResult(
     rejections: rejections,
     tests: tests,

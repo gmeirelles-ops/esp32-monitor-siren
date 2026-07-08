@@ -1,0 +1,49 @@
+menu "Line actuator"
+
+config LINE_ACTUATOR_ENABLE
+    bool "Enable line actuator (reject/approve GPIO)"
+    default y
+    help
+        GPIO outputs for physical sorting (reject conveyor relay, optional approve stack light).
+        Verdict and GPIO fire before MQTT publish (edge-first).
+
+config LINE_ACTUATOR_REJECT_GPIO
+    int "Reject GPIO number (-1 = disabled)"
+    range -1 39
+    default -1
+    depends on LINE_ACTUATOR_ENABLE
+    help
+        Optional pulse on REPROVADO for conveyor/solenoid sorting. -1 = disabled (bench: button + relay only).
+        Relay load sirene remains on GPIO_RELAY.
+
+config LINE_ACTUATOR_APPROVE_GPIO
+    int "Approve GPIO number (-1 = disabled)"
+    range -1 39
+    default -1
+    depends on LINE_ACTUATOR_ENABLE
+    help
+        Optional pulse on APROVADO (stack light). -1 = LED only.
+
+config LINE_ACTUATOR_ACTIVE_HIGH
+    bool "Actuator outputs active high"
+    default y
+    depends on LINE_ACTUATOR_ENABLE
+
+config LINE_ACTUATOR_REJECT_PULSE_MS
+    int "Reject pulse duration (ms)"
+    range 50 2000
+    default 300
+    depends on LINE_ACTUATOR_ENABLE
+
+config LINE_ACTUATOR_APPROVE_PULSE_MS
+    int "Approve pulse duration (ms)"
+    range 50 2000
+    default 200
+    depends on LINE_ACTUATOR_ENABLE
+
+config LINE_ACTUATOR_PUBLISH_TELEMETRY
+    bool "Publish tipo:atuador telemetry on pulse"
+    default y
+    depends on LINE_ACTUATOR_ENABLE
+
+endmenu

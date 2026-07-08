@@ -32,22 +32,26 @@ class BatchLiveLastTestHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (estado == DeviceFsmState.testing) {
+    final latest = _resolveLatest();
+    if (estado == DeviceFsmState.testing && latest == null && liveResult == null) {
       return _HeroShell(
         accent: DipontoColors.primary,
-        icon: Icons.hourglass_top,
-        title: 'Teste em andamento',
-        subtitle: 'Aguarde o resultado na bancada',
+        icon: Icons.bolt_rounded,
+        title: 'Testando',
+        subtitle: 'Medindo potência na bancada — aguarde o resultado',
         child: const Center(
           child: Padding(
-            padding: EdgeInsets.symmetric(vertical: 8),
-            child: CircularProgressIndicator(color: DipontoColors.primary),
+            padding: EdgeInsets.symmetric(vertical: 12),
+            child: SizedBox(
+              width: 40,
+              height: 40,
+              child: CircularProgressIndicator(strokeWidth: 3, color: DipontoColors.primary),
+            ),
           ),
         ),
       );
     }
 
-    final latest = _resolveLatest();
     if (latest == null) {
       return _HeroShell(
         accent: mqttDisconnected ? DipontoColors.error : DipontoColors.primary,
@@ -203,32 +207,96 @@ class BatchLiveProgressSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final progress = meta > 0 ? (metrics.aprovados / meta).clamp(0.0, 1.0) : 0.0;
+    if (meta <= 0) return const SizedBox.shrink();
+
+    final progress = (metrics.aprovados / meta).clamp(0.0, 1.0);
+    final pendentes = metrics.pendentes(meta);
+    final percent = (progress * 100).round();
 
     return ActionSectionCard(
       icon: Icons.trending_up,
       title: 'Progresso do lote',
-      subtitle: meta > 0
-          ? '${metrics.pendentes(meta)} pendentes · ${metrics.total} ${PortugueseLabels.totalTestadas.toLowerCase()}'
-          : '${metrics.total} ${PortugueseLabels.totalTestadas.toLowerCase()}',
+      subtitle: '$pendentes pendentes · ${metrics.aprovados} aprovados na bancada',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (meta > 0) ...[
-            LinearProgressIndicator(
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  DipontoColors.success.withValues(alpha: 0.14),
+                  DipontoColors.primary.withValues(alpha: 0.08),
+                ],
+              ),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: DipontoColors.success.withValues(alpha: 0.35)),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Aprovados',
+                        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                              color: DipontoColors.onSurface.withValues(alpha: 0.7),
+                            ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text.rich(
+                        TextSpan(
+                          children: [
+                            TextSpan(
+                              text: '${metrics.aprovados}',
+                              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                                    fontWeight: FontWeight.w800,
+                                    color: DipontoColors.success,
+                                    height: 1,
+                                  ),
+                            ),
+                            TextSpan(
+                              text: ' / $meta',
+                              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                    color: DipontoColors.onSurface.withValues(alpha: 0.75),
+                                  ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: DipontoColors.surface.withValues(alpha: 0.65),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    '$percent%',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: DipontoColors.primaryLight,
+                        ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: LinearProgressIndicator(
               value: progress,
-              minHeight: 10,
-              borderRadius: BorderRadius.circular(5),
-              color: DipontoColors.primary,
+              minHeight: 12,
+              color: DipontoColors.success,
               backgroundColor: DipontoColors.surfaceVariant,
             ),
-            const SizedBox(height: 8),
-            Text(
-              '${metrics.aprovados} / $meta aprovados',
-              style: Theme.of(context).textTheme.titleSmall,
-            ),
-            const SizedBox(height: 16),
-          ],
+          ),
+          const SizedBox(height: 16),
           Row(
             children: [
               Expanded(
@@ -569,6 +637,7 @@ class BatchLiveOperatorHero extends StatelessWidget {
     this.potenciaMax,
     this.mqttDisconnected = false,
     this.filaOffline = 0,
+    this.awaitingMqtt = false,
   });
 
   final DeviceFsmState estado;
@@ -580,30 +649,108 @@ class BatchLiveOperatorHero extends StatelessWidget {
   final double? potenciaMax;
   final bool mqttDisconnected;
   final int filaOffline;
+  final bool awaitingMqtt;
 
   @override
   Widget build(BuildContext context) {
+    if (liveResult != null && liveResult!.numeroOp == numeroOp) {
+      final approved = liveResult!.isApproved;
+      final accent = approved ? DipontoColors.success : DipontoColors.error;
+      return _OperatorHeroCard(
+        accent: accent,
+        child: Column(
+          children: [
+            Text(
+              liveResult!.veredito,
+              style: Theme.of(context).textTheme.displayMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: accent,
+                    letterSpacing: 1.2,
+                  ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              '${liveResult!.potenciaMedia.toStringAsFixed(2)} W',
+              style: Theme.of(context).textTheme.headlineLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+              textAlign: TextAlign.center,
+            ),
+            if (potenciaMin != null && potenciaMax != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  'Faixa: ${potenciaMin!.toStringAsFixed(1)}–${potenciaMax!.toStringAsFixed(1)} W',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: DipontoColors.onSurface.withValues(alpha: 0.65),
+                      ),
+                ),
+              ),
+          ],
+        ),
+      );
+    }
+
     if (estado == DeviceFsmState.testing) {
       return _OperatorHeroCard(
         accent: DipontoColors.primary,
         child: Column(
           children: [
+            const _TestingPulseIndicator(),
+            const SizedBox(height: 24),
+            Text(
+              'Testando',
+              style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: DipontoColors.primary,
+                    letterSpacing: 0.5,
+                  ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'Medindo potência na bancada',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: DipontoColors.onSurface.withValues(alpha: 0.8),
+                  ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Aguarde o resultado — não pressione o botão novamente',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: DipontoColors.onSurface.withValues(alpha: 0.55),
+                  ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (awaitingMqtt) {
+      return _OperatorHeroCard(
+        accent: Colors.orange,
+        child: Column(
+          children: [
             const SizedBox(
               width: 48,
               height: 48,
-              child: CircularProgressIndicator(strokeWidth: 3, color: DipontoColors.primary),
+              child: CircularProgressIndicator(strokeWidth: 3, color: Colors.orange),
             ),
             const SizedBox(height: 20),
             Text(
-              'Testando…',
+              'Aguardando MQTT',
               style: Theme.of(context).textTheme.displaySmall?.copyWith(
                     fontWeight: FontWeight.bold,
-                    color: DipontoColors.primary,
+                    color: Colors.orange.shade800,
                   ),
             ),
             const SizedBox(height: 8),
             Text(
-              'Aguarde o resultado na bancada',
+              filaOffline > 0
+                  ? 'Resultado na fila da bancada ($filaOffline) — sincronizando…'
+                  : 'Resultado do teste a caminho — aguarde',
               style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                     color: DipontoColors.onSurface.withValues(alpha: 0.7),
                   ),
@@ -756,6 +903,7 @@ class BatchLiveOperatorProgress extends StatelessWidget {
     if (meta <= 0) return const SizedBox.shrink();
 
     final progress = (metrics.aprovados / meta).clamp(0.0, 1.0);
+    final pendentes = metrics.pendentes(meta);
 
     return Card(
       margin: EdgeInsets.zero,
@@ -767,26 +915,52 @@ class BatchLiveOperatorProgress extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  'Meta do lote',
-                  style: Theme.of(context).textTheme.titleSmall,
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Meta do lote',
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                    Text(
+                      '$pendentes pendentes',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: DipontoColors.onSurface.withValues(alpha: 0.65),
+                          ),
+                    ),
+                  ],
                 ),
-                Text(
-                  '${metrics.aprovados} / $meta',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: DipontoColors.success,
+                Text.rich(
+                  TextSpan(
+                    children: [
+                      TextSpan(
+                        text: '${metrics.aprovados}',
+                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                              fontWeight: FontWeight.w800,
+                              color: DipontoColors.success,
+                            ),
                       ),
+                      TextSpan(
+                        text: ' / $meta',
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w600,
+                              color: DipontoColors.onSurface.withValues(alpha: 0.75),
+                            ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
-            const SizedBox(height: 10),
-            LinearProgressIndicator(
-              value: progress,
-              minHeight: 8,
-              borderRadius: BorderRadius.circular(4),
-              color: DipontoColors.success,
-              backgroundColor: DipontoColors.surfaceVariant,
+            const SizedBox(height: 12),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: LinearProgressIndicator(
+                value: progress,
+                minHeight: 10,
+                color: DipontoColors.success,
+                backgroundColor: DipontoColors.surfaceVariant,
+              ),
             ),
           ],
         ),
@@ -803,12 +977,14 @@ class BatchLiveOperatorStatusStrip extends StatelessWidget {
     required this.estado,
     required this.mqttDisconnected,
     this.filaOffline = 0,
+    this.awaitingMqtt = false,
   });
 
   final String bancadaLabel;
   final DeviceFsmState estado;
   final bool mqttDisconnected;
   final int filaOffline;
+  final bool awaitingMqtt;
 
   @override
   Widget build(BuildContext context) {
@@ -826,6 +1002,12 @@ class BatchLiveOperatorStatusStrip extends StatelessWidget {
           _OperatorStatusPill(
             icon: Icons.queue,
             label: 'Fila $filaOffline',
+            color: Colors.orange,
+          ),
+        if (awaitingMqtt)
+          const _OperatorStatusPill(
+            icon: Icons.sync,
+            label: 'Aguardando MQTT',
             color: Colors.orange,
           ),
       ],
@@ -900,6 +1082,85 @@ class _OperatorHeroCard extends StatelessWidget {
           ),
         ),
         child: child,
+      ),
+    );
+  }
+}
+
+class _TestingPulseIndicator extends StatefulWidget {
+  const _TestingPulseIndicator();
+
+  @override
+  State<_TestingPulseIndicator> createState() => _TestingPulseIndicatorState();
+}
+
+class _TestingPulseIndicatorState extends State<_TestingPulseIndicator>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 88,
+      height: 88,
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, child) {
+          final t = _controller.value;
+          final scale = 0.85 + (Curves.easeOut.transform(t) * 0.25);
+          final opacity = (1 - t).clamp(0.0, 1.0);
+          return Stack(
+            alignment: Alignment.center,
+            children: [
+              Transform.scale(
+                scale: scale,
+                child: Container(
+                  width: 72,
+                  height: 72,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: DipontoColors.primary.withValues(alpha: opacity * 0.45),
+                      width: 2,
+                    ),
+                  ),
+                ),
+              ),
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: DipontoColors.primary.withValues(alpha: 0.15),
+                  border: Border.all(
+                    color: DipontoColors.primary.withValues(alpha: 0.5),
+                    width: 2,
+                  ),
+                ),
+                child: const Icon(
+                  Icons.bolt_rounded,
+                  size: 32,
+                  color: DipontoColors.primary,
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }

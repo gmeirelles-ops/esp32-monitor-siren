@@ -39,12 +39,22 @@ static void publish_calibracao_msg(const char *evento, float potencia_w, uint32_
                  "{\"device_id\":\"%s\",\"site\":\"%s\",\"bancada\":%u,\"ts_ms\":%lld,"
                  "\"tipo\":\"calibracao\",\"evento\":\"iniciado\"}",
                  device_id_get(), site, bancada, (long long)ts_ms);
-    } else {
-        snprintf(json, sizeof(json),
-                 "{\"device_id\":\"%s\",\"site\":\"%s\",\"bancada\":%u,\"ts_ms\":%lld,"
-                 "\"tipo\":\"calibracao\",\"evento\":\"concluido\",\"potencia_media\":%.2f}",
-                 device_id_get(), site, bancada, (long long)ts_ms, potencia_media);
     }
+    app_publish_or_queue("calibracao", json);
+}
+
+static void publish_calibracao_concluido(float potencia_media, float potencia_max)
+{
+    char json[320];
+    int64_t ts_ms = app_now_ts_ms();
+    const char *site = mqtt_topics_get_site();
+    unsigned bancada = (unsigned)mqtt_topics_get_bancada();
+
+    snprintf(json, sizeof(json),
+             "{\"device_id\":\"%s\",\"site\":\"%s\",\"bancada\":%u,\"ts_ms\":%lld,"
+             "\"tipo\":\"calibracao\",\"evento\":\"concluido\",\"potencia_max\":%.2f,"
+             "\"potencia_media\":%.2f}",
+             device_id_get(), site, bancada, (long long)ts_ms, potencia_max, potencia_media);
     app_publish_or_queue("calibracao", json);
 }
 
@@ -54,8 +64,15 @@ static void on_calibration_sample(float power_w, uint32_t elapsed_ms, void *ctx)
     publish_calibracao_msg("amostra", power_w, elapsed_ms, 0);
 }
 
-void calibration_handle_start(void)
+void calibration_handle_start(uint32_t duration_sec)
 {
+    if (duration_sec == 0) {
+        duration_sec = CALIBRATION_SEC;
+    }
+    if (duration_sec > 120) {
+        duration_sec = 120;
+    }
+
     if (!state_machine_can_accept_calibration()) {
         mqtt_bridge_publish_rejection("calibracao_estado_invalido");
         return;
@@ -78,7 +95,7 @@ void calibration_handle_start(void)
     relay_set(true);
 
     pzem_cycle_result_t result = {0};
-    bool ok = pzem_measure_cycle(CALIBRATION_SEC, INRUSH_DISCARD_MS, &result,
+    bool ok = pzem_measure_cycle(duration_sec, INRUSH_DISCARD_MS, &result,
                                  on_calibration_sample, NULL);
 
     relay_set(false);
@@ -91,6 +108,6 @@ void calibration_handle_start(void)
         return;
     }
 
-    publish_calibracao_msg("concluido", 0, 0, result.average_w);
+    publish_calibracao_concluido(result.average_w, result.max_w);
     state_machine_set(restore_state);
 }

@@ -23,6 +23,36 @@ void main() {
     expect(result.tests.first.ano, '26');
   });
 
+  test('payload colado com 2 testes distintos extrai ambos', () {
+    const glued =
+        '{"tipo":"teste","ts_ms":1001,"numero_op":"OP","id_produto":"150","ano":"26",'
+        '"veredito":"APROVADO","potencia_media":80.0,"sequencial":253,"aprovados_no_lote":1}'
+        '{"tipo":"teste","ts_ms":1002,"numero_op":"OP","id_produto":"150","ano":"26",'
+        '"veredito":"APROVADO","potencia_media":81.0,"sequencial":255,"aprovados_no_lote":2}';
+    final result = parseMqttStatusPayload(glued);
+    expect(result.tests, hasLength(2));
+    expect(result.tests.map((t) => t.sequencial).toList()..sort(), [253, 255]);
+  });
+
+  test('payload colado OP 1001 recupera APROVADO', () {
+    const broken =
+        r'{"tipo":"teste","ts_ms":265352,"ts_unix":1783531026,"numero_op":"1001","id_produto":"150'
+        r'26{"tipo":"teste","ts_ms":265352,"ts_unix":1783531026,"numero_op":"1001"","ano":"26'
+        r'{"tipo":"teste","ts_ms":265352,"ts_unix":1783531026,"numero_op":"1001","id_produto":"150'
+        r'26{"tipo":"teste","ts_ms":265352,"ts_unix":1783531026,"numero_op":"1001"","veredito":"APROVADO",'
+        r'"potencia_media":78.95,"sequencial":258,"aprovados_no_lote":6}';
+    final result = parseMqttStatusPayload(broken);
+    expect(result.tests, hasLength(1));
+    expect(result.tests.first.veredito, 'APROVADO');
+    expect(result.tests.first.sequencial, 258);
+    expect(result.tests.first.potenciaMedia, closeTo(78.95, 0.01));
+    expect(result.tests.first.aprovadosNoLote, 6);
+    expect(result.tests.first.numeroOp, '1001');
+    expect(result.tests.first.idProduto, '150');
+    expect(result.tests.first.ano, '26');
+    expect(result.tests.first.tsMs, 265352);
+  });
+
   test('parseMqttStatusPayload extrai rejeição', () {
     const payload = '{"tipo":"rejeicao","motivo":"lote_inativo"}';
     final objects = MqttParser.tryParseJsonObjects(payload);

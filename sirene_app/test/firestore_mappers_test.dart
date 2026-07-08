@@ -19,6 +19,25 @@ void main() {
       expect(serialPath('2026001', '1232600018'),
           'test_results/2026001/seriais/1232600018');
       expect(reprovadaPath('2026001', 3), 'test_results/2026001/reprovadas/3');
+      expect(
+        reprovadaPath('2026001', 3, tsMs: 6886992),
+        'test_results/2026001/reprovadas/6886992',
+      );
+      expect(
+        reprovadaDocumentId(
+          const TestResultMessage(
+            numeroOp: '2026001',
+            idProduto: '123',
+            ano: '26',
+            veredito: 'REPROVADO',
+            potenciaMedia: 5,
+            sequencial: 3,
+            aprovadosNoLote: 0,
+            tsMs: 6886992,
+          ),
+        ),
+        '6886992',
+      );
       expect(isReprovadaFirestorePath('test_results/2525/reprovadas/14'), isTrue);
       expect(isReprovadaFirestorePath('test_results/2525/seriais/123'), isFalse);
       expect(isReprovadaFirestorePath(null), isFalse);

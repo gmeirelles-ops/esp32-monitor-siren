@@ -17,6 +17,7 @@
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 #include "led_feedback.h"
+#include "line_actuator.h"
 #include "mqtt_bridge.h"
 #include "mqtt_cmd.h"
 #include "mqtt_topics.h"
@@ -61,6 +62,7 @@ static void on_mqtt_connected(void)
 static bool telemetry_snapshot(telemetry_snapshot_t *out)
 {
     static char s_wifi_ssid[33];
+    static char s_ultimo_veredito[16];
     batch_context_t *batch = app_batch();
     out->rssi = wifi_prov_get_rssi();
     out->estado = state_machine_name(state_machine_get());
@@ -90,6 +92,23 @@ static bool telemetry_snapshot(telemetry_snapshot_t *out)
         out->aprovados = 0;
     }
     app_batch_unlock();
+
+    app_last_test_t last;
+    app_last_test_get(&last);
+    out->last_test_valid = last.valid;
+    if (last.valid) {
+        strncpy(s_ultimo_veredito, last.veredito, sizeof(s_ultimo_veredito) - 1);
+        s_ultimo_veredito[sizeof(s_ultimo_veredito) - 1] = '\0';
+        out->ultimo_veredito = s_ultimo_veredito;
+        out->ultima_potencia = last.potencia_media;
+        out->ultimo_sequencial = last.sequencial;
+        out->ultimo_ts_ms = last.ts_ms;
+    } else {
+        out->ultimo_veredito = "";
+        out->ultima_potencia = 0.f;
+        out->ultimo_sequencial = 0;
+        out->ultimo_ts_ms = 0;
+    }
     return true;
 }
 
@@ -135,6 +154,7 @@ static void on_pzem_fault(bool fault)
     }
     hardware_fault_enter(restore, "pzem_uart");
     relay_set(false);
+    line_actuator_safe_all();
 }
 
 static void on_ota_status(const char *json)
@@ -160,7 +180,7 @@ static void pzem_worker_task(void *arg)
         if (item.type == PZEM_WORK_TEST) {
             batch_cmd_run_test_cycle(item.duration_sec);
         } else if (item.type == PZEM_WORK_CALIBRATION) {
-            calibration_handle_start();
+            calibration_handle_start(item.duration_sec);
         } else if (item.type == PZEM_WORK_ENSAIO) {
             ensaio_handle_start(item.ensaio);
         } else if (item.type == PZEM_WORK_PROBE) {
@@ -299,6 +319,7 @@ void app_main(void)
     app_runtime_init(s_batch_mu, s_work_queue, s_pzem_queue);
 
     relay_init_safe();
+    line_actuator_init();
     device_id_init();
     state_machine_init(oled_display_on_state_change);
     led_feedback_init();
@@ -391,10 +412,12 @@ void app_main(void)
     telemetry_set_snapshot_provider(telemetry_snapshot);
     telemetry_start();
     offline_queue_sync_task_start();
-    xTaskCreate(pzem_worker_task, "pzem_worker", 8192, NULL, 6, NULL);
+    xTaskCreatePinnedToCore(pzem_worker_task, "pzem_worker", 8192, NULL, 6, NULL,
+                            CONFIG_PZEM_WORKER_CORE);
     xTaskCreate(worker_task, "worker", 8192, NULL, 6, NULL);
     xTaskCreate(hardware_monitor_task, "hw_mon", 3072, NULL, 5, NULL);
 
     ESP_LOGI(TAG, "sistema pronto (hardening producao)");
 }
+
 

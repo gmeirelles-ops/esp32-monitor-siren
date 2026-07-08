@@ -128,7 +128,7 @@ static bool oled_hw_init(void)
     i2c_device_config_t dev_cfg = {
         .dev_addr_length = I2C_ADDR_BIT_LEN_7,
         .device_address = OLED_I2C_ADDR,
-        .sclk_speed_hz = 400000,
+        .scl_speed_hz = 400000,
     };
     if (i2c_master_bus_add_device(s_bus, &dev_cfg, &s_dev) != ESP_OK) {
         return false;
@@ -195,7 +195,7 @@ static void fb_flush(void)
 static void render_locked(void)
 {
     char line0[22];
-    char line3[22];
+    char line3[32];
     char ssid[12];
 
     snprintf(line0, sizeof(line0), "DIPONTO %s", state_machine_name(s_state));

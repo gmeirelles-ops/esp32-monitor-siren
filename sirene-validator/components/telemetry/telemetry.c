@@ -51,13 +51,21 @@ static void publish_heartbeat(void)
     if (s_provider) {
         s_provider(&snap);
     }
+    char last_test_json[160] = "";
+    if (snap.last_test_valid && snap.ultimo_veredito != NULL && snap.ultimo_veredito[0] != '\0') {
+        snprintf(last_test_json, sizeof(last_test_json),
+                 ",\"ultimo_veredito\":\"%s\",\"ultima_potencia\":%.2f,"
+                 "\"ultimo_sequencial\":%lu,\"ultimo_ts_ms\":%lld",
+                 snap.ultimo_veredito, snap.ultima_potencia,
+                 (unsigned long)snap.ultimo_sequencial, (long long)snap.ultimo_ts_ms);
+    }
     char json[768];
     snprintf(json, sizeof(json),
              "{\"device_id\":\"%s\",\"site\":\"%s\",\"bancada\":%u,"
              "\"uptime\":%lld,\"ts_ms\":%lld,\"rssi\":%d,\"estado\":\"%s\",\"wifi_ssid\":\"%s\","
              "\"fila\":%u,\"fila_drops\":%lu,\"firmware_version\":\"%s\",\"numero_op\":\"%s\","
              "\"proximo_sequencial\":%lu,\"aprovados\":%lu,\"batch_nvs_fault\":%s,"
-             "\"pzem_faults\":%lu,\"pzem_addr\":\"0x%02X\",\"reset_reason\":%d,\"time_synced\":%s}",
+             "\"pzem_faults\":%lu,\"pzem_addr\":\"0x%02X\",\"reset_reason\":%d,\"time_synced\":%s%s}",
              device_id_get(),
              mqtt_topics_get_site(),
              (unsigned)mqtt_topics_get_bancada(),
@@ -69,7 +77,7 @@ static void publish_heartbeat(void)
              (unsigned long)snap.proximo_sequencial, (unsigned long)snap.aprovados,
              snap.batch_nvs_fault ? "true" : "false",
              (unsigned long)snap.pzem_faults, snap.pzem_addr, snap.reset_reason,
-             snap.time_synced ? "true" : "false");
+             snap.time_synced ? "true" : "false", last_test_json);
     mqtt_bridge_publish("heartbeat", json);
 }
 

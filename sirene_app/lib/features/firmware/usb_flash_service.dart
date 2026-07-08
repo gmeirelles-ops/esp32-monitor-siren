@@ -51,6 +51,27 @@ class UsbFlashService {
   }
 
   Future<EsptoolCommand?> resolveEsptoolCommand() async {
+    const espPython =
+        r'C:\Espressif\python_env\idf5.5_py3.11_env\Scripts\python.exe';
+    if (await File(espPython).exists()) {
+      final result = await Process.run(espPython, ['-m', 'esptool', 'version']);
+      if (result.exitCode == 0) {
+        return EsptoolCommand(
+          executable: espPython,
+          prefixArgs: const ['-m', 'esptool'],
+        );
+      }
+    }
+
+    for (final cmd in ['python', 'py', 'python3']) {
+      try {
+        final result = await Process.run(cmd, ['-m', 'esptool', 'version']);
+        if (result.exitCode == 0) {
+          return EsptoolCommand(executable: cmd, prefixArgs: const ['-m', 'esptool']);
+        }
+      } catch (_) {}
+    }
+
     final candidates = <String>[];
 
     final exeDir = File(Platform.resolvedExecutable).parent;
@@ -65,15 +86,6 @@ class UsbFlashService {
       if (await File(path).exists()) {
         return EsptoolCommand(executable: path, prefixArgs: const []);
       }
-    }
-
-    for (final cmd in ['python', 'py', 'python3']) {
-      try {
-        final result = await Process.run(cmd, ['-m', 'esptool', 'version']);
-        if (result.exitCode == 0) {
-          return EsptoolCommand(executable: cmd, prefixArgs: const ['-m', 'esptool']);
-        }
-      } catch (_) {}
     }
 
     return null;

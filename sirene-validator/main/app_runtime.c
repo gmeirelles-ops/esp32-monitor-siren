@@ -1,5 +1,7 @@
 #include "app_runtime.h"
 
+#include <string.h>
+
 #include "board_config.h"
 #include "esp_timer.h"
 #include "led_feedback.h"
@@ -17,6 +19,25 @@ static volatile bool s_pzem_busy;
 static bool s_calibrating;
 static volatile bool s_ensaio_stop;
 static bool s_ensaio_running;
+static app_last_test_t s_last_test;
+
+void app_last_test_set(bool approved, float potencia_media, uint32_t sequencial, int64_t ts_ms)
+{
+    s_last_test.valid = true;
+    strncpy(s_last_test.veredito, approved ? "APROVADO" : "REPROVADO", sizeof(s_last_test.veredito) - 1);
+    s_last_test.veredito[sizeof(s_last_test.veredito) - 1] = '\0';
+    s_last_test.potencia_media = potencia_media;
+    s_last_test.sequencial = sequencial;
+    s_last_test.ts_ms = ts_ms;
+}
+
+void app_last_test_get(app_last_test_t *out)
+{
+    if (out == NULL) {
+        return;
+    }
+    *out = s_last_test;
+}
 
 void app_runtime_init(SemaphoreHandle_t batch_mu, QueueHandle_t work_q, QueueHandle_t pzem_q)
 {

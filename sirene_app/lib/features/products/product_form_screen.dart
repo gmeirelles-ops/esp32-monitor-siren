@@ -41,10 +41,19 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
   bool _saving = false;
   final List<double> _samples = [];
   int _elapsedMs = 0;
-  double? _latestSample;
+  double? _peakSample;
   DateTime? _calibratedAt;
 
   bool get _isEditing => widget.existing != null;
+
+  double? get _sampleAverage {
+    if (_samples.isEmpty) return null;
+    var sum = 0.0;
+    for (final sample in _samples) {
+      sum += sample;
+    }
+    return sum / _samples.length;
+  }
 
   @override
   void initState() {
@@ -81,9 +90,13 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
     super.dispose();
   }
 
-  void _applyLimitsFromRef(double ref) {
+  void _applyLimitsFromRef(double ref, {double? potenciaPico}) {
     final tol = double.tryParse(_tolerancia.text) ?? 10;
-    final limits = calcularLimites(ref, tol);
+    final limits = calcularLimitesFromCalibration(
+      potenciaMedia: ref,
+      toleranciaPct: tol,
+      potenciaPico: potenciaPico ?? _peakSample,
+    );
     _potenciaRef.text = ref.toStringAsFixed(2);
     _potenciaMin.text = limits.min.toStringAsFixed(2);
     _potenciaMax.text = limits.max.toStringAsFixed(2);
@@ -119,14 +132,19 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
       return;
     }
 
+    final tempoTeste = int.tryParse(_tempoTeste.text) ?? 5;
+
     setState(() {
       _measuring = true;
       _samples.clear();
       _elapsedMs = 0;
-      _latestSample = null;
+      _peakSample = null;
     });
 
-    await ref.read(devicesProvider.notifier).sendStartCalibration(deviceId);
+    await ref.read(devicesProvider.notifier).sendStartCalibration(
+          deviceId,
+          tempoTesteSec: tempoTeste,
+        );
   }
 
   Future<void> _save() async {
@@ -228,7 +246,9 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
       next.whenData((event) {
         if (event.deviceId != _selectedDeviceId || !_measuring) return;
         setState(() {
-          _latestSample = event.sample.potenciaW;
+          _peakSample = _peakSample == null
+              ? event.sample.potenciaW
+              : math.max(_peakSample!, event.sample.potenciaW);
           _elapsedMs = event.sample.elapsedMs;
           _samples.add(event.sample.potenciaW);
         });
@@ -252,8 +272,13 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
           _measuring = false;
           _calibratedAt = DateTime.now();
         });
-        _applyLimitsFromRef(event.result.potenciaMedia);
-        _showSnack('Calibração concluída: ${event.result.potenciaMedia.toStringAsFixed(2)} W');
+        _applyLimitsFromRef(
+          event.result.potenciaMedia,
+          potenciaPico: event.result.potenciaMax ?? _peakSample,
+        );
+        _showSnack(
+          'Calibração concluída (média): ${event.result.potenciaMedia.toStringAsFixed(2)} W',
+        );
       });
     });
 
@@ -345,15 +370,24 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                       _measuring ? 'Medindo...' : 'Última medição',
                       style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
+                    if (_peakSample != null)
+                      Text(
+                        'Pico no ciclo: ${_peakSample!.toStringAsFixed(2)} W',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: DipontoColors.onSurface.withValues(alpha: 0.7),
+                            ),
+                      ),
                     const SizedBox(height: 8),
                     LinearProgressIndicator(
-                      value: (_elapsedMs / 5000).clamp(0.0, 1.0),
+                      value: (_elapsedMs /
+                              ((int.tryParse(_tempoTeste.text) ?? 5) * 1000))
+                          .clamp(0.0, 1.0),
                       color: DipontoColors.primary,
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      _latestSample != null
-                          ? '${_latestSample!.toStringAsFixed(2)} W'
+                      _sampleAverage != null
+                          ? 'Média: ${_sampleAverage!.toStringAsFixed(2)} W'
                           : 'Aguardando leituras...',
                       style: const TextStyle(fontSize: 24, color: DipontoColors.primaryLight),
                     ),

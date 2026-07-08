@@ -28,6 +28,8 @@ class TestResults extends Table {
   RealColumn get potenciaMax => real().nullable()();
   IntColumn get operatorId => integer().nullable()();
   BoolColumn get isRetest => boolean().withDefault(const Constant(false))();
+  /// Timestamp do firmware (`ts_ms` no MQTT) — chave de dedupe.
+  IntColumn get firmwareTsMs => integer().nullable()();
   DateTimeColumn get createdAt => dateTime()();
 }
 
@@ -196,7 +198,7 @@ class AppDatabase extends _$AppDatabase {
   }
 
   @override
-  int get schemaVersion => 18;
+  int get schemaVersion => 19;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -272,6 +274,14 @@ class AppDatabase extends _$AppDatabase {
           }
           if (from < 18) {
             await _addColumnIfNotExists(m, products, products.sequencialInicial);
+          }
+          if (from < 19) {
+            await _addColumnIfNotExists(m, testResults, testResults.firmwareTsMs);
+            await m.database.customStatement(
+              'CREATE INDEX IF NOT EXISTS idx_test_results_op_ts_ms '
+              'ON test_results(numero_op, firmware_ts_ms) '
+              'WHERE firmware_ts_ms IS NOT NULL',
+            );
           }
         },
       );
@@ -557,6 +567,7 @@ class AppDatabase extends _$AppDatabase {
     double? potenciaMax,
     int? operatorId,
     bool isRetest = false,
+    int? firmwareTsMs,
   }) {
     return into(testResults).insert(
       TestResultsCompanion.insert(
@@ -573,6 +584,7 @@ class AppDatabase extends _$AppDatabase {
         potenciaMax: Value(potenciaMax),
         operatorId: Value(operatorId),
         isRetest: Value(isRetest),
+        firmwareTsMs: Value(firmwareTsMs),
         createdAt: DateTime.now(),
       ),
     );
@@ -615,6 +627,45 @@ class AppDatabase extends _$AppDatabase {
     return computeBatchMetrics(rows);
   }
 
+  Future<TestResult?> getTestByOpSequencial(String numeroOp, int sequencial) {
+    return (select(testResults)
+          ..where((t) => t.numeroOp.equals(numeroOp))
+          ..where((t) => t.sequencial.equals(sequencial))
+          ..orderBy([(t) => OrderingTerm.desc(t.createdAt)])
+          ..limit(1))
+        .getSingleOrNull();
+  }
+
+  Future<List<TestResult>> getApprovedProductionTestsForOp(
+    String numeroOp, {
+    DateTime? since,
+  }) async {
+    final rows = since != null
+        ? await getTestsByOpSince(numeroOp, since)
+        : await (select(testResults)..where((t) => t.numeroOp.equals(numeroOp))).get();
+    return rows
+        .where((r) => !r.isRetest && isApprovedVeredito(r.veredito))
+        .where((r) => r.serial != null && r.serial!.trim().isNotEmpty)
+        .toList();
+  }
+
+  Future<List<TestResult>> getTestsByOpSince(String numeroOp, DateTime since) async {
+    final rows = await (select(testResults)..where((t) => t.numeroOp.equals(numeroOp))).get();
+    return rows.where((r) => !r.createdAt.isBefore(since)).toList();
+  }
+
+  Future<bool> markQueueContainsSerial(String serial) async {
+    final row = await (select(markQueueEntries)..where((t) => t.serial.equals(serial)))
+        .getSingleOrNull();
+    return row != null;
+  }
+
+  Future<bool> labelBufferContainsSerial(String serial) async {
+    final row = await (select(labelBufferEntries)..where((t) => t.serial.equals(serial)))
+        .getSingleOrNull();
+    return row != null;
+  }
+
   Future<int> addLabelToBuffer({
     required String serial,
     required String numeroOp,
@@ -647,7 +698,12 @@ class AppDatabase extends _$AppDatabase {
   }
 
   Future<void> removeLabelsFromBuffer(List<int> ids) async {
+    if (ids.isEmpty) return;
     await (delete(labelBufferEntries)..where((t) => t.id.isIn(ids))).go();
+  }
+
+  Future<int> removeLabelsForOp(String numeroOp) async {
+    return (delete(labelBufferEntries)..where((t) => t.numeroOp.equals(numeroOp))).go();
   }
 
   Future<int> labelBufferCount() async {
@@ -752,10 +808,14 @@ class AppDatabase extends _$AppDatabase {
         .get();
   }
 
+  Expression<bool> _markQueueActiveFilter(MarkQueueEntries t) =>
+      t.status.equals('pending') | t.status.equals('in_progress');
+
   Stream<List<MarkQueueEntry>> watchPendingMarkQueue() {
     return (select(markQueueEntries)
-          ..where((t) => t.status.equals('pending'))
+          ..where(_markQueueActiveFilter)
           ..orderBy([
+            (t) => OrderingTerm.asc(t.status),
             (t) => OrderingTerm.desc(t.pinned),
             (t) => OrderingTerm.asc(t.createdAt),
           ]))
@@ -766,7 +826,7 @@ class AppDatabase extends _$AppDatabase {
     final count = countAll();
     final query = selectOnly(markQueueEntries)
       ..addColumns([count])
-      ..where(markQueueEntries.status.equals('pending'));
+      ..where(_markQueueActiveFilter(markQueueEntries));
     return query.watch().map((rows) => rows.first.read(count) ?? 0);
   }
 
@@ -1384,6 +1444,54 @@ class AppDatabase extends _$AppDatabase {
         ),
       );
     });
+  }
+
+  /// Evita reprocessar o mesmo teste MQTT (replay fila offline).
+  Future<bool> testExistsByOpTsMsSequencial(
+    String numeroOp,
+    int firmwareTsMs,
+    int sequencial,
+  ) async {
+    final row = await (select(testResults)
+          ..where(
+            (t) =>
+                t.numeroOp.equals(numeroOp) &
+                t.firmwareTsMs.equals(firmwareTsMs) &
+                t.sequencial.equals(sequencial),
+          ))
+        .getSingleOrNull();
+    return row != null;
+  }
+
+  /// Evita reprocessar o mesmo teste MQTT (replay fila offline) por ts_ms.
+  Future<bool> testExistsByOpAndTsMs(String numeroOp, int firmwareTsMs) async {
+    final row = await (select(testResults)
+          ..where(
+            (t) =>
+                t.numeroOp.equals(numeroOp) & t.firmwareTsMs.equals(firmwareTsMs),
+          ))
+        .getSingleOrNull();
+    return row != null;
+  }
+
+  /// Legado: replay sem ts_ms — mesma OP, seq, veredito e potência.
+  Future<bool> testExistsLegacyReplay(
+    String numeroOp,
+    int sequencial,
+    String veredito,
+    double potenciaMedia,
+  ) async {
+    final row = await (select(testResults)
+          ..where(
+            (t) =>
+                t.numeroOp.equals(numeroOp) &
+                t.sequencial.equals(sequencial) &
+                t.veredito.equals(veredito) &
+                t.potenciaMedia.equals(potenciaMedia) &
+                t.firmwareTsMs.isNull(),
+          ))
+        .getSingleOrNull();
+    return row != null;
   }
 
   /// Evita reprocessar o mesmo teste (MQTT duplicado / fila offline do firmware).

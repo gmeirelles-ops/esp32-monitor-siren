@@ -24,6 +24,29 @@ import 'remark_serial.dart';
 import 'zpl_generator.dart';
 import '../mqtt/mqtt_providers.dart';
 
+Future<bool> _confirmDelete(
+  BuildContext context, {
+  required String title,
+  required String message,
+}) async {
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Text(title),
+      content: Text(message),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+        ElevatedButton(
+          style: ElevatedButton.styleFrom(foregroundColor: DipontoColors.error),
+          onPressed: () => Navigator.pop(ctx, true),
+          child: const Text('Excluir'),
+        ),
+      ],
+    ),
+  );
+  return ok == true;
+}
+
 Future<void> showSerialSearchDialog(BuildContext context, WidgetRef ref) async {
   final db = ref.read(databaseProvider);
   final mode = ref.read(appConfigProvider).markingMode;
@@ -254,10 +277,28 @@ class LabelsScreen extends ConsumerWidget {
                                     ),
                                   Align(
                                     alignment: Alignment.centerRight,
-                                    child: TextButton.icon(
-                                      onPressed: () => _printPending(context, ref, group.entries),
-                                      icon: const Icon(Icons.print, size: 18),
-                                      label: const Text('Imprimir lote'),
+                                    child: Wrap(
+                                      spacing: 4,
+                                      children: [
+                                        TextButton.icon(
+                                          onPressed: () => _deleteLabelsForOp(
+                                            context,
+                                            ref,
+                                            group.numeroOp,
+                                            group.count,
+                                          ),
+                                          icon: const Icon(Icons.delete_outline, size: 18),
+                                          label: const Text('Excluir OP'),
+                                          style: TextButton.styleFrom(
+                                            foregroundColor: DipontoColors.error,
+                                          ),
+                                        ),
+                                        TextButton.icon(
+                                          onPressed: () => _printPending(context, ref, group.entries),
+                                          icon: const Icon(Icons.print, size: 18),
+                                          label: const Text('Imprimir lote'),
+                                        ),
+                                      ],
                                     ),
                                   ),
                                   for (final entry in group.entries)
@@ -270,6 +311,12 @@ class LabelsScreen extends ConsumerWidget {
                                         style: const TextStyle(fontFamily: 'monospace'),
                                       ),
                                       subtitle: Text(dateFmt.format(entry.createdAt.toLocal())),
+                                      trailing: IconButton(
+                                        tooltip: 'Excluir etiqueta',
+                                        icon: const Icon(Icons.delete_outline, size: 20),
+                                        color: DipontoColors.error.withValues(alpha: 0.85),
+                                        onPressed: () => _deleteLabel(context, ref, entry),
+                                      ),
                                     ),
                                 ],
                               ),
@@ -344,6 +391,47 @@ class LabelsScreen extends ConsumerWidget {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Arquivo salvo: ${location.path}')),
+      );
+    }
+  }
+
+  Future<void> _deleteLabel(
+    BuildContext context,
+    WidgetRef ref,
+    LabelBufferEntry entry,
+  ) async {
+    final ok = await _confirmDelete(
+      context,
+      title: 'Excluir etiqueta?',
+      message: 'Remover ${entry.serial} do buffer de impressão?',
+    );
+    if (!ok || !context.mounted) return;
+
+    await ref.read(databaseProvider).removeLabelsFromBuffer([entry.id]);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Etiqueta ${entry.serial} removida')),
+      );
+    }
+  }
+
+  Future<void> _deleteLabelsForOp(
+    BuildContext context,
+    WidgetRef ref,
+    String numeroOp,
+    int count,
+  ) async {
+    final ok = await _confirmDelete(
+      context,
+      title: 'Excluir etiquetas da OP?',
+      message: 'Remover $count etiqueta(s) pendentes da OP $numeroOp?',
+    );
+    if (!ok || !context.mounted) return;
+
+    await ref.read(databaseProvider).removeLabelsForOp(numeroOp);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Etiquetas da OP $numeroOp removidas')),
       );
     }
   }
@@ -509,19 +597,66 @@ class _LaserMarkQueueScreen extends ConsumerWidget {
                               children: [
                                 for (var i = 0; i < entries.length; i++) ...[
                                   if (i > 0) const Divider(height: 1),
-                                  ListTile(
-                                    contentPadding: EdgeInsets.zero,
-                                    leading: Icon(
-                                      entries[i].pinned ? Icons.push_pin : Icons.looks_one_outlined,
-                                      color: DipontoColors.primary,
-                                    ),
-                                    title: Text(
-                                      entries[i].serial,
-                                      style: const TextStyle(fontFamily: 'monospace'),
-                                    ),
-                                    subtitle: Text(
-                                      'OP ${entries[i].numeroOp} · ${dateFmt.format(entries[i].createdAt)}',
-                                    ),
+                                  Builder(
+                                    builder: (context) {
+                                      final entry = entries[i];
+                                      final inProgress = entry.status == 'in_progress';
+                                      return ListTile(
+                                        contentPadding: EdgeInsets.zero,
+                                        leading: inProgress
+                                            ? CircleAvatar(
+                                                radius: 14,
+                                                backgroundColor: DipontoColors.primary
+                                                    .withValues(alpha: 0.2),
+                                                child: const Icon(
+                                                  Icons.play_arrow,
+                                                  size: 16,
+                                                  color: DipontoColors.primary,
+                                                ),
+                                              )
+                                            : entry.pinned
+                                                ? const Icon(
+                                                    Icons.push_pin,
+                                                    color: DipontoColors.primary,
+                                                  )
+                                                : CircleAvatar(
+                                                    radius: 14,
+                                                    backgroundColor: DipontoColors.primary
+                                                        .withValues(alpha: 0.15),
+                                                    child: Text(
+                                                      '${i + 1}',
+                                                      style: const TextStyle(
+                                                        fontSize: 12,
+                                                        fontWeight: FontWeight.w600,
+                                                        color: DipontoColors.primary,
+                                                      ),
+                                                    ),
+                                                  ),
+                                        title: Text(
+                                          entry.serial,
+                                          style: const TextStyle(fontFamily: 'monospace'),
+                                        ),
+                                        subtitle: Text(
+                                          inProgress
+                                              ? 'Em gravação no DiatuCAD · OP ${entry.numeroOp}'
+                                              : 'OP ${entry.numeroOp} · ${dateFmt.format(entry.createdAt)}',
+                                        ),
+                                        trailing: IconButton(
+                                          tooltip: inProgress
+                                              ? 'Aguarde a gravação terminar'
+                                              : 'Remover da fila',
+                                          icon: const Icon(Icons.delete_outline, size: 20),
+                                          color: DipontoColors.error.withValues(alpha: 0.85),
+                                          onPressed: inProgress
+                                              ? null
+                                              : () => _deleteMarkQueueEntry(
+                                                    context,
+                                                    this.ref,
+                                                    entry,
+                                                  ),
+                                        ),
+                                      );
+                                    },
                                   ),
                                 ],
                               ],
@@ -539,4 +674,19 @@ class _LaserMarkQueueScreen extends ConsumerWidget {
       ),
     );
   }
+}
+
+Future<void> _deleteMarkQueueEntry(
+  BuildContext context,
+  WidgetRef ref,
+  MarkQueueEntry entry,
+) async {
+  final ok = await _confirmDelete(
+    context,
+    title: 'Remover da fila?',
+    message: 'Excluir ${entry.serial} da fila de gravação laser?',
+  );
+  if (!ok || !context.mounted) return;
+
+  await ref.read(databaseProvider).removeMarkQueueEntry(entry.id);
 }

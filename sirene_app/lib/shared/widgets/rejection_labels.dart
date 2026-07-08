@@ -8,6 +8,7 @@ const Map<String, String> rejectionMotivoLabels = {
   'cmd_durante_teste': 'Comando bloqueado durante teste',
   'cmd_durante_ota': 'Comando bloqueado durante atualização OTA',
   'set_batch_durante_teste': 'Não é possível configurar lote durante teste',
+  'config_durante_teste': 'Configuração bloqueada durante teste em andamento',
   'set_batch_campos_invalidos': 'Parâmetros do lote inválidos',
   'end_batch_durante_teste': 'Não é possível encerrar lote durante teste',
   'end_batch_durante_calibracao': 'Não é possível encerrar lote durante calibração',

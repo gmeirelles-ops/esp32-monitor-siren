@@ -116,4 +116,42 @@ void main() {
     expect(container.read(devicesProvider)['dev1']?.activeBatch, isNull);
     expect(container.read(autoBatchEndedProvider)?.numeroOp, 'OP-AUTO');
   });
+
+  test('auto END_BATCH dispara em teste duplicado se meta já atingida', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final container = await createContainer(db);
+    final notifier = container.read(devicesProvider.notifier);
+
+    const smallBatch = BatchConfig(
+      numeroOp: 'OP-DUP',
+      idProduto: '123',
+      ano: '26',
+      tempoTeste: 5,
+      potenciaMin: 18,
+      potenciaMax: 22,
+      quantidadeTotal: 1,
+      proximoSequencial: 1,
+    );
+    notifier.setActiveBatch('dev1', smallBatch);
+
+    const test = TestResultMessage(
+      numeroOp: 'OP-DUP',
+      idProduto: '123',
+      ano: '26',
+      veredito: 'APROVADO',
+      potenciaMedia: 20,
+      sequencial: 1,
+      aprovadosNoLote: 1,
+      tsMs: 1000,
+    );
+    await notifier.processTestResult('dev1', test);
+    expect(container.read(devicesProvider)['dev1']?.activeBatch, isNull);
+
+    notifier.setActiveBatch('dev1', smallBatch);
+    await notifier.processTestResult('dev1', test);
+
+    expect(container.read(devicesProvider)['dev1']?.activeBatch, isNull);
+    expect(container.read(autoBatchEndedProvider)?.numeroOp, 'OP-DUP');
+  });
 }

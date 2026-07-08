@@ -18,6 +18,8 @@
 #endif
 #define GPIO_LED_STATUS       25
 #define GPIO_BUZZER           33
+/* Atuador de refugo opcional (esteira) — default desligado (-1); ver menuconfig Line actuator */
+#define GPIO_REJECT_DEFAULT   (-1)
 
 /* SSD1306 OLED (I2C) — ver Sirene OLED display em menuconfig */
 #define OLED_I2C_SDA_GPIO     CONFIG_SIRENE_OLED_SDA_GPIO
@@ -89,5 +91,5 @@
 #define MQTT_RECONNECT_BASE_MS      1000
 #define MQTT_RECONNECT_MAX_MS       30000
 #define WIFI_STA_VALIDATE_TIMEOUT_MS 15000
-#define OFFLINE_SYNC_INTERVAL_MS    5000
-#define FIRMWARE_VERSION            "1.7.5"
+#define OFFLINE_SYNC_INTERVAL_MS    500
+#define FIRMWARE_VERSION            "1.8.4"

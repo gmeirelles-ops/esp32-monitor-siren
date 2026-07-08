@@ -14,6 +14,8 @@ typedef enum {
 } pure_state_t;
 
 bool pure_verdict_approved(float average_w, float potencia_min, float potencia_max);
+/* Contract 004: verdict is computed on-device; GPIO/actuator MUST run before MQTT publish
+ * (enforced in batch_cmd_apply_verdict, not in this library). */
 
 typedef struct {
     uint32_t head;

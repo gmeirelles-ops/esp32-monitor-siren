@@ -2,9 +2,9 @@
 setlocal
 cd /d "%~dp0"
 echo.
-echo Gerando dist do Diponto Sirene Validator...
+echo Gerando instalador setup.exe (Diponto Sirene Validator)...
 echo.
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\gerar_dist.ps1" %*
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\gerar_dist.ps1" -ApenasInstalador %*
 set ERR=%ERRORLEVEL%
 echo.
 if %ERR% NEQ 0 (
@@ -12,5 +12,5 @@ if %ERR% NEQ 0 (
   pause
   exit /b %ERR%
 )
-echo Concluido. Arquivos em dist\
+echo Concluido. Instalador em dist\
 pause

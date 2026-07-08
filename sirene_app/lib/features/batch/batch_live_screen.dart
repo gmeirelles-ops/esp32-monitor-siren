@@ -123,7 +123,7 @@ class _BatchLiveScreenState extends ConsumerState<BatchLiveScreen> {
     final bancadas = ref.watch(bancadasMapProvider).valueOrNull ?? {};
     final batch = device?.activeBatch;
     final estado = device?.estado ?? DeviceFsmState.unknown;
-    final metricsAsync = ref.watch(batchLiveMetricsProvider(widget.numeroOp));
+    final testsAsync = ref.watch(batchLiveTestsProvider(widget.numeroOp));
     final labelCountAsync = ref.watch(labelBufferCountProvider);
     final retestMode = ref.watch(retestModeProvider);
     final activeOp = ref.watch(activeOperatorProvider).valueOrNull;
@@ -177,7 +177,16 @@ class _BatchLiveScreenState extends ConsumerState<BatchLiveScreen> {
     );
 
     final meta = batch?.quantidadeTotal ?? 0;
-    final metrics = metricsAsync.valueOrNull;
+    final sessionSince = device?.batchStartedAt;
+    final tests = testsAsync.valueOrNull ?? [];
+    final metricsRaw = computeSessionBatchMetrics(tests, since: sessionSince);
+    final firmwareCount = resolveFirmwareAprovados(
+      heartbeat: firmwareAprovadosForOp(device, widget.numeroOp),
+      lastTest: device?.lastTestResult?.numeroOp == widget.numeroOp
+          ? device?.lastTestResult?.aprovadosNoLote
+          : null,
+    );
+    final metrics = mergeFirmwareAprovados(metricsRaw, firmwareCount);
     final labelCount = labelCountAsync.valueOrNull ?? 0;
     final demoMode = ref.watch(demoModeProvider);
     final isGestor = ref.watch(activeOperatorIsGestorProvider);
@@ -199,11 +208,12 @@ class _BatchLiveScreenState extends ConsumerState<BatchLiveScreen> {
               label: estado.label,
               color: estado == DeviceFsmState.testing ? DipontoColors.primaryLight : DipontoColors.primary,
             ),
-            if (meta > 0 && metrics != null)
+            if (meta > 0)
               StatusChipData(
                 icon: Icons.check_circle_outline,
                 label: '${metrics.aprovados}/$meta',
                 color: DipontoColors.success,
+                highlight: true,
               ),
             if (labelCount > 0)
               StatusChipData(
@@ -229,11 +239,12 @@ class _BatchLiveScreenState extends ConsumerState<BatchLiveScreen> {
               label: bancadaLabel,
               color: device?.isOnline == true ? DipontoColors.success : DipontoColors.error,
             ),
-            if (meta > 0 && metrics != null)
+            if (meta > 0)
               StatusChipData(
                 icon: Icons.check_circle_outline,
                 label: '${metrics.aprovados}/$meta',
                 color: DipontoColors.success,
+                highlight: true,
               ),
           ];
 
@@ -297,9 +308,6 @@ class _BatchLiveScreenState extends ConsumerState<BatchLiveScreen> {
             ),
           ),
           ScreenBottomBar(
-            hint: meta > 0 && metrics != null
-                ? '${metrics.aprovados} de $meta aprovados'
-                : null,
             child: Wrap(
               spacing: 8,
               runSpacing: 8,
@@ -365,12 +373,30 @@ class _BatchLiveBody extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final testsAsync = ref.watch(batchLiveTestsProvider(numeroOp));
-    final metricsAsync = ref.watch(batchLiveMetricsProvider(numeroOp));
     final mqttState = resolveMqttConnectionDisplayState(
       ref.watch(mqttConnectionStateProvider),
       ref.read(mqttServiceProvider).currentState,
     );
     final mqttDisconnected = mqttState != AppMqttConnectionState.connected;
+
+    final liveResult = device?.lastTestResult?.numeroOp == numeroOp
+        ? device?.lastTestResult
+        : null;
+    final sessionSince = device?.batchStartedAt;
+    final firmwareCount = resolveFirmwareAprovados(
+      heartbeat: firmwareAprovadosForOp(device, numeroOp),
+      lastTest: liveResult?.aprovadosNoLote,
+    );
+
+    BatchMetrics sessionMetrics(List<TestResult> tests) => mergeFirmwareAprovados(
+          computeSessionBatchMetrics(tests, since: sessionSince),
+          firmwareCount,
+        );
+
+    List<TestResult> sessionTests(List<TestResult> tests) {
+      if (sessionSince == null) return tests;
+      return tests.where((t) => !t.createdAt.isBefore(sessionSince!)).toList();
+    }
 
     return testsAsync.when(
       loading: () => const Padding(
@@ -379,17 +405,15 @@ class _BatchLiveBody extends ConsumerWidget {
       ),
       error: (e, _) => Text('Erro ao carregar testes: $e'),
       data: (tests) {
-        final liveResult = device?.lastTestResult?.numeroOp == numeroOp
-            ? device?.lastTestResult
-            : null;
-
+        final scopedTests = sessionTests(tests);
+        final metrics = sessionMetrics(tests);
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             if (isGestor) ...[
               BatchLiveLastTestHero(
                 estado: estado,
-                tests: tests,
+                tests: scopedTests,
                 liveResult: liveResult,
                 potenciaMin: batch?.potenciaMin,
                 potenciaMax: batch?.potenciaMax,
@@ -401,16 +425,9 @@ class _BatchLiveBody extends ConsumerWidget {
                 onSimulateOnce: onSimulateOnce,
                 simulating: simulating,
               ),
-              metricsAsync.when(
-                loading: () => const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 24),
-                  child: Center(child: CircularProgressIndicator()),
-                ),
-                error: (e, _) => Text('Erro nas métricas: $e'),
-                data: (metrics) => BatchLiveProgressSection(
-                  metrics: metrics,
-                  meta: batch?.quantidadeTotal ?? 0,
-                ),
+              BatchLiveProgressSection(
+                metrics: metrics,
+                meta: batch?.quantidadeTotal ?? 0,
               ),
               if (batch != null)
                 ActionSectionCard(
@@ -457,14 +474,14 @@ class _BatchLiveBody extends ConsumerWidget {
                   ),
                 ),
               BatchLivePowerChart(
-                tests: tests,
+                tests: scopedTests,
                 potenciaMin: batch?.potenciaMin,
                 potenciaMax: batch?.potenciaMax,
               ),
               BatchLiveRecentTests(
-                tests: tests,
-                onViewAll: tests.length > 10
-                    ? () => showBatchHistorySheet(context, tests)
+                tests: scopedTests,
+                onViewAll: scopedTests.length > 10
+                    ? () => showBatchHistorySheet(context, scopedTests)
                     : null,
               ),
               BatchLiveDetailsExpansion(
@@ -474,12 +491,12 @@ class _BatchLiveBody extends ConsumerWidget {
                 operador: operador,
                 estado: estado,
                 batch: batch,
-                tests: tests,
+                tests: scopedTests,
               ),
             ] else ...[
               BatchLiveOperatorHero(
                 estado: estado,
-                tests: tests,
+                tests: scopedTests,
                 numeroOp: numeroOp,
                 productName: productName,
                 liveResult: liveResult,
@@ -487,15 +504,12 @@ class _BatchLiveBody extends ConsumerWidget {
                 potenciaMax: batch?.potenciaMax,
                 mqttDisconnected: mqttDisconnected,
                 filaOffline: device?.fila ?? 0,
+                awaitingMqtt: device?.awaitingMqttResult ?? false,
               ),
               const SizedBox(height: 16),
-              metricsAsync.when(
-                loading: () => const SizedBox.shrink(),
-                error: (_, __) => const SizedBox.shrink(),
-                data: (metrics) => BatchLiveOperatorProgress(
-                  metrics: metrics,
-                  meta: batch?.quantidadeTotal ?? 0,
-                ),
+              BatchLiveOperatorProgress(
+                metrics: metrics,
+                meta: batch?.quantidadeTotal ?? 0,
               ),
               const SizedBox(height: 12),
               BatchLiveOperatorStatusStrip(
@@ -503,6 +517,7 @@ class _BatchLiveBody extends ConsumerWidget {
                 estado: estado,
                 mqttDisconnected: mqttDisconnected,
                 filaOffline: device?.fila ?? 0,
+                awaitingMqtt: device?.awaitingMqttResult ?? false,
               ),
             ],
           ],

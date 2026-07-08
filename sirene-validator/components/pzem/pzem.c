@@ -8,8 +8,10 @@
 #include "esp_log.h"
 #include "esp_random.h"
 #include "esp_task_wdt.h"
+#include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "sdkconfig.h"
 
 #if CONFIG_DEV_MOCK_PZEM
 static float mock_sample_power_w(void)
@@ -217,6 +219,28 @@ bool pzem_read_power_w(float *power_w)
     return false;
 }
 
+bool pzem_read_active_power_w(float *power_w)
+{
+#if CONFIG_PZEM_FAST_READ
+    int64_t t0 = esp_timer_get_time();
+    bool ok = pzem_send_read_power(power_w);
+    int64_t dt_us = esp_timer_get_time() - t0;
+    ESP_LOGD(TAG, "active_power_read_us=%lld ok=%d", (long long)dt_us, ok ? 1 : 0);
+    if (ok) {
+        s_consecutive_errors = 0;
+        report_fault(false);
+        return true;
+    }
+    s_consecutive_errors++;
+    if (s_consecutive_errors >= 3) {
+        report_fault(true);
+    }
+    return false;
+#else
+    return pzem_read_power_w(power_w);
+#endif
+}
+
 bool pzem_is_fault(void)
 {
     return s_fault;
@@ -245,6 +269,7 @@ bool pzem_measure_cycle(uint32_t duration_sec, uint32_t inrush_discard_ms, pzem_
                         pzem_sample_cb_t sample_cb, void *sample_ctx)
 {
     out->average_w = 0;
+    out->max_w = 0;
     out->sample_count = 0;
     out->uart_error = false;
 
@@ -267,12 +292,16 @@ bool pzem_measure_cycle(uint32_t duration_sec, uint32_t inrush_discard_ms, pzem_
         read_ok = true;
         vTaskDelay(pdMS_TO_TICKS(100));
 #else
-        for (int attempt = 0; attempt < PZEM_SAMPLE_READ_RETRIES; attempt++) {
-            if (pzem_read_power_w(&power)) {
+        int max_attempts = PZEM_SAMPLE_READ_RETRIES;
+#if CONFIG_PZEM_FAST_READ
+        max_attempts = 1;
+#endif
+        for (int attempt = 0; attempt < max_attempts; attempt++) {
+            if (pzem_read_active_power_w(&power)) {
                 read_ok = true;
                 break;
             }
-            if (attempt + 1 < PZEM_SAMPLE_READ_RETRIES) {
+            if (attempt + 1 < max_attempts) {
                 vTaskDelay(pdMS_TO_TICKS(10));
             }
         }
@@ -284,6 +313,9 @@ bool pzem_measure_cycle(uint32_t duration_sec, uint32_t inrush_discard_ms, pzem_
         if (xTaskGetTickCount() >= inrush_end) {
             sum += power;
             out->sample_count++;
+            if (out->sample_count == 1 || power > out->max_w) {
+                out->max_w = power;
+            }
             if (sample_cb != NULL) {
                 uint32_t elapsed_ms = (uint32_t)((xTaskGetTickCount() - start) * portTICK_PERIOD_MS);
                 if (elapsed_ms - last_sample_ms >= CALIBRATION_SAMPLE_MS) {

@@ -20,9 +20,11 @@
 
 **Rationale**: Explica testes **sem novo toque** no botão. App processava cada mensagem como teste novo.
 
-**Mitigação app**: dedupe por `(numero_op, sequencial)` em `processTestResult`.
+**Mitigação app**: dedupe por `(numero_op, ts_ms)` em `processTestResult` (feature 003); fallback legado `(numero_op, sequencial)` para payloads sem `ts_ms`.
 
-**Mitigação firmware (futuro)**: limitar replay ou dedupe por `ts_ms` na fila.
+**Mitigação firmware (003)**: `telemetry_publish_now()` ao iniciar/terminar teste; replay deduplicado no app por `ts_ms`.
+
+**Status**: Mitigado em app (003-test-flow-resilience, 2026-07-08).
 
 ---
 

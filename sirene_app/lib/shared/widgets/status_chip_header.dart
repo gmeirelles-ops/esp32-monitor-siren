@@ -7,11 +7,13 @@ class StatusChipData {
     required this.icon,
     required this.label,
     required this.color,
+    this.highlight = false,
   });
 
   final IconData icon;
   final String label;
   final Color color;
+  final bool highlight;
 }
 
 class StatusChipHeader extends StatelessWidget {
@@ -40,7 +42,12 @@ class StatusChipHeader extends StatelessWidget {
         runSpacing: 10,
         children: [
           for (final chip in chips)
-            _StatusChip(icon: chip.icon, label: chip.label, color: chip.color),
+            _StatusChip(
+              icon: chip.icon,
+              label: chip.label,
+              color: chip.color,
+              highlight: chip.highlight,
+            ),
         ],
       ),
     );
@@ -52,32 +59,40 @@ class _StatusChip extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.color,
+    this.highlight = false,
   });
 
   final IconData icon;
   final String label;
   final Color color;
+  final bool highlight;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: EdgeInsets.symmetric(
+        horizontal: highlight ? 14 : 12,
+        vertical: highlight ? 10 : 8,
+      ),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withValues(alpha: 0.35)),
+        color: color.withValues(alpha: highlight ? 0.2 : 0.12),
+        borderRadius: BorderRadius.circular(highlight ? 24 : 20),
+        border: Border.all(
+          color: color.withValues(alpha: highlight ? 0.55 : 0.35),
+          width: highlight ? 1.5 : 1,
+        ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 16, color: color),
+          Icon(icon, size: highlight ? 18 : 16, color: color),
           const SizedBox(width: 6),
           Text(
             label,
             style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-              color: DipontoColors.onSurface.withValues(alpha: 0.9),
+              fontSize: highlight ? 14 : 13,
+              fontWeight: highlight ? FontWeight.w700 : FontWeight.w500,
+              color: highlight ? color : DipontoColors.onSurface.withValues(alpha: 0.9),
             ),
           ),
         ],

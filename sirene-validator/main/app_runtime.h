@@ -53,3 +53,14 @@ QueueHandle_t app_pzem_queue(void);
 QueueHandle_t app_work_queue(void);
 int64_t app_now_ts_ms(void);
 bool app_enqueue_pzem_work(pzem_work_type_t type, uint32_t duration_sec, const ensaio_params_t *ensaio);
+
+typedef struct {
+    bool valid;
+    char veredito[16];
+    float potencia_media;
+    uint32_t sequencial;
+    int64_t ts_ms;
+} app_last_test_t;
+
+void app_last_test_set(bool approved, float potencia_media, uint32_t sequencial, int64_t ts_ms);
+void app_last_test_get(app_last_test_t *out);

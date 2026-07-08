@@ -23,10 +23,183 @@ class MqttParser {
     }
   }
 
-  /// Remove artefatos de JSON colado (ex.: `","","` sem chave).
+  /// Remove artefatos de JSON colado (ex.: `","","` sem chave, aspas duplicadas).
   @visibleForTesting
   static String sanitizeCorruptedJson(String json) {
-    return json.replaceAll(',"",', ',');
+    var s = json.replaceAll(',"",', ',');
+    s = s.replaceAllMapped(
+      RegExp(r'"(numero_op|id_produto|ano)"\s*:\s*"([^"]*?)""+'),
+      (m) => '"${m[1]}":"${m[2]}"',
+    );
+    return s;
+  }
+
+  /// Extrai campos de teste via regex quando JSON está colado/inválido (produção OP 1001).
+  @visibleForTesting
+  static Map<String, dynamic>? recoverTestFields(String payload) {
+    final vereditoRe = RegExp(r'"veredito"\s*:\s*"(APROVADO|REPROVADO)"', caseSensitive: false);
+    final vereditoMatches = vereditoRe.allMatches(payload);
+    if (vereditoMatches.isEmpty) return null;
+
+    final veredito = vereditoMatches.last.group(1)!.toUpperCase();
+    final potencia = _lastDouble(payload, r'"potencia_media"\s*:\s*([\d.]+)');
+    final sequencial = _lastInt(payload, r'"sequencial"\s*:\s*(\d+)');
+    final aprovados = _lastInt(payload, r'"aprovados_no_lote"\s*:\s*(\d+)');
+    final tsMs = _lastInt(payload, r'"ts_ms"\s*:\s*(\d+)');
+    final tsUnix = _lastInt(payload, r'"ts_unix"\s*:\s*(\d+)');
+    if (sequencial == null || sequencial <= 0 || potencia == null) return null;
+
+    final numeroOp = _lastString(payload, r'"numero_op"\s*:\s*"([^"{\\]+)');
+    final idProduto = _extractIdProduto(payload);
+    final ano = _extractAno(payload);
+
+    return {
+      'tipo': 'teste',
+      'veredito': veredito,
+      'potencia_media': potencia,
+      'sequencial': sequencial,
+      'aprovados_no_lote': aprovados ?? 0,
+      if (tsMs != null) 'ts_ms': tsMs,
+      if (tsUnix != null) 'ts_unix': tsUnix,
+      if (numeroOp != null && numeroOp.isNotEmpty) 'numero_op': numeroOp,
+      if (idProduto != null && idProduto.isNotEmpty) 'id_produto': idProduto,
+      if (ano != null && ano.isNotEmpty) 'ano': ano,
+    };
+  }
+
+  static String? _lastString(String payload, String pattern) {
+    final matches = RegExp(pattern).allMatches(payload);
+    if (matches.isEmpty) return null;
+    return matches.last.group(1);
+  }
+
+  static int? _lastInt(String payload, String pattern) {
+    final s = _lastString(payload, pattern);
+    return s == null ? null : int.tryParse(s);
+  }
+
+  static double? _lastDouble(String payload, String pattern) {
+    final s = _lastString(payload, pattern);
+    return s == null ? null : double.tryParse(s);
+  }
+
+  static String? _sanitizeIdProduto(String? raw) {
+    if (raw == null || raw.isEmpty) return null;
+    final digits = RegExp(r'\d{1,3}').stringMatch(raw);
+    return digits;
+  }
+
+  static String? _extractIdProduto(String payload) {
+    final digitMatches = RegExp(r'"id_produto"\s*:\s*"(\d{1,3})').allMatches(payload);
+    if (digitMatches.isNotEmpty) {
+      return digitMatches.last.group(1);
+    }
+    final matches = RegExp(r'"id_produto"\s*:\s*"([^"]*)').allMatches(payload);
+    String? best;
+    for (final m in matches) {
+      final candidate = _sanitizeIdProduto(m.group(1));
+      if (candidate != null && (best == null || candidate.length >= best.length)) {
+        best = candidate;
+      }
+    }
+    return best;
+  }
+
+  static String? _extractAno(String payload) {
+    final matches = RegExp(r'"ano"\s*:\s*"(\d{0,2})').allMatches(payload);
+    for (final m in matches) {
+      final candidate = _sanitizeAno(m.group(1));
+      if (candidate != null) return candidate;
+    }
+    return _sanitizeAno(_lastString(payload, r'"ano"\s*:\s*"(\d{0,2})'));
+  }
+
+  static String? _sanitizeAno(String? raw) {
+    if (raw == null || raw.isEmpty) return null;
+    final digits = RegExp(r'\d{2}').firstMatch(raw)?.group(0);
+    return digits;
+  }
+
+  /// Extrai **todos** os `tipo:teste` de um payload colado (não só o último).
+  static List<Map<String, dynamic>> tryParseAllTestObjects(String payload) {
+    final trimmed = payload.trim();
+    if (trimmed.isEmpty) return const [];
+
+    const marker = '{"tipo":"teste"';
+    final indices = <int>[];
+    var from = 0;
+    while (true) {
+      final idx = trimmed.indexOf(marker, from);
+      if (idx < 0) break;
+      indices.add(idx);
+      from = idx + marker.length;
+    }
+
+    if (indices.isEmpty) {
+      final whole = tryParseJson(trimmed) ?? tryParseJson(sanitizeCorruptedJson(trimmed));
+      if (whole != null && whole['tipo'] == 'teste') {
+        return [whole];
+      }
+      if (trimmed.contains('"veredito"')) {
+        return _recoverAllTestFields(trimmed);
+      }
+      return const [];
+    }
+
+    final results = <Map<String, dynamic>>[];
+    for (var i = 0; i < indices.length; i++) {
+      final start = indices[i];
+      final endExclusive = i + 1 < indices.length ? indices[i + 1] : trimmed.length;
+      final chunk = trimmed.substring(start, endExclusive);
+      final lastBrace = chunk.lastIndexOf('}');
+      if (lastBrace < 0) continue;
+
+      var candidate = sanitizeCorruptedJson(chunk.substring(0, lastBrace + 1));
+      var parsed = tryParseJson(candidate);
+      if (parsed == null || parsed['tipo'] != 'teste') {
+        parsed = recoverTestFields(chunk);
+      } else {
+        _enrichTestObject(parsed, chunk, fullPayload: trimmed);
+        final ano = parsed['ano'];
+        if (ano == null || (ano is String && ano.isEmpty)) {
+          final inferred = _inferAnoFromGluedPrefix(trimmed, start);
+          if (inferred != null) parsed['ano'] = inferred;
+        }
+      }
+      if (parsed != null && parsed['tipo'] == 'teste' && parseTestResult(parsed) != null) {
+        results.add(parsed);
+      }
+    }
+
+    if (results.isEmpty && trimmed.contains('"veredito"')) {
+      return _recoverAllTestFields(trimmed);
+    }
+    return _dedupeTestMaps(results);
+  }
+
+  static List<Map<String, dynamic>> _recoverAllTestFields(String payload) {
+    final vereditoRe =
+        RegExp(r'"veredito"\s*:\s*"(APROVADO|REPROVADO)"', caseSensitive: false);
+    final results = <Map<String, dynamic>>[];
+    for (final m in vereditoRe.allMatches(payload)) {
+      final start = (m.start - 160).clamp(0, payload.length);
+      final end = (m.end + 120).clamp(0, payload.length);
+      final chunk = payload.substring(start, end);
+      final recovered = recoverTestFields(chunk);
+      if (recovered != null) results.add(recovered);
+    }
+    return _dedupeTestMaps(results);
+  }
+
+  static List<Map<String, dynamic>> _dedupeTestMaps(List<Map<String, dynamic>> maps) {
+    final seen = <String>{};
+    final out = <Map<String, dynamic>>[];
+    for (final m in maps) {
+      final key =
+          '${m['ts_ms']}_${m['sequencial']}_${m['veredito']}_${m['potencia_media']}';
+      if (seen.add(key)) out.add(m);
+    }
+    return out;
   }
 
   /// Quando o broker entrega JSON colado/corrompido, tenta recuperar o último objeto válido.
@@ -51,6 +224,11 @@ class MqttParser {
       final obj = _tryParseLastTypedObject(trimmed, tipo);
       if (obj != null) return [obj];
     }
+
+    if (trimmed.contains('"veredito"')) {
+      final recovered = recoverTestFields(trimmed);
+      if (recovered != null) return [recovered];
+    }
     return const [];
   }
 
@@ -69,12 +247,14 @@ class MqttParser {
     final tail = payload.substring(idx);
     final end = tail.lastIndexOf('}');
     if (end < 0) return null;
-    final candidate = tail.substring(0, end + 1);
+    var candidate = tail.substring(0, end + 1);
+    candidate = sanitizeCorruptedJson(candidate);
     final parsed =
         tryParseJson(candidate) ?? tryParseJson(sanitizeCorruptedJson(candidate));
     if (parsed == null) return null;
 
     if (tipo == 'teste') {
+      _enrichTestObject(parsed, payload, fullPayload: payload);
       final ano = parsed['ano'];
       if (ano == null || (ano is String && ano.isEmpty)) {
         final inferred = _inferAnoFromGluedPrefix(payload, idx);
@@ -84,6 +264,21 @@ class MqttParser {
       }
     }
     return parsed;
+  }
+
+  static void _enrichTestObject(
+    Map<String, dynamic> obj,
+    String chunk, {
+    String? fullPayload,
+  }) {
+    final recovered = recoverTestFields(fullPayload ?? chunk);
+    if (recovered == null) return;
+    for (final key in ['id_produto', 'ano', 'numero_op', 'ts_ms', 'aprovados_no_lote']) {
+      final v = obj[key];
+      if ((v == null || (v is String && v.isEmpty)) && recovered[key] != null) {
+        obj[key] = recovered[key];
+      }
+    }
   }
 
   /// Recupera `ano` do primeiro objeto quando dois JSONs de teste vêm colados.
@@ -103,6 +298,7 @@ class MqttParser {
   static HeartbeatMessage? parseHeartbeat(String payload) {
     final json = tryParseJson(payload);
     if (json == null) return null;
+    final ultimoVeredito = (json['ultimo_veredito'] as String?)?.trim().toUpperCase();
     return HeartbeatMessage(
       uptime: (json['uptime'] as num?)?.toInt() ?? 0,
       rssi: (json['rssi'] as num?)?.toInt() ?? 0,
@@ -112,6 +308,13 @@ class MqttParser {
       deviceId: json['device_id'] as String?,
       bancada: (json['bancada'] as num?)?.toInt(),
       site: json['site'] as String?,
+      numeroOp: json['numero_op'] as String?,
+      aprovados: (json['aprovados'] as num?)?.toInt(),
+      proximoSequencial: (json['proximo_sequencial'] as num?)?.toInt(),
+      ultimoVeredito: ultimoVeredito != null && ultimoVeredito.isNotEmpty ? ultimoVeredito : null,
+      ultimaPotencia: (json['ultima_potencia'] as num?)?.toDouble(),
+      ultimoSequencial: (json['ultimo_sequencial'] as num?)?.toInt(),
+      ultimoTsMs: (json['ultimo_ts_ms'] as num?)?.toInt(),
     );
   }
 
@@ -129,6 +332,8 @@ class MqttParser {
       potenciaMedia: (json['potencia_media'] as num?)?.toDouble() ?? 0,
       sequencial: sequencial,
       aprovadosNoLote: (json['aprovados_no_lote'] as num?)?.toInt() ?? 0,
+      tsMs: (json['ts_ms'] as num?)?.toInt(),
+      tsUnix: (json['ts_unix'] as num?)?.toInt(),
     );
   }
 
@@ -184,9 +389,13 @@ class MqttParser {
     if (json['tipo'] != 'calibracao') return null;
     final evento = json['evento'] as String?;
     if (evento != null && evento != 'concluido') return null;
-    if (!json.containsKey('potencia_media')) return null;
+    if (!json.containsKey('potencia_media') && !json.containsKey('potencia_max')) return null;
     return CalibrationMessage(
-      potenciaMedia: (json['potencia_media'] as num?)?.toDouble() ?? 0,
+      potenciaMedia:
+          (json['potencia_media'] as num?)?.toDouble() ??
+          (json['potencia_max'] as num?)?.toDouble() ??
+          0,
+      potenciaMax: (json['potencia_max'] as num?)?.toDouble(),
     );
   }
 

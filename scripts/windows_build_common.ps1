@@ -339,6 +339,23 @@ function Invoke-SirenePortablePackage {
     }
 }
 
+function Ensure-SireneEsptoolBundled {
+    $toolsDir = Join-Path (Get-SireneAppDir) "tools\windows"
+    $esptool = Join-Path $toolsDir "esptool.exe"
+    if (Test-Path $esptool) {
+        return
+    }
+    Write-Host "==> esptool.exe ausente — gerando bundle..."
+    $bundleScript = Join-Path (Get-SireneAppDir) "scripts\bundle_esptool_windows.ps1"
+    if (-not (Test-Path $bundleScript)) {
+        throw "esptool.exe nao encontrado e bundle script ausente: $bundleScript"
+    }
+    & powershell -NoProfile -ExecutionPolicy Bypass -File $bundleScript
+    if (-not (Test-Path $esptool)) {
+        throw "Falha ao gerar esptool.exe em $toolsDir"
+    }
+}
+
 function Compile-SireneWindowsInstaller {
     param([string]$Version)
 
@@ -361,6 +378,9 @@ function Compile-SireneWindowsInstaller {
     }
 
     New-Item -ItemType Directory -Path $distRoot -Force | Out-Null
+
+    Ensure-SireneEsptoolBundled
+    Copy-SireneBundledTools -AppDestDir $releaseDir
 
     $readmeContent = Get-Content $readmeTemplate -Raw -Encoding UTF8
     $readmeContent.Replace("{{VERSION}}", $Version) | Set-Content $readmeInstall -Encoding UTF8

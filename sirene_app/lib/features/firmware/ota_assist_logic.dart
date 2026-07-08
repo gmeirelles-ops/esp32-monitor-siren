@@ -11,11 +11,42 @@ String buildOtaFirmwareUrl(String lanIp, int port, {String fileName = kOtaServed
   return 'http://$lanIp:$port/$fileName';
 }
 
+/// Adaptadores virtuais (WSL, Hyper-V, Docker…) — IP não alcançável pelo ESP32 na LAN.
+bool isVirtualNetworkInterface(String name) {
+  final lower = name.toLowerCase();
+  return lower.contains('wsl') ||
+      lower.contains('hyper-v') ||
+      lower.contains('vethernet') ||
+      lower.contains('virtualbox') ||
+      lower.contains('vmware') ||
+      lower.contains('docker') ||
+      lower.contains('npcap') ||
+      lower.contains('loopback');
+}
+
+bool isUsableOtaLanIp(String ip) {
+  if (ip.startsWith('127.') || ip.startsWith('169.254.')) return false;
+  // Gateway WSL/Docker no host Windows — ESP32 na Wi-Fi não alcança.
+  if (ip == '172.20.0.1' || ip == '172.17.0.1') return false;
+  return true;
+}
+
+int _otaIpSortPriority(String ip) {
+  if (ip.startsWith('192.168.')) return 0;
+  if (ip.startsWith('10.')) return 1;
+  final parts = ip.split('.');
+  if (parts.length == 4) {
+    final second = int.tryParse(parts[1]);
+    if (parts[0] == '172' && second != null && second >= 16 && second <= 31) {
+      return 2;
+    }
+  }
+  return 3;
+}
+
 /// Escolhe IPv4 LAN na mesma faixa do broker MQTT, se possível.
 String? pickLanIPv4(Iterable<String> candidates, {String? mqttBrokerHost}) {
-  final usable = candidates
-      .where((ip) => !ip.startsWith('127.') && !ip.startsWith('169.254.'))
-      .toList();
+  final usable = candidates.where(isUsableOtaLanIp).toList();
   if (usable.isEmpty) return null;
 
   if (mqttBrokerHost != null && mqttBrokerHost.isNotEmpty && mqttBrokerHost != 'localhost') {
@@ -27,6 +58,8 @@ String? pickLanIPv4(Iterable<String> candidates, {String? mqttBrokerHost}) {
       }
     }
   }
+
+  usable.sort((a, b) => _otaIpSortPriority(a).compareTo(_otaIpSortPriority(b)));
   return usable.first;
 }
 
@@ -37,6 +70,7 @@ Future<String?> detectLanIPv4({String? mqttBrokerHost}) async {
   );
   final ips = <String>[];
   for (final iface in interfaces) {
+    if (isVirtualNetworkInterface(iface.name)) continue;
     for (final addr in iface.addresses) {
       ips.add(addr.address);
     }

@@ -56,6 +56,7 @@ Name: "desktopicon"; Description: "Criar atalho na area de trabalho"; GroupDescr
 
 [Files]
 Source: "{#MyReleaseDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\..\sirene_app\tools\windows\*"; DestDir: "{app}\tools\windows"; Flags: ignoreversion
 Source: "{#MyReadmeFile}"; DestDir: "{app}"; DestName: "LEIA-ME.txt"; Flags: ignoreversion
 
 [Icons]

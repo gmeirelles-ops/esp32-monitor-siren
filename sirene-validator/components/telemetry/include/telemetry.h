@@ -20,6 +20,11 @@ typedef struct {
     int reset_reason;
     bool time_synced;
     uint8_t pzem_addr;
+    bool last_test_valid;
+    const char *ultimo_veredito;
+    float ultima_potencia;
+    uint32_t ultimo_sequencial;
+    int64_t ultimo_ts_ms;
 } telemetry_snapshot_t;
 
 bool telemetry_init(void);

@@ -21,9 +21,13 @@ add_executable(host_tests
     test_ensaio.c
     test_site.c
     test_host_lan.c
+    test_verdict_contract.c
 )
 target_include_directories(host_tests PRIVATE .)
-target_link_libraries(host_tests pure_logic m)
+target_link_libraries(host_tests pure_logic)
+if(NOT MSVC)
+    target_link_libraries(host_tests m)
+endif()
 
 enable_testing()
 add_test(NAME host_tests COMMAND host_tests)

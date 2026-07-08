@@ -97,7 +97,11 @@ class FirestoreSyncService {
 
     if (!isTesteAprovado(test)) {
       await _enqueuePath(
-        documentPath: reprovadaPath(numeroOp, test.sequencial),
+        documentPath: reprovadaPath(
+          numeroOp,
+          test.sequencial,
+          tsMs: test.tsMs,
+        ),
         payload: mapReprovadaDocument(
           deviceId: deviceId,
           test: test,

@@ -14,8 +14,13 @@ String lotePath(String numeroOp) => 'test_results/$numeroOp';
 String serialPath(String numeroOp, String serial) =>
     'test_results/$numeroOp/$firestoreSubcollectionSeriais/$serial';
 
-String reprovadaPath(String numeroOp, int sequencial) =>
-    'test_results/$numeroOp/$firestoreSubcollectionReprovadas/$sequencial';
+String reprovadaPath(String numeroOp, int sequencial, {int? tsMs}) =>
+    'test_results/$numeroOp/$firestoreSubcollectionReprovadas/'
+    '${tsMs ?? sequencial}';
+
+/// Id estável para documento reprovado no Firestore.
+String reprovadaDocumentId(TestResultMessage test) =>
+    test.tsMs?.toString() ?? '${test.sequencial}';
 
 bool isReprovadaFirestorePath(String? documentPath) {
   if (documentPath == null || documentPath.isEmpty) return false;
@@ -129,6 +134,7 @@ Map<String, dynamic> mapReprovadaDocument({
     'timestamp': timestamp.toUtc().toIso8601String(),
     'station_id': stationId,
     'is_retest': isRetest,
+    if (test.tsMs != null) 'ts_ms': test.tsMs,
   };
 }
 

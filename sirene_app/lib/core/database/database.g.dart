@@ -167,6 +167,17 @@ class $TestResultsTable extends TestResults
     ),
     defaultValue: const Constant(false),
   );
+  static const VerificationMeta _firmwareTsMsMeta = const VerificationMeta(
+    'firmwareTsMs',
+  );
+  @override
+  late final GeneratedColumn<int> firmwareTsMs = GeneratedColumn<int>(
+    'firmware_ts_ms',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -194,6 +205,7 @@ class $TestResultsTable extends TestResults
     potenciaMax,
     operatorId,
     isRetest,
+    firmwareTsMs,
     createdAt,
   ];
   @override
@@ -316,6 +328,15 @@ class $TestResultsTable extends TestResults
         isRetest.isAcceptableOrUnknown(data['is_retest']!, _isRetestMeta),
       );
     }
+    if (data.containsKey('firmware_ts_ms')) {
+      context.handle(
+        _firmwareTsMsMeta,
+        firmwareTsMs.isAcceptableOrUnknown(
+          data['firmware_ts_ms']!,
+          _firmwareTsMsMeta,
+        ),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -389,6 +410,10 @@ class $TestResultsTable extends TestResults
         DriftSqlType.bool,
         data['${effectivePrefix}is_retest'],
       )!,
+      firmwareTsMs: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}firmware_ts_ms'],
+      ),
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
@@ -417,6 +442,9 @@ class TestResult extends DataClass implements Insertable<TestResult> {
   final double? potenciaMax;
   final int? operatorId;
   final bool isRetest;
+
+  /// Timestamp do firmware (`ts_ms` no MQTT) — chave de dedupe.
+  final int? firmwareTsMs;
   final DateTime createdAt;
   const TestResult({
     required this.id,
@@ -433,6 +461,7 @@ class TestResult extends DataClass implements Insertable<TestResult> {
     this.potenciaMax,
     this.operatorId,
     required this.isRetest,
+    this.firmwareTsMs,
     required this.createdAt,
   });
   @override
@@ -464,6 +493,9 @@ class TestResult extends DataClass implements Insertable<TestResult> {
       map['operator_id'] = Variable<int>(operatorId);
     }
     map['is_retest'] = Variable<bool>(isRetest);
+    if (!nullToAbsent || firmwareTsMs != null) {
+      map['firmware_ts_ms'] = Variable<int>(firmwareTsMs);
+    }
     map['created_at'] = Variable<DateTime>(createdAt);
     return map;
   }
@@ -496,6 +528,9 @@ class TestResult extends DataClass implements Insertable<TestResult> {
           ? const Value.absent()
           : Value(operatorId),
       isRetest: Value(isRetest),
+      firmwareTsMs: firmwareTsMs == null && nullToAbsent
+          ? const Value.absent()
+          : Value(firmwareTsMs),
       createdAt: Value(createdAt),
     );
   }
@@ -520,6 +555,7 @@ class TestResult extends DataClass implements Insertable<TestResult> {
       potenciaMax: serializer.fromJson<double?>(json['potenciaMax']),
       operatorId: serializer.fromJson<int?>(json['operatorId']),
       isRetest: serializer.fromJson<bool>(json['isRetest']),
+      firmwareTsMs: serializer.fromJson<int?>(json['firmwareTsMs']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
     );
   }
@@ -541,6 +577,7 @@ class TestResult extends DataClass implements Insertable<TestResult> {
       'potenciaMax': serializer.toJson<double?>(potenciaMax),
       'operatorId': serializer.toJson<int?>(operatorId),
       'isRetest': serializer.toJson<bool>(isRetest),
+      'firmwareTsMs': serializer.toJson<int?>(firmwareTsMs),
       'createdAt': serializer.toJson<DateTime>(createdAt),
     };
   }
@@ -560,6 +597,7 @@ class TestResult extends DataClass implements Insertable<TestResult> {
     Value<double?> potenciaMax = const Value.absent(),
     Value<int?> operatorId = const Value.absent(),
     bool? isRetest,
+    Value<int?> firmwareTsMs = const Value.absent(),
     DateTime? createdAt,
   }) => TestResult(
     id: id ?? this.id,
@@ -578,6 +616,7 @@ class TestResult extends DataClass implements Insertable<TestResult> {
     potenciaMax: potenciaMax.present ? potenciaMax.value : this.potenciaMax,
     operatorId: operatorId.present ? operatorId.value : this.operatorId,
     isRetest: isRetest ?? this.isRetest,
+    firmwareTsMs: firmwareTsMs.present ? firmwareTsMs.value : this.firmwareTsMs,
     createdAt: createdAt ?? this.createdAt,
   );
   TestResult copyWithCompanion(TestResultsCompanion data) {
@@ -610,6 +649,9 @@ class TestResult extends DataClass implements Insertable<TestResult> {
           ? data.operatorId.value
           : this.operatorId,
       isRetest: data.isRetest.present ? data.isRetest.value : this.isRetest,
+      firmwareTsMs: data.firmwareTsMs.present
+          ? data.firmwareTsMs.value
+          : this.firmwareTsMs,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
     );
   }
@@ -631,6 +673,7 @@ class TestResult extends DataClass implements Insertable<TestResult> {
           ..write('potenciaMax: $potenciaMax, ')
           ..write('operatorId: $operatorId, ')
           ..write('isRetest: $isRetest, ')
+          ..write('firmwareTsMs: $firmwareTsMs, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
         .toString();
@@ -652,6 +695,7 @@ class TestResult extends DataClass implements Insertable<TestResult> {
     potenciaMax,
     operatorId,
     isRetest,
+    firmwareTsMs,
     createdAt,
   );
   @override
@@ -672,6 +716,7 @@ class TestResult extends DataClass implements Insertable<TestResult> {
           other.potenciaMax == this.potenciaMax &&
           other.operatorId == this.operatorId &&
           other.isRetest == this.isRetest &&
+          other.firmwareTsMs == this.firmwareTsMs &&
           other.createdAt == this.createdAt);
 }
 
@@ -690,6 +735,7 @@ class TestResultsCompanion extends UpdateCompanion<TestResult> {
   final Value<double?> potenciaMax;
   final Value<int?> operatorId;
   final Value<bool> isRetest;
+  final Value<int?> firmwareTsMs;
   final Value<DateTime> createdAt;
   const TestResultsCompanion({
     this.id = const Value.absent(),
@@ -706,6 +752,7 @@ class TestResultsCompanion extends UpdateCompanion<TestResult> {
     this.potenciaMax = const Value.absent(),
     this.operatorId = const Value.absent(),
     this.isRetest = const Value.absent(),
+    this.firmwareTsMs = const Value.absent(),
     this.createdAt = const Value.absent(),
   });
   TestResultsCompanion.insert({
@@ -723,6 +770,7 @@ class TestResultsCompanion extends UpdateCompanion<TestResult> {
     this.potenciaMax = const Value.absent(),
     this.operatorId = const Value.absent(),
     this.isRetest = const Value.absent(),
+    this.firmwareTsMs = const Value.absent(),
     required DateTime createdAt,
   }) : deviceId = Value(deviceId),
        numeroOp = Value(numeroOp),
@@ -746,6 +794,7 @@ class TestResultsCompanion extends UpdateCompanion<TestResult> {
     Expression<double>? potenciaMax,
     Expression<int>? operatorId,
     Expression<bool>? isRetest,
+    Expression<int>? firmwareTsMs,
     Expression<DateTime>? createdAt,
   }) {
     return RawValuesInsertable({
@@ -763,6 +812,7 @@ class TestResultsCompanion extends UpdateCompanion<TestResult> {
       if (potenciaMax != null) 'potencia_max': potenciaMax,
       if (operatorId != null) 'operator_id': operatorId,
       if (isRetest != null) 'is_retest': isRetest,
+      if (firmwareTsMs != null) 'firmware_ts_ms': firmwareTsMs,
       if (createdAt != null) 'created_at': createdAt,
     });
   }
@@ -782,6 +832,7 @@ class TestResultsCompanion extends UpdateCompanion<TestResult> {
     Value<double?>? potenciaMax,
     Value<int?>? operatorId,
     Value<bool>? isRetest,
+    Value<int?>? firmwareTsMs,
     Value<DateTime>? createdAt,
   }) {
     return TestResultsCompanion(
@@ -799,6 +850,7 @@ class TestResultsCompanion extends UpdateCompanion<TestResult> {
       potenciaMax: potenciaMax ?? this.potenciaMax,
       operatorId: operatorId ?? this.operatorId,
       isRetest: isRetest ?? this.isRetest,
+      firmwareTsMs: firmwareTsMs ?? this.firmwareTsMs,
       createdAt: createdAt ?? this.createdAt,
     );
   }
@@ -848,6 +900,9 @@ class TestResultsCompanion extends UpdateCompanion<TestResult> {
     if (isRetest.present) {
       map['is_retest'] = Variable<bool>(isRetest.value);
     }
+    if (firmwareTsMs.present) {
+      map['firmware_ts_ms'] = Variable<int>(firmwareTsMs.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
@@ -871,6 +926,7 @@ class TestResultsCompanion extends UpdateCompanion<TestResult> {
           ..write('potenciaMax: $potenciaMax, ')
           ..write('operatorId: $operatorId, ')
           ..write('isRetest: $isRetest, ')
+          ..write('firmwareTsMs: $firmwareTsMs, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
         .toString();
@@ -6630,6 +6686,7 @@ typedef $$TestResultsTableCreateCompanionBuilder =
       Value<double?> potenciaMax,
       Value<int?> operatorId,
       Value<bool> isRetest,
+      Value<int?> firmwareTsMs,
       required DateTime createdAt,
     });
 typedef $$TestResultsTableUpdateCompanionBuilder =
@@ -6648,6 +6705,7 @@ typedef $$TestResultsTableUpdateCompanionBuilder =
       Value<double?> potenciaMax,
       Value<int?> operatorId,
       Value<bool> isRetest,
+      Value<int?> firmwareTsMs,
       Value<DateTime> createdAt,
     });
 
@@ -6727,6 +6785,11 @@ class $$TestResultsTableFilterComposer
 
   ColumnFilters<bool> get isRetest => $composableBuilder(
     column: $table.isRetest,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get firmwareTsMs => $composableBuilder(
+    column: $table.firmwareTsMs,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -6815,6 +6878,11 @@ class $$TestResultsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get firmwareTsMs => $composableBuilder(
+    column: $table.firmwareTsMs,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -6886,6 +6954,11 @@ class $$TestResultsTableAnnotationComposer
   GeneratedColumn<bool> get isRetest =>
       $composableBuilder(column: $table.isRetest, builder: (column) => column);
 
+  GeneratedColumn<int> get firmwareTsMs => $composableBuilder(
+    column: $table.firmwareTsMs,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
 }
@@ -6935,6 +7008,7 @@ class $$TestResultsTableTableManager
                 Value<double?> potenciaMax = const Value.absent(),
                 Value<int?> operatorId = const Value.absent(),
                 Value<bool> isRetest = const Value.absent(),
+                Value<int?> firmwareTsMs = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
               }) => TestResultsCompanion(
                 id: id,
@@ -6951,6 +7025,7 @@ class $$TestResultsTableTableManager
                 potenciaMax: potenciaMax,
                 operatorId: operatorId,
                 isRetest: isRetest,
+                firmwareTsMs: firmwareTsMs,
                 createdAt: createdAt,
               ),
           createCompanionCallback:
@@ -6969,6 +7044,7 @@ class $$TestResultsTableTableManager
                 Value<double?> potenciaMax = const Value.absent(),
                 Value<int?> operatorId = const Value.absent(),
                 Value<bool> isRetest = const Value.absent(),
+                Value<int?> firmwareTsMs = const Value.absent(),
                 required DateTime createdAt,
               }) => TestResultsCompanion.insert(
                 id: id,
@@ -6985,6 +7061,7 @@ class $$TestResultsTableTableManager
                 potenciaMax: potenciaMax,
                 operatorId: operatorId,
                 isRetest: isRetest,
+                firmwareTsMs: firmwareTsMs,
                 createdAt: createdAt,
               ),
           withReferenceMapper: (p0) => p0

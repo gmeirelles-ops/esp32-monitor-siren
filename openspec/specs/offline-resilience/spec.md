@@ -8,7 +8,7 @@ O dispositivo SHALL continuar executando os testes de sirene normalmente mesmo q
 
 #### Scenario: Queda de rede durante o lote
 - **WHEN** a conexão Wi-Fi ou com o broker MQTT falha no andamento de um lote
-- **THEN** o dispositivo mantém o fluxo de teste (botão, relé, leitura PZEM, veredito) operando normalmente
+- **THEN** o dispositivo mantém o fluxo de teste (botão, relé, leitura PZEM, veredito, atuador de linha) operando normalmente
 
 ### Requirement: Persistência local dos resultados
 O dispositivo SHALL gravar os resultados dos testes de forma persistente na memória flash local (NVS ou SPIFFS) enquanto estiver offline.

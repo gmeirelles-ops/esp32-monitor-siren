@@ -12,11 +12,13 @@ int test_ensaio(void);
 
 int test_site(void);
 int test_host_lan(void);
+int test_verdict_contract(void);
 
 int main(void)
 {
     int failures = 0;
     failures += test_verdict();
+    failures += test_verdict_contract();
     failures += test_fifo();
     failures += test_fsm();
     failures += test_serial();

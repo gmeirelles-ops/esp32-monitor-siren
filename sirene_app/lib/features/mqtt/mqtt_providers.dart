@@ -88,6 +88,11 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
   DevicesNotifier.forTesting(this._ref, Map<String, DeviceInfo> devices)
       : super(devices);
 
+  /// Processa mensagem MQTT (testes de integração).
+  @visibleForTesting
+  Future<void> handleMessageForTest(String topic, String payload) =>
+      _handleMessage((topic, payload));
+
   final Ref _ref;
   StreamSubscription<(String, String)>? _sub;
   Timer? _staleTimer;
@@ -282,7 +287,60 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
     } else if (topic.endsWith('/heartbeat')) {
       final hb = MqttParser.parseHeartbeat(payload);
       if (hb != null) {
+        final prevEstado = device.estado;
         device.estado = hb.estado;
+        final batch = device.activeBatch;
+        if (hb.numeroOp != null &&
+            hb.numeroOp!.isNotEmpty &&
+            batch != null &&
+            hb.numeroOp == batch.numeroOp &&
+            hb.aprovados != null) {
+          device.firmwareAprovados = hb.aprovados;
+          device.firmwareAprovadosOp = hb.numeroOp;
+        } else if (batch != null &&
+            hb.numeroOp != null &&
+            hb.numeroOp!.isNotEmpty &&
+            hb.numeroOp != batch.numeroOp) {
+          device.firmwareAprovados = null;
+          device.firmwareAprovadosOp = null;
+        }
+        if (hb.ultimoVeredito != null &&
+            batch != null &&
+            hb.numeroOp == batch.numeroOp) {
+          final dbMetrics = await _ref.read(databaseProvider).getBatchMetrics(batch.numeroOp);
+          final sessionMetrics = device.batchStartedAt != null
+              ? computeSessionBatchMetrics(
+                  await _ref.read(databaseProvider).getTestsByOpSince(
+                    batch.numeroOp,
+                    device.batchStartedAt!,
+                  ),
+                )
+              : dbMetrics;
+          if ((hb.aprovados ?? 0) > sessionMetrics.aprovados) {
+            await _tryProcessHeartbeatLastTest(deviceId, hb);
+          }
+        }
+        if (prevEstado == DeviceFsmState.testing &&
+            hb.estado != DeviceFsmState.testing) {
+          final processed = await _tryProcessHeartbeatLastTest(deviceId, hb);
+          if (!processed) {
+            device.awaitingMqttResult = true;
+          }
+        } else if (hb.ultimoVeredito != null &&
+            hb.estado == DeviceFsmState.batchReady &&
+            device.awaitingMqttResult) {
+          await _tryProcessHeartbeatLastTest(deviceId, hb);
+        }
+        final batchAfterHb = device.activeBatch;
+        if (batchAfterHb != null &&
+            hb.numeroOp != null &&
+            hb.numeroOp!.isNotEmpty &&
+            hb.numeroOp == batchAfterHb.numeroOp &&
+            hb.aprovados != null &&
+            batchAfterHb.quantidadeTotal > 0 &&
+            hb.aprovados! >= batchAfterHb.quantidadeTotal) {
+          await _maybeAutoEndBatch(deviceId, test: device.lastTestResult);
+        }
         device.rssi = hb.rssi;
         device.uptime = hb.uptime;
         device.fila = hb.fila;
@@ -384,6 +442,60 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
     state = {...state};
   }
 
+  /// Fallback 005: veredito no heartbeat quando `tipo:teste` MQTT está colado/corrompido.
+  Future<bool> _tryProcessHeartbeatLastTest(
+    String deviceId,
+    HeartbeatMessage hb,
+  ) async {
+    final veredito = hb.ultimoVeredito;
+    if (veredito != 'APROVADO' && veredito != 'REPROVADO') {
+      return false;
+    }
+    final sequencial = hb.ultimoSequencial;
+    final potencia = hb.ultimaPotencia;
+    if (sequencial == null || sequencial <= 0 || potencia == null) {
+      return false;
+    }
+
+    final device = state[deviceId];
+    final batch = device?.activeBatch;
+    if (batch == null) {
+      return false;
+    }
+
+    final numeroOp = (hb.numeroOp != null && hb.numeroOp!.isNotEmpty)
+        ? hb.numeroOp!
+        : batch.numeroOp;
+    if (numeroOp != batch.numeroOp) {
+      return false;
+    }
+
+    final test = TestResultMessage(
+      numeroOp: numeroOp,
+      idProduto: batch.idProduto,
+      ano: batch.ano,
+      veredito: veredito!,
+      potenciaMedia: potencia,
+      sequencial: sequencial,
+      aprovadosNoLote: hb.aprovados ?? 0,
+      tsMs: hb.ultimoTsMs,
+    );
+
+    final db = _ref.read(databaseProvider);
+    if (test.tsMs != null &&
+        await db.testExistsByOpTsMsSequencial(numeroOp, test.tsMs!, test.sequencial)) {
+      device!.lastTestResult = test;
+      device.awaitingMqttResult = false;
+      state = {...state};
+      await _ensureMarkingForTest(db, test);
+      await _maybeAutoEndBatch(deviceId, test: test);
+      return true;
+    }
+
+    await processTestResult(deviceId, test);
+    return true;
+  }
+
   /// Processa resultado de teste (MQTT ou simulador de desenvolvimento).
   Future<void> processTestResult(
     String deviceId,
@@ -395,17 +507,45 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
     device.lastTestResult = test;
 
     final db = _ref.read(databaseProvider);
-    if (await db.testExistsForOpSequencial(test.numeroOp, test.sequencial)) {
-      if (!test.isApproved) {
+    if (test.tsMs != null) {
+      if (await db.testExistsByOpTsMsSequencial(
+        test.numeroOp,
+        test.tsMs!,
+        test.sequencial,
+      )) {
         unawaited(AppLog.write(
-          'MQTT: rejeição duplicada ignorada OP=${test.numeroOp} seq=${test.sequencial}',
+          'MQTT: teste duplicado ignorado OP=${test.numeroOp} ts_ms=${test.tsMs} seq=${test.sequencial}',
         ));
+        if (!(isRetest ?? _ref.read(retestModeProvider))) {
+          await _ensureMarkingForTest(_ref.read(databaseProvider), test);
+          await _maybeAutoEndBatch(deviceId, test: test);
+        }
         return;
       }
+    } else if (!test.isApproved) {
+      if (await db.testExistsLegacyReplay(
+        test.numeroOp,
+        test.sequencial,
+        test.veredito,
+        test.potenciaMedia,
+      )) {
+        unawaited(AppLog.write(
+          'MQTT: rejeição legada duplicada ignorada OP=${test.numeroOp} seq=${test.sequencial}',
+        ));
+        if (!(isRetest ?? _ref.read(retestModeProvider))) {
+          await _maybeAutoEndBatch(deviceId, test: test);
+        }
+        return;
+      }
+    } else if (await db.testExistsForOpSequencial(test.numeroOp, test.sequencial)) {
       if (await db.hasApprovedTestForOpSequencial(test.numeroOp, test.sequencial)) {
         unawaited(AppLog.write(
           'MQTT: teste duplicado ignorado OP=${test.numeroOp} seq=${test.sequencial}',
         ));
+        if (!(isRetest ?? _ref.read(retestModeProvider))) {
+          await _ensureMarkingForTest(db, test);
+          await _maybeAutoEndBatch(deviceId, test: test);
+        }
         return;
       }
       // Aprovação após reprovação no mesmo sequencial (firmware reutiliza o número).
@@ -417,6 +557,7 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
     final operatorCodigo = await resolveOperatorCodigo(_ref);
     final batch = device.activeBatch;
     final bool retest = isRetest ?? _ref.read(retestModeProvider);
+
     String? serial;
     if (test.isApproved && !retest) {
       final candidate = generateFullSerial(
@@ -432,20 +573,6 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
         );
       } else {
         serial = candidate;
-        final config = _ref.read(appConfigProvider);
-        if (config.markingMode == MarkingMode.laser) {
-          await db.addToMarkQueue(serial: serial, numeroOp: test.numeroOp);
-          await _maybeStartMarkServer();
-        } else {
-          await db.addLabelToBuffer(serial: serial, numeroOp: test.numeroOp);
-          await _maybePrintLabels(db);
-        }
-        await db.bumpSerialCounter(
-          idProduto: test.idProduto,
-          ano: test.ano,
-          sequencial: test.sequencial,
-        );
-        _advanceBatchSequencial(deviceId, test);
       }
     }
 
@@ -463,7 +590,29 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
       potenciaMax: batch?.potenciaMax,
       operatorId: operatorId,
       isRetest: retest,
+      firmwareTsMs: test.tsMs,
     );
+    device.awaitingMqttResult = false;
+    _ref.read(localDataRevisionProvider.notifier).state++;
+    state = {...state};
+
+    if (test.isApproved && !retest && serial != null) {
+      final config = _ref.read(appConfigProvider);
+      if (config.markingMode == MarkingMode.laser) {
+        await db.addToMarkQueue(serial: serial, numeroOp: test.numeroOp);
+        await _maybeStartMarkServer();
+      } else {
+        await db.addLabelToBuffer(serial: serial, numeroOp: test.numeroOp);
+        await _maybePrintLabels(db);
+      }
+      await db.bumpSerialCounter(
+        idProduto: test.idProduto,
+        ano: test.ano,
+        sequencial: test.sequencial,
+      );
+      _advanceBatchSequencial(deviceId, test);
+    }
+
     if (!_ref.read(demoModeProvider)) {
       await _ref.read(firestoreSyncServiceProvider).enqueueTestResult(
         deviceId: deviceId,
@@ -477,11 +626,86 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
         isRetest: retest,
       );
     }
-    _ref.read(localDataRevisionProvider.notifier).state++;
-    state = {...state};
 
     if (!retest) {
-      await _maybeAutoEndBatch(deviceId, test);
+      await _maybeAutoEndBatch(deviceId, test: test);
+    }
+  }
+
+  int _resolvedApprovedCount(DeviceInfo? device, TestResultMessage? test) {
+    final fromTest = test?.aprovadosNoLote ?? 0;
+    final fromFirmware = device?.firmwareAprovados ?? 0;
+    return fromTest > fromFirmware ? fromTest : fromFirmware;
+  }
+
+  Future<void> _ensureMarkingForTest(AppDatabase db, TestResultMessage test) async {
+    if (!test.isApproved) return;
+    final row = await db.getTestByOpSequencial(test.numeroOp, test.sequencial);
+    final serial = row?.serial;
+    if (serial == null || serial.trim().isEmpty) return;
+    await _enqueueMarking(db, serial: serial, numeroOp: test.numeroOp);
+  }
+
+  Future<void> _enqueueMarking(
+    AppDatabase db, {
+    required String serial,
+    required String numeroOp,
+  }) async {
+    final config = _ref.read(appConfigProvider);
+    if (config.markingMode == MarkingMode.laser) {
+      if (!await db.markQueueContainsSerial(serial)) {
+        await db.addToMarkQueue(serial: serial, numeroOp: numeroOp);
+        await _maybeStartMarkServer();
+      }
+    } else if (!await db.labelBufferContainsSerial(serial)) {
+      await db.addLabelToBuffer(serial: serial, numeroOp: numeroOp);
+      await _maybePrintLabels(db);
+    }
+  }
+
+  Future<void> _syncMarkingForOp(
+    AppDatabase db,
+    String numeroOp, {
+    DateTime? since,
+  }) async {
+    final tests = await db.getApprovedProductionTestsForOp(numeroOp, since: since);
+    for (final test in tests) {
+      final serial = test.serial;
+      if (serial == null || serial.trim().isEmpty) continue;
+      await _enqueueMarking(db, serial: serial, numeroOp: numeroOp);
+    }
+  }
+
+  Future<void> _maybeAutoEndBatch(String deviceId, {TestResultMessage? test}) async {
+    final device = state[deviceId];
+    final batch = device?.activeBatch;
+    if (batch == null) return;
+    if (test != null && batch.numeroOp != test.numeroOp) return;
+    if (batch.quantidadeTotal <= 0) return;
+
+    final approved = _resolvedApprovedCount(device, test);
+    if (approved < batch.quantidadeTotal) return;
+    if (_autoEndBatchSent.contains(deviceId)) return;
+
+    _autoEndBatchSent.add(deviceId);
+    final db = _ref.read(databaseProvider);
+    await _syncMarkingForOp(db, batch.numeroOp, since: device?.batchStartedAt);
+    await _flushLabelsForOp(db, batch.numeroOp);
+
+    // Firmware ainda está em TESTING por alguns ms após publicar o resultado.
+    for (var i = 0; i < 15; i++) {
+      if (state[deviceId]?.estado != DeviceFsmState.testing) break;
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+    }
+
+    final rejection = await sendEndBatch(deviceId);
+    if (rejection == null) {
+      _ref.read(autoBatchEndedProvider.notifier).state = (
+        deviceId: deviceId,
+        numeroOp: batch.numeroOp,
+      );
+    } else {
+      _autoEndBatchSent.remove(deviceId);
     }
   }
 
@@ -633,38 +857,15 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
     }
   }
 
-  Future<void> _maybeAutoEndBatch(String deviceId, TestResultMessage test) async {
-    final device = state[deviceId];
-    final batch = device?.activeBatch;
-    if (batch == null || batch.numeroOp != test.numeroOp) return;
-    if (batch.quantidadeTotal <= 0) return;
-    if (test.aprovadosNoLote < batch.quantidadeTotal) return;
-    if (_autoEndBatchSent.contains(deviceId)) return;
-
-    _autoEndBatchSent.add(deviceId);
-    await _flushLabelsForOp(_ref.read(databaseProvider), batch.numeroOp);
-
-    // Firmware ainda está em TESTING por alguns ms após publicar o resultado.
-    for (var i = 0; i < 40; i++) {
-      if (state[deviceId]?.estado != DeviceFsmState.testing) break;
-      await Future<void>.delayed(const Duration(milliseconds: 500));
-    }
-
-    final rejection = await sendEndBatch(deviceId);
-    if (rejection == null) {
-      _ref.read(autoBatchEndedProvider.notifier).state = (
-        deviceId: deviceId,
-        numeroOp: test.numeroOp,
-      );
-    } else {
-      _autoEndBatchSent.remove(deviceId);
-    }
-  }
-
   void setActiveBatch(String deviceId, BatchConfig batch) {
     final device = _getOrCreate(deviceId);
     device.activeBatch = batch;
-    _batchStartedAt[deviceId] = DateTime.now();
+    device.batchStartedAt = DateTime.now();
+    device.firmwareAprovados = null;
+    device.firmwareAprovadosOp = null;
+    device.lastTestResult = null;
+    device.awaitingMqttResult = false;
+    _batchStartedAt[deviceId] = device.batchStartedAt!;
     state = {...state};
   }
 
@@ -672,6 +873,10 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
     final device = state[deviceId];
     if (device != null) {
       device.activeBatch = null;
+      device.batchStartedAt = null;
+      device.firmwareAprovados = null;
+      device.firmwareAprovadosOp = null;
+      device.awaitingMqttResult = false;
       state = {...state};
     }
   }
@@ -799,9 +1004,13 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
     return null;
   }
 
-  Future<void> sendStartCalibration(String deviceId) async {
+  Future<void> sendStartCalibration(String deviceId, {int? tempoTesteSec}) async {
     final service = _ref.read(mqttServiceProvider);
-    await _publishForDevice(deviceId, {'cmd': 'START_CALIBRATION'});
+    final payload = <String, dynamic>{'cmd': 'START_CALIBRATION'};
+    if (tempoTesteSec != null && tempoTesteSec >= 1 && tempoTesteSec <= 120) {
+      payload['tempo_teste'] = tempoTesteSec;
+    }
+    await _publishForDevice(deviceId, payload);
   }
 
   Future<void> sendStartEnsaio(String deviceId, EnsaioConfig config) async {

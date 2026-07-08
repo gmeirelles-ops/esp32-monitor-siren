@@ -7,6 +7,7 @@ typedef void (*pzem_fault_cb_t)(bool fault);
 
 bool pzem_init(pzem_fault_cb_t fault_cb);
 bool pzem_read_power_w(float *power_w);
+bool pzem_read_active_power_w(float *power_w);
 bool pzem_probe_read(float *power_w);
 bool pzem_boot_self_test(void);
 bool pzem_is_fault(void);
@@ -17,6 +18,7 @@ uint32_t pzem_get_fault_count(void);
 
 typedef struct {
     float average_w;
+    float max_w;
     uint32_t sample_count;
     bool uart_error;
 } pzem_cycle_result_t;

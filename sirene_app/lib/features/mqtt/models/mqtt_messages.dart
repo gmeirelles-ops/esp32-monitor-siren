@@ -78,6 +78,13 @@ class HeartbeatMessage {
     this.deviceId,
     this.bancada,
     this.site,
+    this.numeroOp,
+    this.aprovados,
+    this.proximoSequencial,
+    this.ultimoVeredito,
+    this.ultimaPotencia,
+    this.ultimoSequencial,
+    this.ultimoTsMs,
   });
 
   final int uptime;
@@ -88,6 +95,13 @@ class HeartbeatMessage {
   final String? deviceId;
   final int? bancada;
   final String? site;
+  final String? numeroOp;
+  final int? aprovados;
+  final int? proximoSequencial;
+  final String? ultimoVeredito;
+  final double? ultimaPotencia;
+  final int? ultimoSequencial;
+  final int? ultimoTsMs;
 }
 
 class TestResultMessage {
@@ -99,6 +113,8 @@ class TestResultMessage {
     required this.potenciaMedia,
     required this.sequencial,
     required this.aprovadosNoLote,
+    this.tsMs,
+    this.tsUnix,
   });
 
   final String numeroOp;
@@ -108,6 +124,9 @@ class TestResultMessage {
   final double potenciaMedia;
   final int sequencial;
   final int aprovadosNoLote;
+  /// Timestamp monotônico do firmware (ms) — chave de dedupe.
+  final int? tsMs;
+  final int? tsUnix;
 
   bool get isApproved => veredito == 'APROVADO';
 }
@@ -161,8 +180,12 @@ class CalibrationSampleMessage {
 }
 
 class CalibrationMessage {
-  const CalibrationMessage({required this.potenciaMedia});
+  const CalibrationMessage({
+    required this.potenciaMedia,
+    this.potenciaMax,
+  });
   final double potenciaMedia;
+  final double? potenciaMax;
 }
 
 class HardwareAlertMessage {
@@ -227,6 +250,14 @@ class DeviceInfo {
   double? lastCalibration;
   BatchConfig? activeBatch;
   TestResultMessage? lastTestResult;
+  /// Contador de aprovados reportado pelo firmware (heartbeat), para meta do lote.
+  int? firmwareAprovados;
+  /// OP à qual [firmwareAprovados] pertence (evita vazar contagem de lote anterior).
+  String? firmwareAprovadosOp;
+  /// Início da sessão do lote ativo (filtra testes de OP reutilizada).
+  DateTime? batchStartedAt;
+  /// True após TESTING→BATCH_READY até `tipo:teste` ser processado.
+  bool awaitingMqttResult = false;
 }
 
 class BatchConfig {

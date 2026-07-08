@@ -16,6 +16,7 @@
 #include "freertos/queue.h"
 #include "freertos/task.h"
 #include "led_feedback.h"
+#include "line_actuator.h"
 #include "mqtt_bridge.h"
 #include "mqtt_config.h"
 #include "mqtt_topics.h"
@@ -35,6 +36,7 @@ void hardware_fault_enter(app_state_t restore_state, const char *falha)
         *app_state_before_fault() = restore_state;
         state_machine_set(STATE_HARDWARE_FAULT);
         led_feedback_signal(FEEDBACK_FAULT);
+        line_actuator_safe_all();
         char alerta[128];
         snprintf(alerta, sizeof(alerta), "{\"tipo\":\"hardware\",\"falha\":\"%s\"}", falha);
         app_publish_or_queue("alerta", alerta);
@@ -156,7 +158,11 @@ void mqtt_cmd_process_payload(const char *payload)
 
     if (strcmp(cmd->valuestring, "SET_BATCH") == 0) {
         if (!state_machine_can_accept_batch_cmd()) {
-            mqtt_bridge_publish_rejection("set_batch_durante_teste");
+            if (state_machine_get() == STATE_TESTING) {
+                mqtt_bridge_publish_rejection("config_durante_teste");
+            } else {
+                mqtt_bridge_publish_rejection("set_batch_durante_teste");
+            }
         } else if (!batch_cmd_parse_set_batch(root)) {
             mqtt_bridge_publish_rejection("set_batch_campos_invalidos");
         }
@@ -168,8 +174,15 @@ void mqtt_cmd_process_payload(const char *payload)
             mqtt_bridge_publish_rejection("calibracao_estado_invalido");
         } else if (pzem_is_fault()) {
             mqtt_bridge_publish_rejection("calibracao_pzem_falha");
-        } else if (!app_enqueue_pzem_work(PZEM_WORK_CALIBRATION, 0, NULL)) {
-            mqtt_bridge_publish_rejection("pzem_ocupado");
+        } else {
+            uint32_t duration_sec = 0;
+            cJSON *tempo = cJSON_GetObjectItem(root, "tempo_teste");
+            if (cJSON_IsNumber(tempo) && tempo->valuedouble >= 1.0 && tempo->valuedouble <= 120.0) {
+                duration_sec = (uint32_t)tempo->valuedouble;
+            }
+            if (!app_enqueue_pzem_work(PZEM_WORK_CALIBRATION, duration_sec, NULL)) {
+                mqtt_bridge_publish_rejection("pzem_ocupado");
+            }
         }
     } else if (strcmp(cmd->valuestring, "START_ENSAIO") == 0) {
         ensaio_params_t params;

@@ -25,6 +25,19 @@ void main() {
       final ip = pickLanIPv4(['10.0.0.5', '172.16.0.2'], mqttBrokerHost: '8.8.8.8');
       expect(ip, '10.0.0.5');
     });
+
+    test('ignora IP WSL 172.20.0.1 e prefere 192.168.x', () {
+      final ip = pickLanIPv4(
+        ['172.20.0.1', '192.168.51.50'],
+        mqttBrokerHost: 'mqtt.diponto.com',
+      );
+      expect(ip, '192.168.51.50');
+    });
+
+    test('isVirtualNetworkInterface detecta WSL/Hyper-V', () {
+      expect(isVirtualNetworkInterface('vEthernet (WSL (Hyper-V firewall))'), isTrue);
+      expect(isVirtualNetworkInterface('Ethernet'), isFalse);
+    });
   });
 
   group('otaPrecheckError', () {

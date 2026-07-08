@@ -8,4 +8,18 @@ config DEV_MOCK_PZEM
         instead of reading the PZEM-004T over UART. Use only on development
         benches without the sensor wired. Never enable in production firmware.
 
+config PZEM_FAST_READ
+    bool "Fast PZEM read (fewer UART retries per sample)"
+    default y
+    help
+        Reduces Modbus retries during measure_cycle for higher throughput.
+        Disable if UART is noisy on long cable runs.
+
+config PZEM_WORKER_CORE
+    int "CPU core for PZEM worker task (test/calibration)"
+    range 0 1
+    default 0
+    help
+        Pin test/calibration worker to Core 0 (critical path). Wi-Fi/MQTT use Core 1.
+
 endmenu

@@ -18,6 +18,24 @@ PowerLimits calcularLimites(double ref, double toleranciaPct) {
   );
 }
 
+/// Faixa alinhada ao teste de produção: mesma janela [tempo_teste] e margem para rampa térmica.
+PowerLimits calcularLimitesFromCalibration({
+  required double potenciaMedia,
+  required double toleranciaPct,
+  double? potenciaPico,
+}) {
+  final base = calcularLimites(potenciaMedia, toleranciaPct);
+  if (potenciaPico == null || potenciaPico <= base.max) {
+    return base;
+  }
+  // Pico observado na calibração: evita reprovar peça boa quando a média ainda sobe no ciclo.
+  final maxFromPeak = _round2(potenciaPico * 0.95);
+  if (maxFromPeak <= base.max) {
+    return base;
+  }
+  return PowerLimits(min: base.min, max: maxFromPeak);
+}
+
 bool isValidProductId(String id) {
   final trimmed = id.trim();
   return RegExp(r'^\d{3}$').hasMatch(trimmed);

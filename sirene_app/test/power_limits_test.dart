@@ -16,6 +16,28 @@ void main() {
     });
   });
 
+  group('calcularLimitesFromCalibration', () {
+    test('expande máximo quando pico supera tolerância da média', () {
+      final limits = calcularLimitesFromCalibration(
+        potenciaMedia: 79.3,
+        toleranciaPct: 10,
+        potenciaPico: 103.8,
+      );
+      expect(limits.min, closeTo(71.37, 0.01));
+      expect(limits.max, closeTo(98.61, 0.01));
+      expect(limits.max, greaterThan(87.23));
+    });
+
+    test('mantém faixa simétrica sem pico elevado', () {
+      final limits = calcularLimitesFromCalibration(
+        potenciaMedia: 80,
+        toleranciaPct: 10,
+        potenciaPico: 85,
+      );
+      expect(limits.max, 88.0);
+    });
+  });
+
   group('isValidProductId', () {
     test('aceita 3 dígitos', () {
       expect(isValidProductId('123'), isTrue);

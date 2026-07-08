@@ -34,6 +34,18 @@ ci_local.sh — não executado nesta sessão (requer ambiente Linux/WSL para hos
 - Validação física deve ser executada pelo operador no posto seguindo [quickstart.md](./quickstart.md).
 - Após deploy do app corrigido, repetir Fases A–E e atualizar esta tabela.
 
+## 003-test-flow-resilience (rede lenta / dedupe ts_ms)
+
+**Date**: 2026-07-08  
+**Executor**: _pendente — cenários em [../003-test-flow-resilience/quickstart.md](../003-test-flow-resilience/quickstart.md)_
+
+| Cenário | Resultado | Notas |
+|---------|-----------|-------|
+| 3 reprovados mesmo seq (rede lenta) | PENDENTE | App: dedupe por `ts_ms` — `flutter test test_dedupe_ts_ms_test.dart` PASS |
+| Fila offline + reconexão | PENDENTE | |
+| Aprovação antes da etiqueta | PENDENTE | Insert SQLite antes de impressão implementado |
+
+
 ## Instruções para operador (executar no posto)
 
 Siga [quickstart.md](./quickstart.md) fases A–E com estes parâmetros:

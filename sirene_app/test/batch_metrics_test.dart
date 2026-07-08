@@ -71,4 +71,79 @@ void main() {
       expect(m.pendentes(10), 10);
     });
   });
+
+  group('resolveFirmwareAprovados', () {
+    test('usa o maior entre heartbeat e último teste', () {
+      expect(
+        resolveFirmwareAprovados(heartbeat: 5, lastTest: 6),
+        6,
+      );
+      expect(resolveFirmwareAprovados(heartbeat: 6), 6);
+      expect(resolveFirmwareAprovados(lastTest: 4), 4);
+      expect(resolveFirmwareAprovados(), isNull);
+    });
+  });
+
+  group('mergeFirmwareAprovados', () {
+    test('alinha aprovados com contador da bancada', () {
+      const db = BatchMetrics(total: 2, aprovados: 2, reprovados: 0);
+      final merged = mergeFirmwareAprovados(db, 6);
+      expect(merged.aprovados, 6);
+      expect(merged.total, 6);
+      expect(merged.reprovados, 0);
+      expect(merged.pendentes(10), 4);
+    });
+
+    test('não altera quando firmware está atrás do SQLite', () {
+      const db = BatchMetrics(total: 6, aprovados: 6, reprovados: 0);
+      expect(mergeFirmwareAprovados(db, 4), db);
+    });
+  });
+
+  group('computeSessionBatchMetrics', () {
+    test('ignora testes anteriores à sessão', () {
+      final old = TestResult(
+        id: 1,
+        deviceId: 'd1',
+        numeroOp: 'OP1',
+        veredito: 'APROVADO',
+        potenciaMedia: 20,
+        sequencial: 1,
+        aprovadosNoLote: 1,
+        serial: 's1',
+        operador: 'op',
+        tempoTesteSec: 5,
+        potenciaMin: 18,
+        potenciaMax: 22,
+        operatorId: null,
+        isRetest: false,
+        firmwareTsMs: null,
+        createdAt: DateTime(2020, 1, 1),
+      );
+      final recent = TestResult(
+        id: 2,
+        deviceId: 'd1',
+        numeroOp: 'OP1',
+        veredito: 'APROVADO',
+        potenciaMedia: 21,
+        sequencial: 2,
+        aprovadosNoLote: 2,
+        serial: 's2',
+        operador: 'op',
+        tempoTesteSec: 5,
+        potenciaMin: 18,
+        potenciaMax: 22,
+        operatorId: null,
+        isRetest: false,
+        firmwareTsMs: null,
+        createdAt: DateTime.now(),
+      );
+      final metrics = computeSessionBatchMetrics(
+        [old, recent],
+        since: DateTime(2026, 1, 1),
+      );
+      expect(metrics.aprovados, 1);
+      expect(metrics.total, 1);
+    });
+  });
 }

@@ -96,6 +96,15 @@ O dispositivo SHALL sinalizar localmente, via LED/buzzer, o resultado de cada te
 - **WHEN** um teste é concluído
 - **THEN** o dispositivo aciona o sinal local correspondente (aprovado ou reprovado) mesmo se estiver offline
 
+#### Scenario: Ordem veredito antes de MQTT (004)
+- **WHEN** o ciclo de medição PZEM termina e o veredito é calculado no dispositivo
+- **THEN** o dispositivo aciona GPIO/LED/atuador de linha **antes** de publicar ou enfileirar `tipo:teste` em MQTT
+- **AND** a latência entre o fim da última amostra válida e o acionamento GPIO SHALL ser inferior a 50 ms em condições normais
+
+#### Scenario: Atuador de refugo em reprovado
+- **WHEN** o veredito é REPROVADO e o atuador de linha está habilitado
+- **THEN** o dispositivo emite pulso no GPIO de refugo configurado (`GPIO_REJECT`) independentemente de conexão MQTT
+
 #### Scenario: Sinalização de falha de hardware
 - **WHEN** o dispositivo entra no estado `HARDWARE_FAULT`
 - **THEN** o dispositivo apresenta um sinal local distinto indicando falha
@@ -162,4 +171,30 @@ O app Flutter SHALL calcular `ano` e `proximo_sequencial` automaticamente antes 
 #### Scenario: Payload MQTT inalterado
 - **WHEN** o app envia `SET_BATCH` após derivação automática
 - **THEN** o payload MQTT continua incluindo `ano` e `proximo_sequencial` conforme contrato do firmware
+
+### Requirement: Resiliência do fluxo de teste (003)
+O firmware SHALL publicar heartbeat imediato ao entrar em `TESTING` e após publicar `tipo:teste`. O app SHALL deduplicar resultados por `(numero_op, ts_ms)` quando presente, gravar SQLite antes de etiqueta/sync, e exibir estados Testando/Aguardando MQTT no painel operador.
+
+#### Scenario: Múltiplas reprovações no mesmo sequencial
+- **WHEN** o firmware publica 3 `tipo:teste` REPROVADO com o mesmo `sequencial` e `ts_ms` distintos
+- **THEN** o app grava 3 registros locais distintos
+
+#### Scenario: Replay MQTT da fila offline
+- **WHEN** o app recebe o mesmo `tipo:teste` com `ts_ms` já gravado
+- **THEN** o app ignora o duplicado
+
+#### Scenario: Heartbeat imediato no ciclo
+- **WHEN** o operador inicia um teste pelo botão físico
+- **THEN** o firmware publica heartbeat com `estado: TESTING` em menos de 2 segundos após o início do ciclo
+
+### Requirement: App confia no veredito MQTT (004)
+O app Flutter SHALL tratar o campo `veredito` de `tipo:teste` como fonte da verdade para aprovação/reprovação, serial e etiqueta. O app SHALL NOT recalcular veredito a partir de `potencia_media` e limites locais do lote.
+
+#### Scenario: Reprovado MQTT com potência na faixa local
+- **WHEN** o app recebe `tipo:teste` com `veredito: REPROVADO` e `potencia_media` dentro dos limites do lote ativo
+- **THEN** o app grava REPROVADO e não gera serial nem etiqueta
+
+#### Scenario: SET_BATCH durante teste
+- **WHEN** o dispositivo está em `TESTING` e recebe `SET_BATCH`
+- **THEN** o firmware rejeita com motivo `config_durante_teste` sem alterar parâmetros do ciclo em andamento
 
