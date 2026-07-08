@@ -396,10 +396,19 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
 
     final db = _ref.read(databaseProvider);
     if (await db.testExistsForOpSequencial(test.numeroOp, test.sequencial)) {
-      unawaited(AppLog.write(
-        'MQTT: teste duplicado ignorado OP=${test.numeroOp} seq=${test.sequencial}',
-      ));
-      return;
+      if (!test.isApproved) {
+        unawaited(AppLog.write(
+          'MQTT: rejeição duplicada ignorada OP=${test.numeroOp} seq=${test.sequencial}',
+        ));
+        return;
+      }
+      if (await db.hasApprovedTestForOpSequencial(test.numeroOp, test.sequencial)) {
+        unawaited(AppLog.write(
+          'MQTT: teste duplicado ignorado OP=${test.numeroOp} seq=${test.sequencial}',
+        ));
+        return;
+      }
+      // Aprovação após reprovação no mesmo sequencial (firmware reutiliza o número).
     }
 
     final operadorFinal =
@@ -558,7 +567,14 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
 
     final toPrint = entries.take(3).toList();
     final items = await resolveLabelZplItems(db, toPrint.map((e) => e.serial).toList());
-    final printer = createLabelPrinterTransport(config);
+    LabelPrinterTransport printer;
+    try {
+      printer = createLabelPrinterTransport(config);
+    } catch (e) {
+      _ref.read(printFailureProvider.notifier).state =
+          formatPrinterError(e, config.printerMode);
+      return;
+    }
 
     try {
       await printer.sendZpl(generateZplLabelRow(items));
@@ -590,7 +606,15 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
     final opEntries = entries.where((e) => e.numeroOp == numeroOp).toList();
     if (opEntries.isEmpty) return;
 
-    final printer = createLabelPrinterTransport(config);
+    LabelPrinterTransport printer;
+    try {
+      printer = createLabelPrinterTransport(config);
+    } catch (e) {
+      _ref.read(printFailureProvider.notifier).state =
+          formatPrinterError(e, config.printerMode);
+      return;
+    }
+
     final items = await resolveLabelZplItems(db, opEntries.map((e) => e.serial).toList());
     final printEntries = <({int id, LabelZplItem item})>[];
     for (var i = 0; i < opEntries.length; i++) {

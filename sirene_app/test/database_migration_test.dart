@@ -42,7 +42,7 @@ void main() {
     expect(operators, isEmpty);
 
     final version = await db.customSelect('PRAGMA user_version').getSingle();
-    expect(version.read<int>('user_version'), 17);
+    expect(version.read<int>('user_version'), 18);
 
     final downtimeTable = await db.customSelect(
       "SELECT name FROM sqlite_master WHERE type='table' AND name='downtime_events'",

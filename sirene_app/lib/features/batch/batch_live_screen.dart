@@ -45,7 +45,11 @@ class _BatchLiveScreenState extends ConsumerState<BatchLiveScreen> {
 
   @override
   void deactivate() {
-    ref.read(demoPlaybackProvider).stop();
+    try {
+      ref.read(demoPlaybackProvider).stop();
+    } on StateError {
+      // Container descartado (ex.: tearDown de teste).
+    }
     super.deactivate();
   }
 

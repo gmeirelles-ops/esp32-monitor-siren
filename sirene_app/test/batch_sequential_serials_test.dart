@@ -12,6 +12,8 @@ import 'package:sirene_app/features/mqtt/mqtt_providers.dart';
 import 'package:sirene_app/features/serial/itf_check_digit.dart';
 import 'package:sqlite3/open.dart';
 
+import 'test_support.dart';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -36,13 +38,9 @@ void main() {
   );
 
   Future<ProviderContainer> createContainer(AppDatabase db) async {
-    SharedPreferences.setMockInitialValues({});
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await createTestPrefs(useLaserMarking: false);
     final container = ProviderContainer(
-      overrides: [
-        sharedPreferencesProvider.overrideWithValue(prefs),
-        databaseProvider.overrideWithValue(db),
-      ],
+      overrides: devicesTestOverrides(db: db, prefs: prefs),
     );
     addTearDown(container.dispose);
     return container;

@@ -189,36 +189,39 @@ class _TraceabilityReportScreenState extends ConsumerState<TraceabilityReportScr
                               children: [
                                 for (var i = 0; i < batches.length; i++) ...[
                                   if (i > 0) const Divider(height: 1),
-                                  ListTile(
-                                    contentPadding: EdgeInsets.zero,
-                                    leading: const Icon(
-                                      Icons.folder_open_outlined,
-                                      color: DipontoColors.primary,
-                                    ),
-                                    title: Text(
-                                      'OP ${batches[i].numeroOp}',
-                                      style: const TextStyle(fontWeight: FontWeight.w600),
-                                    ),
-                                    subtitle: Text(
-                                      '${batches[i].aprovados} aprovados · ${batches[i].reprovados} reprovados · '
-                                      'yield ${batches[i].yieldPct.toStringAsFixed(1)}%'
-                                      '${batches[i].lastTestAt != null ? '\n${dateFmt.format(batches[i].lastTestAt!.toLocal())}' : ''}',
-                                    ),
-                                    isThreeLine: batches[i].lastTestAt != null,
-                                    trailing: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Text(
-                                          '${batches[i].total}',
-                                          style: const TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 16,
+                                  Material(
+                                    color: Colors.transparent,
+                                    child: ListTile(
+                                      contentPadding: EdgeInsets.zero,
+                                      leading: const Icon(
+                                        Icons.folder_open_outlined,
+                                        color: DipontoColors.primary,
+                                      ),
+                                      title: Text(
+                                        'OP ${batches[i].numeroOp}',
+                                        style: const TextStyle(fontWeight: FontWeight.w600),
+                                      ),
+                                      subtitle: Text(
+                                        '${batches[i].aprovados} aprovados · ${batches[i].reprovados} reprovados · '
+                                        'yield ${batches[i].yieldPct.toStringAsFixed(1)}%'
+                                        '${batches[i].lastTestAt != null ? '\n${dateFmt.format(batches[i].lastTestAt!.toLocal())}' : ''}',
+                                      ),
+                                      isThreeLine: batches[i].lastTestAt != null,
+                                      trailing: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Text(
+                                            '${batches[i].total}',
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 16,
+                                            ),
                                           ),
-                                        ),
-                                        const Icon(Icons.chevron_right),
-                                      ],
+                                          const Icon(Icons.chevron_right),
+                                        ],
+                                      ),
+                                      onTap: () => _openBatch(batches[i], filters),
                                     ),
-                                    onTap: () => _openBatch(batches[i], filters),
                                   ),
                                 ],
                               ],

@@ -20,6 +20,8 @@ import 'package:sirene_app/features/operators/operators_provider.dart';
 import 'package:sirene_app/features/products/products_provider.dart';
 import 'package:sqlite3/open.dart';
 
+import 'test_support.dart';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -51,7 +53,7 @@ void main() {
     TestResultMessage? lastTestResult,
   }) async {
     SharedPreferences.setMockInitialValues({});
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await createTestPrefs();
 
     final device = DeviceInfo(deviceId: deviceId)
       ..estado = DeviceFsmState.batchReady
@@ -74,6 +76,9 @@ void main() {
         bancadasMapProvider.overrideWith((ref) => Stream.value({deviceId: 1})),
         productsStreamProvider.overrideWith((ref) => Stream.value([])),
         activeOperatorProvider.overrideWith((ref) => Future.value(null)),
+        mqttConnectionStateProvider.overrideWith(
+          (ref) => Stream.value(AppMqttConnectionState.connected),
+        ),
       ],
     );
   }

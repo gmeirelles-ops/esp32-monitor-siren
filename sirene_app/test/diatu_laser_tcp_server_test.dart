@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -102,12 +103,23 @@ void main() {
 
     Future<String> clientRoundTrip(String payload) async {
       final client = await Socket.connect('127.0.0.1', server.boundPort!);
+      final responseCompleter = Completer<String>();
+      client.listen(
+        (data) {
+          if (!responseCompleter.isCompleted) {
+            responseCompleter.complete(utf8.decode(data).trim());
+          }
+        },
+        onError: (Object e, StackTrace st) {
+          if (!responseCompleter.isCompleted) {
+            responseCompleter.completeError(e, st);
+          }
+        },
+      );
+      client.write(payload);
+      await client.flush();
       try {
-        await Future<void>.delayed(const Duration(milliseconds: 150));
-        client.write(payload);
-        await client.flush();
-        final data = await client.timeout(const Duration(seconds: 2)).first;
-        return utf8.decode(data).trim();
+        return await responseCompleter.future.timeout(const Duration(seconds: 3));
       } finally {
         await client.close();
       }
@@ -115,6 +127,7 @@ void main() {
 
     test('comando serial válido retorna serial', () async {
       final response = await clientRoundTrip(command);
+      await server.handlersDrained;
       expect(response, '1234567890');
       expect(serialCalls, 1);
       expect(modelCalls, 0);
@@ -132,6 +145,7 @@ void main() {
 
     test('comando inválido retorna ERROR:BADCMD', () async {
       final response = await clientRoundTrip('wrong');
+      await server.handlersDrained;
       expect(response, 'ERROR:BADCMD');
       expect(log.lastEvent?.response, 'ERROR:BADCMD');
     });
@@ -155,6 +169,7 @@ void main() {
       for (var i = 0; i < 3; i++) {
         final response = await clientRoundTrip(command);
         expect(response, '1234567890');
+        await server.handlersDrained;
       }
       expect(log.events.length, greaterThanOrEqualTo(3));
     });

@@ -9,7 +9,10 @@ import 'package:sirene_app/core/database/database.dart';
 import 'package:sirene_app/features/batch/batch_live_providers.dart';
 import 'package:sirene_app/features/mqtt/models/mqtt_messages.dart';
 import 'package:sirene_app/features/mqtt/mqtt_providers.dart';
+import 'package:sirene_app/features/mqtt/mqtt_service.dart';
 import 'package:sqlite3/open.dart';
+
+import 'test_support.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -35,12 +38,11 @@ void main() {
   );
 
   Future<ProviderContainer> createContainer(AppDatabase db) async {
-    SharedPreferences.setMockInitialValues({});
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await createTestPrefs();
     final container = ProviderContainer(
       overrides: [
-        sharedPreferencesProvider.overrideWithValue(prefs),
-        databaseProvider.overrideWithValue(db),
+        ...devicesTestOverrides(db: db, prefs: prefs),
+        mqttServiceProvider.overrideWithValue(MqttService()..testMode = true),
       ],
     );
     addTearDown(container.dispose);

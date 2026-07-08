@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sirene_app/core/config/app_config.dart';
 import 'package:sirene_app/core/providers/core_providers.dart';
 import 'package:sirene_app/core/services/factory_reset_service.dart';
+import 'package:sirene_app/features/cloud/sync/sync_providers.dart';
 import 'package:sirene_app/features/operators/operators_provider.dart';
 
 void main() {
@@ -30,6 +31,15 @@ void main() {
       final container = ProviderContainer(
         overrides: [
           sharedPreferencesProvider.overrideWithValue(prefs),
+          syncStatusProvider.overrideWith(
+            (ref) async => const SyncStatus(
+              pending: 0,
+              failed: 0,
+              enabled: false,
+              firebaseAvailable: false,
+              authenticated: false,
+            ),
+          ),
           factoryResetServiceProvider.overrideWith((ref) {
             return FactoryResetService(
               ref: ref,
@@ -45,6 +55,7 @@ void main() {
       container.read(sessionOperatorIdProvider.notifier).state = 42;
 
       await container.read(factoryResetServiceProvider).execute();
+      await container.read(syncStatusProvider.future);
 
       expect(dbClosed, isTrue);
       expect(fileDeleted, isTrue);

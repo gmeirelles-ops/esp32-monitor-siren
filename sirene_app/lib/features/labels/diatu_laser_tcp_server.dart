@@ -1,5 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
+
+import 'package:flutter/foundation.dart';
 
 import 'laser_tcp_diagnostics.dart';
 import 'serial_marking_backend.dart';
@@ -34,11 +37,19 @@ class DiatuLaserTcpServer implements SerialMarkingBackend {
 
   ServerSocket? _server;
   final _clients = <Socket>{};
+  final List<Future<void>> _pendingHandlers = [];
 
   @override
   bool get isRunning => _server != null;
 
   int? get boundPort => _server?.port;
+
+  /// Aguarda handlers de conexão em andamento (útil em testes).
+  @visibleForTesting
+  Future<void> get handlersDrained async {
+    if (_pendingHandlers.isEmpty) return;
+    await Future.wait(List<Future<void>>.from(_pendingHandlers));
+  }
 
   @override
   String get modeDescription => 'Laser Diatu TCP :$port';
@@ -51,46 +62,46 @@ class DiatuLaserTcpServer implements SerialMarkingBackend {
     } on SocketException catch (e) {
       throw StateError(formatLaserPortInUseError(port, e.message));
     }
-    _server!.listen(_onConnection, onError: (_) {}, cancelOnError: false);
+    _server!.listen(
+      (client) {
+        final handler = _onConnection(client);
+        _pendingHandlers.add(handler);
+        unawaited(handler.whenComplete(() => _pendingHandlers.remove(handler)));
+      },
+      onError: (_) {},
+      cancelOnError: false,
+    );
   }
 
   @override
   Future<void> stop() async {
     final server = _server;
     _server = null;
-    for (final client in _clients.toList()) {
-      await client.close();
+    try {
+      await server?.close();
+    } catch (_) {}
+    if (_pendingHandlers.isNotEmpty) {
+      await Future.wait(List<Future<void>>.from(_pendingHandlers));
     }
+    final clients = _clients.toList();
     _clients.clear();
-    await server?.close();
+    for (final client in clients) {
+      try {
+        client.destroy();
+      } catch (_) {}
+    }
   }
 
   Future<void> _onConnection(Socket client) async {
     _clients.add(client);
     final remote = '${client.remoteAddress.address}:${client.remotePort}';
-    final requestBuffer = <int>[];
-    final requestDone = Completer<void>();
-    late final StreamSubscription<List<int>> requestSub;
-    requestSub = client.listen(
-      (data) {
-        requestBuffer.addAll(data);
-        if (!requestDone.isCompleted) requestDone.complete();
-      },
-    );
-
     String? requestText;
     String? response;
     String? error;
 
     try {
-      try {
-        await requestDone.future.timeout(connectionTimeout);
-      } on TimeoutException {
-        // Cliente não enviou comando a tempo.
-      }
-      await requestSub.cancel();
-
-      requestText = requestBuffer.isEmpty ? '' : String.fromCharCodes(requestBuffer);
+      final data = await client.first.timeout(connectionTimeout);
+      requestText = data.isEmpty ? '' : String.fromCharCodes(data);
       final route = routeDiatuTcpCommand(
         requestText,
         serialCommandPrefix: commandPrefix,
@@ -110,7 +121,7 @@ class DiatuLaserTcpServer implements SerialMarkingBackend {
       client.write(response);
       await client.flush();
     } catch (e) {
-      error = 'ERROR:SERVER';
+      error = e is TimeoutException ? 'ERROR:TIMEOUT' : 'ERROR:SERVER';
       response = error;
       try {
         client.write(error);
@@ -125,7 +136,9 @@ class DiatuLaserTcpServer implements SerialMarkingBackend {
         error: error,
       ));
       _clients.remove(client);
-      await client.close();
+      try {
+        client.destroy();
+      } catch (_) {}
     }
   }
 }

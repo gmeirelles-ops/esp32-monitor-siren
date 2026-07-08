@@ -1394,6 +1394,13 @@ class AppDatabase extends _$AppDatabase {
     return row != null;
   }
 
+  Future<bool> hasApprovedTestForOpSequencial(String numeroOp, int sequencial) async {
+    final row = await (select(testResults)
+          ..where((t) => t.numeroOp.equals(numeroOp) & t.sequencial.equals(sequencial)))
+        .getSingleOrNull();
+    return row != null && isApprovedVeredito(row.veredito);
+  }
+
   Future<bool> serialExists(String serial) async {
     final row = await (select(testResults)..where((t) => t.serial.equals(serial)))
         .getSingleOrNull();

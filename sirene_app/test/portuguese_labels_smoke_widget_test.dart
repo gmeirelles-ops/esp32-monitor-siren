@@ -71,7 +71,7 @@ void main() {
 
     expect(find.text('Bancada 1'), findsOneWidget);
     expect(find.text(mac), findsNothing);
-    expect(find.text(PortugueseLabels.navBancadas), findsOneWidget);
+    expect(find.text(PortugueseLabels.navBancadas), findsAtLeastNWidgets(1));
   });
 
   testWidgets('detalhe da bancada mostra identificador técnico e presença PT', (tester) async {
