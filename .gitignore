@@ -4,6 +4,10 @@ Thumbs.db
 *~
 *:Zone.Identifier
 
+# Cursor / Specify (local, não versionar)
+.cursor/
+.specify/
+
 # IDE — preferências locais de máquina (caminhos ESP-IDF, portas COM, etc.)
 **/.vscode/settings.json
 *.swp

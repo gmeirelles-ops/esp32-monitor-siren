@@ -1,20 +1,9 @@
 name: Windows Release
 
+# Só manual — push em sirene_app/** disparava build Windows no CI e falhava sem VS/Inno no runner.
+# Para gerar ZIP/setup.exe: Actions → Windows Release → Run workflow (ou scripts locais no PC).
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - 'sirene_app/**'
-      - 'scripts/build_windows_all.ps1'
-      - 'scripts/build_windows_release.ps1'
-      - 'scripts/build_windows_installer.ps1'
-      - 'scripts/gerar_instalador_atualizado.ps1'
-      - 'scripts/rebuild_windows_clean.ps1'
-      - 'scripts/windows_build_common.ps1'
-      - 'scripts/windows-installer/**'
-      - 'scripts/windows-portable/**'
-      - '.github/workflows/windows-release.yml'
 
 concurrency:
   group: windows-release-${{ github.ref }}
