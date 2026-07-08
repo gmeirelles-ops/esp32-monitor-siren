@@ -643,6 +643,13 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
 
     _autoEndBatchSent.add(deviceId);
     await _flushLabelsForOp(_ref.read(databaseProvider), batch.numeroOp);
+
+    // Firmware ainda está em TESTING por alguns ms após publicar o resultado.
+    for (var i = 0; i < 40; i++) {
+      if (state[deviceId]?.estado != DeviceFsmState.testing) break;
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+    }
+
     final rejection = await sendEndBatch(deviceId);
     if (rejection == null) {
       _ref.read(autoBatchEndedProvider.notifier).state = (

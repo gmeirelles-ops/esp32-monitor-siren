@@ -180,42 +180,62 @@ class _BatchLiveScreenState extends ConsumerState<BatchLiveScreen> {
     final metrics = metricsAsync.valueOrNull;
     final labelCount = labelCountAsync.valueOrNull ?? 0;
     final demoMode = ref.watch(demoModeProvider);
+    final isGestor = ref.watch(activeOperatorIsGestorProvider);
 
-    final chips = <StatusChipData>[
-      StatusChipData(
-        icon: Icons.tag,
-        label: 'OP ${widget.numeroOp}',
-        color: DipontoColors.primary,
-      ),
-      StatusChipData(
-        icon: device?.isOnline == true ? Icons.wifi : Icons.wifi_off,
-        label: bancadaLabel,
-        color: device?.isOnline == true ? DipontoColors.success : DipontoColors.error,
-      ),
-      StatusChipData(
-        icon: estado == DeviceFsmState.testing ? Icons.hourglass_top : Icons.play_circle_outline,
-        label: estado.label,
-        color: estado == DeviceFsmState.testing ? DipontoColors.primaryLight : DipontoColors.primary,
-      ),
-      if (meta > 0 && metrics != null)
-        StatusChipData(
-          icon: Icons.check_circle_outline,
-          label: '${metrics.aprovados}/$meta',
-          color: DipontoColors.success,
-        ),
-      if (labelCount > 0)
-        StatusChipData(
-          icon: Icons.label_outline,
-          label: '$labelCount etiqueta(s)',
-          color: DipontoColors.primaryLight,
-        ),
-      if (demoMode)
-        const StatusChipData(
-          icon: Icons.smart_display_outlined,
-          label: 'Demonstração',
-          color: Colors.deepPurpleAccent,
-        ),
-    ];
+    final chips = isGestor
+        ? <StatusChipData>[
+            StatusChipData(
+              icon: Icons.tag,
+              label: 'OP ${widget.numeroOp}',
+              color: DipontoColors.primary,
+            ),
+            StatusChipData(
+              icon: device?.isOnline == true ? Icons.wifi : Icons.wifi_off,
+              label: bancadaLabel,
+              color: device?.isOnline == true ? DipontoColors.success : DipontoColors.error,
+            ),
+            StatusChipData(
+              icon: estado == DeviceFsmState.testing ? Icons.hourglass_top : Icons.play_circle_outline,
+              label: estado.label,
+              color: estado == DeviceFsmState.testing ? DipontoColors.primaryLight : DipontoColors.primary,
+            ),
+            if (meta > 0 && metrics != null)
+              StatusChipData(
+                icon: Icons.check_circle_outline,
+                label: '${metrics.aprovados}/$meta',
+                color: DipontoColors.success,
+              ),
+            if (labelCount > 0)
+              StatusChipData(
+                icon: Icons.label_outline,
+                label: '$labelCount etiqueta(s)',
+                color: DipontoColors.primaryLight,
+              ),
+            if (demoMode)
+              const StatusChipData(
+                icon: Icons.smart_display_outlined,
+                label: 'Demonstração',
+                color: Colors.deepPurpleAccent,
+              ),
+          ]
+        : <StatusChipData>[
+            StatusChipData(
+              icon: Icons.tag,
+              label: 'OP ${widget.numeroOp}',
+              color: DipontoColors.primary,
+            ),
+            StatusChipData(
+              icon: device?.isOnline == true ? Icons.wifi : Icons.wifi_off,
+              label: bancadaLabel,
+              color: device?.isOnline == true ? DipontoColors.success : DipontoColors.error,
+            ),
+            if (meta > 0 && metrics != null)
+              StatusChipData(
+                icon: Icons.check_circle_outline,
+                label: '${metrics.aprovados}/$meta',
+                color: DipontoColors.success,
+              ),
+          ];
 
     final introSubtitle = [
       if (productName != null) productName,
@@ -234,16 +254,29 @@ class _BatchLiveScreenState extends ConsumerState<BatchLiveScreen> {
               maxWidth: 900,
               header: StatusChipHeader(chips: chips),
               intro: SectionIntro(
-                title: 'Painel ao vivo',
-                subtitle: introSubtitle,
-                icon: Icons.monitor_heart_outlined,
+                title: isGestor ? 'Painel ao vivo' : 'Teste',
+                subtitle: isGestor ? introSubtitle : (productName ?? operador),
+                icon: isGestor ? Icons.monitor_heart_outlined : Icons.play_circle_outline,
               ),
               children: [
-                if (demoMode) const DemoModeBanner(compact: true),
-                if (device?.lastNvsFault != null)
-                  _NvsFaultBanner(alert: device!.lastNvsFault!),
-                if (device?.lastRejection != null)
-                  _RejectionBanner(motivo: device!.lastRejection!.motivo),
+                if (demoMode && isGestor) const DemoModeBanner(compact: true),
+                if (isGestor) ...[
+                  if (device?.lastNvsFault != null)
+                    _NvsFaultBanner(alert: device!.lastNvsFault!),
+                  if (device?.lastRejection != null)
+                    _RejectionBanner(motivo: device!.lastRejection!.motivo),
+                ] else ...[
+                  if (device?.lastNvsFault != null)
+                    BatchLiveOperatorAlert(
+                      isError: false,
+                      message: device!.lastNvsFault!.detalhe ??
+                          formatRejectionMotivo(device!.lastNvsFault!.evento),
+                    ),
+                  if (device?.lastRejection != null)
+                    BatchLiveOperatorAlert(
+                      message: formatRejectionMotivo(device!.lastRejection!.motivo),
+                    ),
+                ],
                 _BatchLiveBody(
                   deviceId: widget.deviceId,
                   numeroOp: widget.numeroOp,
@@ -258,6 +291,7 @@ class _BatchLiveScreenState extends ConsumerState<BatchLiveScreen> {
                   onRetestChanged: _toggleRetest,
                   onSimulateOnce: _simulateTest,
                   simulating: _simulating,
+                  isGestor: isGestor,
                 ),
               ],
             ),
@@ -310,6 +344,7 @@ class _BatchLiveBody extends ConsumerWidget {
     required this.onRetestChanged,
     required this.onSimulateOnce,
     required this.simulating,
+    required this.isGestor,
   });
 
   final String deviceId;
@@ -325,6 +360,7 @@ class _BatchLiveBody extends ConsumerWidget {
   final ValueChanged<bool> onRetestChanged;
   final VoidCallback onSimulateOnce;
   final bool simulating;
+  final bool isGestor;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -350,95 +386,125 @@ class _BatchLiveBody extends ConsumerWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            BatchLiveLastTestHero(
-              estado: estado,
-              tests: tests,
-              liveResult: liveResult,
-              potenciaMin: batch?.potenciaMin,
-              potenciaMax: batch?.potenciaMax,
-              mqttDisconnected: mqttDisconnected,
-            ),
-            DemoLiveControls(
-              deviceId: deviceId,
-              hasActiveBatch: batch != null,
-              onSimulateOnce: onSimulateOnce,
-              simulating: simulating,
-            ),
-            metricsAsync.when(
-              loading: () => const Padding(
-                padding: EdgeInsets.symmetric(vertical: 24),
-                child: Center(child: CircularProgressIndicator()),
+            if (isGestor) ...[
+              BatchLiveLastTestHero(
+                estado: estado,
+                tests: tests,
+                liveResult: liveResult,
+                potenciaMin: batch?.potenciaMin,
+                potenciaMax: batch?.potenciaMax,
+                mqttDisconnected: mqttDisconnected,
               ),
-              error: (e, _) => Text('Erro nas métricas: $e'),
-              data: (metrics) => BatchLiveProgressSection(
-                metrics: metrics,
-                meta: batch?.quantidadeTotal ?? 0,
+              DemoLiveControls(
+                deviceId: deviceId,
+                hasActiveBatch: batch != null,
+                onSimulateOnce: onSimulateOnce,
+                simulating: simulating,
               ),
-            ),
-            if (batch != null)
-              ActionSectionCard(
-                icon: Icons.replay_outlined,
-                title: 'Reteste',
-                subtitle: retestMode
-                    ? 'Ativo — testes não consomem serial nem cota'
-                    : 'Repetir teste sem gerar serial',
-                accentColor: retestMode ? Colors.lightBlueAccent : DipontoColors.onSurface.withValues(alpha: 0.4),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Modo reteste',
-                            style: Theme.of(context).textTheme.titleSmall,
-                          ),
-                          Text(
-                            'Não gera serial nem consome meta do lote',
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  color: DipontoColors.onSurface.withValues(alpha: 0.65),
-                                ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (syncingRetest)
-                      const SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    else
-                      Switch(
-                        value: retestMode,
-                        onChanged: estado == DeviceFsmState.testing || syncingRetest
-                            ? null
-                            : onRetestChanged,
-                      ),
-                  ],
+              metricsAsync.when(
+                loading: () => const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 24),
+                  child: Center(child: CircularProgressIndicator()),
+                ),
+                error: (e, _) => Text('Erro nas métricas: $e'),
+                data: (metrics) => BatchLiveProgressSection(
+                  metrics: metrics,
+                  meta: batch?.quantidadeTotal ?? 0,
                 ),
               ),
-            BatchLivePowerChart(
-              tests: tests,
-              potenciaMin: batch?.potenciaMin,
-              potenciaMax: batch?.potenciaMax,
-            ),
-            BatchLiveRecentTests(
-              tests: tests,
-              onViewAll: tests.length > 10
-                  ? () => showBatchHistorySheet(context, tests)
-                  : null,
-            ),
-            BatchLiveDetailsExpansion(
-              numeroOp: numeroOp,
-              productName: productName,
-              bancadaLabel: bancadaLabel,
-              operador: operador,
-              estado: estado,
-              batch: batch,
-              tests: tests,
-            ),
+              if (batch != null)
+                ActionSectionCard(
+                  icon: Icons.replay_outlined,
+                  title: 'Reteste',
+                  subtitle: retestMode
+                      ? 'Ativo — testes não consomem serial nem cota'
+                      : 'Repetir teste sem gerar serial',
+                  accentColor: retestMode ? Colors.lightBlueAccent : DipontoColors.onSurface.withValues(alpha: 0.4),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Modo reteste',
+                              style: Theme.of(context).textTheme.titleSmall,
+                            ),
+                            Text(
+                              'Não gera serial nem consome meta do lote',
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: DipontoColors.onSurface.withValues(alpha: 0.65),
+                                  ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (syncingRetest)
+                        const SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      else
+                        Switch(
+                          value: retestMode,
+                          onChanged: estado == DeviceFsmState.testing || syncingRetest
+                              ? null
+                              : onRetestChanged,
+                        ),
+                    ],
+                  ),
+                ),
+              BatchLivePowerChart(
+                tests: tests,
+                potenciaMin: batch?.potenciaMin,
+                potenciaMax: batch?.potenciaMax,
+              ),
+              BatchLiveRecentTests(
+                tests: tests,
+                onViewAll: tests.length > 10
+                    ? () => showBatchHistorySheet(context, tests)
+                    : null,
+              ),
+              BatchLiveDetailsExpansion(
+                numeroOp: numeroOp,
+                productName: productName,
+                bancadaLabel: bancadaLabel,
+                operador: operador,
+                estado: estado,
+                batch: batch,
+                tests: tests,
+              ),
+            ] else ...[
+              BatchLiveOperatorHero(
+                estado: estado,
+                tests: tests,
+                numeroOp: numeroOp,
+                productName: productName,
+                liveResult: liveResult,
+                potenciaMin: batch?.potenciaMin,
+                potenciaMax: batch?.potenciaMax,
+                mqttDisconnected: mqttDisconnected,
+                filaOffline: device?.fila ?? 0,
+              ),
+              const SizedBox(height: 16),
+              metricsAsync.when(
+                loading: () => const SizedBox.shrink(),
+                error: (_, __) => const SizedBox.shrink(),
+                data: (metrics) => BatchLiveOperatorProgress(
+                  metrics: metrics,
+                  meta: batch?.quantidadeTotal ?? 0,
+                ),
+              ),
+              const SizedBox(height: 12),
+              BatchLiveOperatorStatusStrip(
+                bancadaLabel: bancadaLabel,
+                estado: estado,
+                mqttDisconnected: mqttDisconnected,
+                filaOffline: device?.fila ?? 0,
+              ),
+            ],
           ],
         );
       },

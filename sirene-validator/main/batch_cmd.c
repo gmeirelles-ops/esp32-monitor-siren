@@ -161,6 +161,7 @@ void batch_cmd_run_test_cycle(uint32_t duration_sec)
     app_batch_unlock();
 
     if (quota_done) {
+        state_machine_set(STATE_BATCH_READY);
         batch_cmd_end_batch_with_reason("cota_atingida");
     } else {
         state_machine_set(STATE_BATCH_READY);

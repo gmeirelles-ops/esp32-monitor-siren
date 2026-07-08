@@ -65,15 +65,26 @@ class BatchLiveLastTestHero extends StatelessWidget {
     }
 
     final approved = isApprovedVeredito(latest.veredito);
-    final accent = approved ? DipontoColors.success : DipontoColors.error;
+    final valid = isValidVeredito(latest.veredito);
+    final accent = !valid
+        ? Colors.orange
+        : approved
+            ? DipontoColors.success
+            : DipontoColors.error;
     final dateFmt = DateFormat('HH:mm:ss');
 
     return Semantics(
-      label: 'Último teste: ${latest.veredito}, ${latest.potenciaMedia.toStringAsFixed(2)} watts',
+      label: valid
+          ? 'Último teste: ${latest.veredito}, ${latest.potenciaMedia.toStringAsFixed(2)} watts'
+          : 'Último teste com veredito inválido',
       child: _HeroShell(
         accent: accent,
-        icon: approved ? Icons.check_circle_outline : Icons.cancel_outlined,
-        title: latest.veredito,
+        icon: !valid
+            ? Icons.warning_amber_outlined
+            : approved
+                ? Icons.check_circle_outline
+                : Icons.cancel_outlined,
+        title: valid ? latest.veredito : 'Veredito inválido',
         subtitle: 'Seq ${latest.sequencial}'
             '${latest.serial != null ? ' · ${latest.serial}' : ''}'
             '${latest.timestamp != null ? ' · ${dateFmt.format(latest.timestamp!.toLocal())}' : ''}',
@@ -535,6 +546,392 @@ class _InfoRow extends StatelessWidget {
             ),
           ),
           Expanded(child: Text(value, style: const TextStyle(fontSize: 13))),
+        ],
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Painel simplificado (operador)
+// ---------------------------------------------------------------------------
+
+/// Cartão grande: APROVADO / REPROVADO + potência + contexto mínimo.
+class BatchLiveOperatorHero extends StatelessWidget {
+  const BatchLiveOperatorHero({
+    super.key,
+    required this.estado,
+    required this.tests,
+    required this.numeroOp,
+    this.productName,
+    this.liveResult,
+    this.potenciaMin,
+    this.potenciaMax,
+    this.mqttDisconnected = false,
+    this.filaOffline = 0,
+  });
+
+  final DeviceFsmState estado;
+  final List<TestResult> tests;
+  final String numeroOp;
+  final String? productName;
+  final TestResultMessage? liveResult;
+  final double? potenciaMin;
+  final double? potenciaMax;
+  final bool mqttDisconnected;
+  final int filaOffline;
+
+  @override
+  Widget build(BuildContext context) {
+    if (estado == DeviceFsmState.testing) {
+      return _OperatorHeroCard(
+        accent: DipontoColors.primary,
+        child: Column(
+          children: [
+            const SizedBox(
+              width: 48,
+              height: 48,
+              child: CircularProgressIndicator(strokeWidth: 3, color: DipontoColors.primary),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              'Testando…',
+              style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: DipontoColors.primary,
+                  ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Aguarde o resultado na bancada',
+              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                    color: DipontoColors.onSurface.withValues(alpha: 0.7),
+                  ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      );
+    }
+
+    final latest = _resolveLatest();
+    if (latest == null) {
+      final accent = mqttDisconnected ? DipontoColors.error : DipontoColors.primary;
+      return _OperatorHeroCard(
+        accent: accent,
+        child: Column(
+          children: [
+            Icon(
+              mqttDisconnected ? Icons.cloud_off : Icons.touch_app,
+              size: 56,
+              color: accent,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              mqttDisconnected ? 'Sem conexão MQTT' : 'Pressione o botão',
+              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: accent,
+                  ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              mqttDisconnected
+                  ? 'Resultados não chegam até reconectar'
+                  : 'O teste só inicia pelo botão físico da bancada',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: DipontoColors.onSurface.withValues(alpha: 0.65),
+                  ),
+              textAlign: TextAlign.center,
+            ),
+            if (filaOffline > 0) ...[
+              const SizedBox(height: 16),
+              _OperatorStatusPill(
+                icon: Icons.queue,
+                label: 'Fila offline: $filaOffline',
+                color: Colors.orange,
+              ),
+            ],
+          ],
+        ),
+      );
+    }
+
+    final valid = isValidVeredito(latest.veredito);
+    final approved = valid && isApprovedVeredito(latest.veredito);
+    final accent = !valid
+        ? Colors.orange
+        : approved
+            ? DipontoColors.success
+            : DipontoColors.error;
+    final verdictLabel = !valid ? 'Sem veredito' : latest.veredito;
+
+    return _OperatorHeroCard(
+      accent: accent,
+      child: Column(
+        children: [
+          Text(
+            verdictLabel,
+            style: Theme.of(context).textTheme.displayMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  color: accent,
+                  letterSpacing: 1.2,
+                ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 12),
+          Text(
+            '${latest.potenciaMedia.toStringAsFixed(2)} W',
+            style: Theme.of(context).textTheme.headlineLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+            textAlign: TextAlign.center,
+          ),
+          if (potenciaMin != null && potenciaMax != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                'Faixa ${potenciaMin!.toStringAsFixed(1)}–${potenciaMax!.toStringAsFixed(1)} W',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: DipontoColors.onSurface.withValues(alpha: 0.6),
+                    ),
+              ),
+            ),
+          const SizedBox(height: 20),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            alignment: WrapAlignment.center,
+            children: [
+              _OperatorStatusPill(icon: Icons.tag, label: 'OP $numeroOp'),
+              if (productName != null)
+                _OperatorStatusPill(icon: Icons.inventory_2_outlined, label: productName!),
+              _OperatorStatusPill(
+                icon: Icons.format_list_numbered,
+                label: 'Seq ${latest.sequencial}',
+              ),
+              if (latest.serial != null)
+                _OperatorStatusPill(icon: Icons.qr_code_2, label: latest.serial!),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  _LatestDisplay? _resolveLatest() {
+    if (liveResult != null) {
+      return _LatestDisplay(
+        veredito: liveResult!.veredito,
+        potenciaMedia: liveResult!.potenciaMedia,
+        sequencial: liveResult!.sequencial,
+      );
+    }
+    if (tests.isEmpty) return null;
+    final t = tests.first;
+    return _LatestDisplay(
+      veredito: t.veredito,
+      potenciaMedia: t.potenciaMedia,
+      sequencial: t.sequencial,
+      serial: t.serial,
+      timestamp: t.createdAt,
+    );
+  }
+}
+
+/// Barra de progresso enxuta para operador.
+class BatchLiveOperatorProgress extends StatelessWidget {
+  const BatchLiveOperatorProgress({
+    super.key,
+    required this.metrics,
+    required this.meta,
+  });
+
+  final BatchMetrics metrics;
+  final int meta;
+
+  @override
+  Widget build(BuildContext context) {
+    if (meta <= 0) return const SizedBox.shrink();
+
+    final progress = (metrics.aprovados / meta).clamp(0.0, 1.0);
+
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Meta do lote',
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+                Text(
+                  '${metrics.aprovados} / $meta',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: DipontoColors.success,
+                      ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            LinearProgressIndicator(
+              value: progress,
+              minHeight: 8,
+              borderRadius: BorderRadius.circular(4),
+              color: DipontoColors.success,
+              backgroundColor: DipontoColors.surfaceVariant,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Faixa compacta de status (MQTT, bancada, fila).
+class BatchLiveOperatorStatusStrip extends StatelessWidget {
+  const BatchLiveOperatorStatusStrip({
+    super.key,
+    required this.bancadaLabel,
+    required this.estado,
+    required this.mqttDisconnected,
+    this.filaOffline = 0,
+  });
+
+  final String bancadaLabel;
+  final DeviceFsmState estado;
+  final bool mqttDisconnected;
+  final int filaOffline;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        _OperatorStatusPill(
+          icon: mqttDisconnected ? Icons.wifi_off : Icons.wifi,
+          label: mqttDisconnected ? 'MQTT off' : bancadaLabel,
+          color: mqttDisconnected ? DipontoColors.error : DipontoColors.success,
+        ),
+        _OperatorStatusPill(icon: Icons.memory, label: estado.label),
+        if (filaOffline > 0)
+          _OperatorStatusPill(
+            icon: Icons.queue,
+            label: 'Fila $filaOffline',
+            color: Colors.orange,
+          ),
+      ],
+    );
+  }
+}
+
+/// Alerta compacto para operador (rejeição MQTT, NVS).
+class BatchLiveOperatorAlert extends StatelessWidget {
+  const BatchLiveOperatorAlert({
+    super.key,
+    required this.message,
+    this.isError = true,
+  });
+
+  final String message;
+  final bool isError;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = isError ? DipontoColors.error : Colors.orange;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        children: [
+          Icon(isError ? Icons.error_outline : Icons.warning_amber_outlined, color: color, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              message,
+              style: TextStyle(fontSize: 13, color: color, fontWeight: FontWeight.w500),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _OperatorHeroCard extends StatelessWidget {
+  const _OperatorHeroCard({required this.accent, required this.child});
+
+  final Color accent;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: EdgeInsets.zero,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: accent.withValues(alpha: 0.35), width: 2),
+      ),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              accent.withValues(alpha: 0.08),
+              Colors.transparent,
+            ],
+          ),
+        ),
+        child: child,
+      ),
+    );
+  }
+}
+
+class _OperatorStatusPill extends StatelessWidget {
+  const _OperatorStatusPill({
+    required this.icon,
+    required this.label,
+    this.color,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color? color;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = color ?? DipontoColors.onSurface.withValues(alpha: 0.75);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: DipontoColors.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: c.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: c),
+          const SizedBox(width: 6),
+          Text(label, style: TextStyle(fontSize: 12, color: c, fontWeight: FontWeight.w500)),
         ],
       ),
     );

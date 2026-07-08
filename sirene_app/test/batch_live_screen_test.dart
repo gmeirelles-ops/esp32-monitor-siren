@@ -51,6 +51,8 @@ void main() {
   Future<ProviderContainer> buildContainer(
     AppDatabase db, {
     TestResultMessage? lastTestResult,
+    bool isGestor = false,
+    Operator? operator,
   }) async {
     SharedPreferences.setMockInitialValues({});
     final prefs = await createTestPrefs();
@@ -60,6 +62,19 @@ void main() {
       ..isOnline = true
       ..activeBatch = batch
       ..lastTestResult = lastTestResult;
+
+    final op = operator ??
+        (isGestor
+            ? Operator(
+                id: 1,
+                codigo: '9000',
+                nome: 'Gestor',
+                ativo: true,
+                isGestor: true,
+                createdAt: DateTime.now(),
+                updatedAt: DateTime.now(),
+              )
+            : null);
 
     return ProviderContainer(
       overrides: [
@@ -75,7 +90,7 @@ void main() {
         labelBufferCountProvider.overrideWith((ref) => Stream.value(0)),
         bancadasMapProvider.overrideWith((ref) => Stream.value({deviceId: 1})),
         productsStreamProvider.overrideWith((ref) => Stream.value([])),
-        activeOperatorProvider.overrideWith((ref) => Future.value(null)),
+        activeOperatorProvider.overrideWith((ref) => Future.value(op)),
         mqttConnectionStateProvider.overrideWith(
           (ref) => Stream.value(AppMqttConnectionState.connected),
         ),
@@ -104,15 +119,42 @@ void main() {
 
     await pumpLiveScreen(tester, container);
 
-    expect(find.text('Pressione o botão no dispositivo'), findsOneWidget);
+    expect(find.text('Pressione o botão'), findsOneWidget);
     expect(find.text(PortugueseLabels.encerrarLote), findsOneWidget);
   });
 
-  testWidgets('hero exibe APROVADO quando lastTestResult presente', (tester) async {
+  testWidgets('operador vê painel simplificado sem gráfico', (tester) async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final container = await buildContainer(db, isGestor: false);
+    addTearDown(container.dispose);
+
+    await pumpLiveScreen(tester, container);
+
+    expect(find.text('Teste'), findsOneWidget);
+    expect(find.text('Potência por teste'), findsNothing);
+    expect(find.text('Testes recentes'), findsNothing);
+  });
+
+  testWidgets('gestor vê painel completo com diagnóstico', (tester) async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final container = await buildContainer(db, isGestor: true);
+    addTearDown(container.dispose);
+
+    await pumpLiveScreen(tester, container);
+
+    expect(find.text('Painel ao vivo'), findsOneWidget);
+    expect(find.text('Potência por teste'), findsOneWidget);
+    expect(find.text('Testes recentes'), findsOneWidget);
+  });
+
+  testWidgets('operador vê APROVADO grande quando lastTestResult presente', (tester) async {
     final db = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(db.close);
     final container = await buildContainer(
       db,
+      isGestor: false,
       lastTestResult: const TestResultMessage(
         numeroOp: numeroOp,
         idProduto: '071',
@@ -127,8 +169,9 @@ void main() {
 
     await pumpLiveScreen(tester, container);
 
-    expect(find.text('APROVADO'), findsWidgets);
+    expect(find.text('APROVADO'), findsOneWidget);
     expect(find.textContaining('37.14 W'), findsOneWidget);
+    expect(find.text('Seq 17'), findsOneWidget);
   });
 
   testWidgets('ScreenBottomBar contém Encerrar lote', (tester) async {
