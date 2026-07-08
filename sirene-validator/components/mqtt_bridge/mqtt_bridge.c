@@ -24,7 +24,7 @@ static mqtt_command_cb_t s_cmd_cb;
 static mqtt_connected_cb_t s_connected_cb;
 static volatile bool s_connected;
 static char s_presenca_topic[96];
-static char s_broker_uri[128];
+static char s_broker_uri[160];
 static uint32_t s_reconnect_delay_ms = MQTT_RECONNECT_BASE_MS;
 static volatile bool s_reconnect_scheduled;
 static SemaphoreHandle_t s_pub_mu;

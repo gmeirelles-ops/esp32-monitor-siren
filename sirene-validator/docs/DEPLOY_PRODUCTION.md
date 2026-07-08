@@ -36,7 +36,7 @@ App administrativo pode usar usuário `devices` com ACL `producao/#` readwrite.
 ## Primeira gravação por bancada
 
 1. Flash USB: `idf.py -p /dev/ttyUSB0 flash`
-2. Conectar ao AP `SireneValidator` — senha **derivada do MAC** (`svXXXXXX`, exibida no portal)
+2. Conectar ao AP `SireneValidator` — senha **`diponto2026`**
 3. Provisionar Wi-Fi + broker no portal
 4. Calibrar produto e teste de fumaça (1 OK + 1 NOK) no app Flutter
 

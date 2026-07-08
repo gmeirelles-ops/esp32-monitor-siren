@@ -37,8 +37,9 @@
 #define PZEM_READ_TIMEOUT_MS    300
 
 /* MQTT broker (fallback de fábrica — sobrescrito por NVS mqtt_cfg se provisionado) */
-#define MQTT_BROKER_URI       "wss://mqtt.diponto.com:443"
+#define MQTT_BROKER_URI       "wss://mqtt.diponto.com:443/ws"
 #define MQTT_DEFAULT_HOST     "mqtt.diponto.com"
+#define MQTT_DEFAULT_WS_PATH  "/ws"
 #define MQTT_DEFAULT_SITE     "producao"
 #define MQTT_NVS_NAMESPACE    "mqtt_cfg"
 #define MQTT_NVS_HOST_KEY     "host"
@@ -72,7 +73,7 @@
 /* Offline queue */
 #define OFFLINE_QUEUE_MAX     64
 
-/* Wi-Fi provisioning — senha AP derivada do MAC (ver wifi_prov_derive_ap_password) */
+/* Wi-Fi provisioning — senha AP fixa (Kconfig) ou derivada do MAC se vazia */
 #define WIFI_AP_SSID          "SireneValidator"
 #define WIFI_AP_PASS          CONFIG_SIRENE_WIFI_AP_PASSWORD
 #define WIFI_AP_IP            "192.168.4.1"

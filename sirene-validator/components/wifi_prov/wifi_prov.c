@@ -314,9 +314,7 @@ void wifi_prov_apply_factory_mqtt_station(void)
     if (!mqtt_topics_is_configured() && STATION_DEFAULT_BANCADA >= 1 && STATION_DEFAULT_BANCADA <= 99) {
         mqtt_topics_save((uint8_t)STATION_DEFAULT_BANCADA, MQTT_DEFAULT_SITE);
     }
-    if (!mqtt_config_has_stored()) {
-        mqtt_config_save(MQTT_DEFAULT_HOST, MQTT_DEFAULT_PORT_TLS, MQTT_DEFAULT_USER, MQTT_DEFAULT_PASS, true);
-    }
+    mqtt_config_save(MQTT_DEFAULT_HOST, MQTT_DEFAULT_PORT_TLS, MQTT_DEFAULT_USER, MQTT_DEFAULT_PASS, true);
 }
 
 static void portal_token_generate(void)

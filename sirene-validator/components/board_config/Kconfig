@@ -32,7 +32,7 @@ config SIRENE_MQTT_DEFAULT_PASSWORD
 
 config SIRENE_WIFI_AP_PASSWORD
     string "Wi-Fi AP password (provisioning)"
-    default ""
+    default "diponto2026"
     help
         Empty = derive from device MAC (sv + 6 hex). Non-empty = fixed AP password.
 

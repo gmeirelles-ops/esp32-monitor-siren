@@ -36,6 +36,7 @@ import '../labels/marking_providers.dart';
 import '../labels/serial_marking_backend.dart';
 import '../dashboard/dashboard_providers.dart';
 import '../bancadas/bancadas_provider.dart';
+import '../provisioning/provisioning_constants.dart';
 import '../provisioning/provisioning_wizard.dart';
 import 'serial_reconciliation_panel.dart';
 import 'settings_category.dart';
@@ -500,9 +501,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Reset iniciado'),
-        content: const Text(
-          'A bancada está reiniciando. Conecte o PC ao AP SireneValidator '
-          'e use o assistente de provisionamento para configurar o Wi-Fi novamente.',
+        content: Text(
+          'A bancada está reiniciando. Conecte o PC ao AP ${ProvisioningConstants.apSsid} '
+          '(senha: ${ProvisioningConstants.apPassword}) e use o assistente de provisionamento '
+          'para configurar o Wi-Fi novamente.',
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Depois')),

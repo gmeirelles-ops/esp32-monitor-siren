@@ -153,6 +153,16 @@ bool mqtt_config_has_stored(void)
     return mqtt_config_load(host, sizeof(host), &port);
 }
 
+static void mqtt_config_format_uri(char *uri, size_t uri_len, const char *host, uint32_t port, bool tls)
+{
+    const char *scheme = mqtt_scheme_for(tls, port);
+    if (strcmp(scheme, "wss") == 0 && !pure_host_is_private_lan(host)) {
+        snprintf(uri, uri_len, "%s://%s:%lu%s", scheme, host, (unsigned long)port, MQTT_DEFAULT_WS_PATH);
+        return;
+    }
+    snprintf(uri, uri_len, "%s://%s:%lu", scheme, host, (unsigned long)port);
+}
+
 bool mqtt_config_get_uri(char *uri, size_t uri_len)
 {
     char host[65] = {0};
@@ -163,7 +173,7 @@ bool mqtt_config_get_uri(char *uri, size_t uri_len)
         if (tls && port == MQTT_DEFAULT_PORT && pure_host_is_private_lan(host)) {
             tls = false;
         }
-        snprintf(uri, uri_len, "%s://%s:%lu", mqtt_scheme_for(tls, port), host, (unsigned long)port);
+        mqtt_config_format_uri(uri, uri_len, host, port, tls);
         return true;
     }
     strncpy(uri, MQTT_BROKER_URI, uri_len - 1);

@@ -623,7 +623,7 @@ Eventos: `inicio`, `sucesso`, `falha`.
 
 ### Primeira configuração
 
-1. ESP32 sem credenciais NVS sobe o AP **`SireneValidator`** (WPA2, senha **`sirene123`**)
+1. ESP32 sem credenciais NVS sobe o AP **`SireneValidator`** (WPA2, senha **`diponto2026`**)
 2. IP do portal: **`http://192.168.4.1`**
 3. Página lista redes do scan (com RSSI) + campo manual
 4. Seção **Broker MQTT (opcional):** host e porta — se vazio, usa fallback de `board_config.h`
@@ -1061,7 +1061,7 @@ Aceito para **rede industrial isolada** de chão de fábrica. Para ambientes exp
 
 - Teste só pelo botão físico (sem comando remoto)
 - OTA não assinado — servir apenas de servidor interno confiável
-- Senha do AP de provisionamento é fixa (`sirene123`)
+- Senha do AP de provisionamento é fixa (`diponto2026`)
 
 ---
 
@@ -1109,7 +1109,7 @@ Ver [TESTING.md](TESTING.md) para checklist detalhado de bancada.
 | `PZEM_READ_TIMEOUT_MS` | 300 | Timeout leitura UART PZEM |
 | `MQTT_BROKER_URI` | mqtt://192.168.1.100:1883 | Broker |
 | `WIFI_AP_SSID` | SireneValidator | AP provisionamento |
-| `WIFI_AP_PASS` | (derivada MAC) | Senha AP `sv` + 6 hex do MAC |
+| `WIFI_AP_PASS` | diponto2026 | Senha AP provisionamento |
 | `WIFI_AP_IP` | 192.168.4.1 | Portal |
 | `HEARTBEAT_INTERVAL_SEC` | 30 | Intervalo heartbeat |
 | `INRUSH_DISCARD_MS` | 500 | Descarte inrush |

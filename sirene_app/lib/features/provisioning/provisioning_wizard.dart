@@ -8,6 +8,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 import '../../core/providers/core_providers.dart';
 import '../../core/theme/diponto_theme.dart';
 import '../mqtt/mqtt_providers.dart';
+import 'provisioning_constants.dart';
 
 class ProvisioningWizard extends ConsumerStatefulWidget {
   const ProvisioningWizard({super.key});
@@ -17,7 +18,7 @@ class ProvisioningWizard extends ConsumerStatefulWidget {
 }
 
 class _ProvisioningWizardState extends ConsumerState<ProvisioningWizard> {
-  static const _portalUrl = 'http://192.168.4.1';
+  static const _portalUrl = ProvisioningConstants.portalUrl;
 
   bool _showWebView = false;
   WebViewController? _webController;
@@ -41,7 +42,10 @@ class _ProvisioningWizardState extends ConsumerState<ProvisioningWizard> {
     } else if (Platform.isAndroid) {
       uri = Uri.parse('android.settings.WIFI_SETTINGS');
     } else {
-      _showMessage('Abra as configurações de Wi-Fi e conecte-se ao AP SireneValidator');
+      _showMessage(
+        'Abra as configurações de Wi-Fi e conecte-se ao AP ${ProvisioningConstants.apSsid} '
+        '(senha: ${ProvisioningConstants.apPassword})',
+      );
       return;
     }
 
@@ -107,7 +111,8 @@ class _ProvisioningWizardState extends ConsumerState<ProvisioningWizard> {
                 if (isDesktop) ...[
                   const SizedBox(height: 8),
                   const Text(
-                    'No Windows, conecte o PC à rede SireneValidator e abra o portal no navegador.',
+                    'No Windows, conecte o PC à rede ${ProvisioningConstants.apSsid} '
+                    '(senha: ${ProvisioningConstants.apPassword}) e abra o portal no navegador.',
                     style: TextStyle(color: DipontoColors.primaryLight),
                   ),
                 ],
@@ -115,7 +120,8 @@ class _ProvisioningWizardState extends ConsumerState<ProvisioningWizard> {
                 _StepTile(
                   number: 1,
                   title: 'Conecte-se ao Wi-Fi do dispositivo',
-                  subtitle: 'Rede: SireneValidator (sem senha)',
+                  subtitle:
+                      'Rede: ${ProvisioningConstants.apSsid} (senha: ${ProvisioningConstants.apPassword})',
                   action: TextButton(
                     onPressed: _openWifiSettings,
                     child: Text(Platform.isWindows ? 'Abrir Wi-Fi (Windows)' : 'Abrir Wi-Fi'),
@@ -124,7 +130,7 @@ class _ProvisioningWizardState extends ConsumerState<ProvisioningWizard> {
                 const _StepTile(
                   number: 2,
                   title: 'Abra o portal de configuração',
-                  subtitle: 'Endereço: http://192.168.4.1',
+                  subtitle: 'Endereço: ${ProvisioningConstants.portalUrl}',
                 ),
                 const _StepTile(
                   number: 3,
