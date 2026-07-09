@@ -1515,7 +1515,8 @@ class AppDatabase extends _$AppDatabase {
     if (row != null) return true;
     final buffered = await (select(labelBufferEntries)..where((t) => t.serial.equals(serial)))
         .getSingleOrNull();
-    return buffered != null;
+    if (buffered != null) return true;
+    return markQueueContainsSerial(serial);
   }
 
   /// Reconciliação dos sequenciais aprovados de um produto/ano.

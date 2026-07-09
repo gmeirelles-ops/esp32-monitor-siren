@@ -1,7 +1,3 @@
-import 'dart:io';
-
-import 'package:file_selector/file_selector.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -9,19 +5,16 @@ import 'package:intl/intl.dart';
 import '../../core/config/app_config.dart';
 import '../../core/database/database.dart';
 import '../../core/theme/diponto_theme.dart';
-import '../../shared/portuguese_labels.dart';
 import '../../shared/widgets/action_section_card.dart';
 import '../../shared/widgets/empty_state_view.dart';
 import '../../shared/widgets/screen_app_bar.dart';
-import '../../shared/widgets/screen_page_layout.dart';
 import '../../shared/widgets/section_intro.dart';
 import '../../shared/widgets/status_chip_header.dart';
-import 'label_buffer_grouping.dart';
-import 'label_print_logic.dart';
-import 'label_printer.dart';
+import 'laser_mark_callout.dart';
+import 'manual_serial_dialog.dart';
+import 'mark_queue_ui.dart';
 import 'marking_providers.dart';
 import 'remark_serial.dart';
-import 'zpl_generator.dart';
 import '../mqtt/mqtt_providers.dart';
 
 Future<bool> _confirmDelete(
@@ -49,8 +42,7 @@ Future<bool> _confirmDelete(
 
 Future<void> showSerialSearchDialog(BuildContext context, WidgetRef ref) async {
   final db = ref.read(databaseProvider);
-  final mode = ref.read(appConfigProvider).markingMode;
-  final copy = remarkUiCopy(mode, '');
+  final copy = remarkUiCopy(MarkingMode.laser, '');
   final controller = TextEditingController();
   var results = <TestResult>[];
 
@@ -102,7 +94,8 @@ Future<void> showSerialSearchDialog(BuildContext context, WidgetRef ref) async {
                             ),
                             subtitle: Text('OP ${r.numeroOp} — ${r.veredito}'),
                             trailing: r.serial == null ||
-                                    r.veredito.toUpperCase() != 'APROVADO'
+                                    (r.veredito.toUpperCase() != 'APROVADO' &&
+                                        r.veredito.toUpperCase() != 'MANUAL')
                                 ? null
                                 : TextButton.icon(
                                     icon: Icon(copy.icon, size: 18),
@@ -142,352 +135,7 @@ class LabelsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final markingMode = ref.watch(appConfigProvider).markingMode;
-    if (markingMode == MarkingMode.laser) {
-      return _LaserMarkQueueScreen(ref: ref);
-    }
-
-    final db = ref.watch(databaseProvider);
-    final printFailure = ref.watch(printFailureProvider);
-    final dateFmt = DateFormat('dd/MM HH:mm');
-
-    final remarkCopy = remarkUiCopy(markingMode, '');
-    return Scaffold(
-      appBar: screenAppBar(
-        context,
-        title: 'Etiquetas',
-        actions: [
-          IconButton(
-            tooltip: 'Buscar / ${remarkCopy.actionLabel.toLowerCase()} serial',
-            icon: const Icon(Icons.search),
-            onPressed: () => showSerialSearchDialog(context, ref),
-          ),
-          StreamBuilder<int>(
-            stream: db.watchLabelBufferCount(),
-            builder: (context, snapshot) {
-              final count = snapshot.data ?? 0;
-              if (count == 0) return const SizedBox.shrink();
-              return Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: Center(
-                  child: Badge(
-                    label: Text('$count'),
-                    child: const Icon(Icons.label, color: DipontoColors.primary),
-                  ),
-                ),
-              );
-            },
-          ),
-        ],
-      ),
-      body: StreamBuilder<List<LabelBufferEntry>>(
-        stream: db.watchLabelBuffer(),
-        builder: (context, snapshot) {
-          if (!snapshot.hasData) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          final entries = snapshot.data!;
-          if (entries.isEmpty) {
-            return const EmptyStateView(
-              icon: Icons.label_outline,
-              title: 'Buffer de etiquetas vazio',
-              subtitle: 'Seriais aprovados nos testes aparecerão aqui para impressão.',
-            );
-          }
-
-          final groups = groupLabelBufferByOp(entries);
-
-          final orphanTotal = groups.fold<int>(0, (s, g) => s + g.orphanCount);
-
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              StatusChipHeader(
-                chips: [
-                  StatusChipData(
-                    icon: Icons.label_outline,
-                    label: '${entries.length} pendente(s)',
-                    color: DipontoColors.primary,
-                  ),
-                  StatusChipData(
-                    icon: Icons.folder_copy_outlined,
-                    label: '${groups.length} OP(s)',
-                    color: DipontoColors.primaryLight,
-                  ),
-                  if (printFailure != null)
-                    StatusChipData(
-                      icon: Icons.print_disabled,
-                      label: 'Falha impressão',
-                      color: DipontoColors.error,
-                    )
-                  else if (entries.length % 3 != 0)
-                    StatusChipData(
-                      icon: Icons.info_outline,
-                      label: '${entries.length % 3} fora do múltiplo de 3',
-                      color: Colors.orangeAccent,
-                    ),
-                  if (orphanTotal > 0)
-                    StatusChipData(
-                      icon: Icons.warning_amber_outlined,
-                      label: '$orphanTotal órfã(s)',
-                      color: Colors.orangeAccent,
-                    ),
-                ],
-              ),
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
-                  child: Align(
-                    alignment: Alignment.topLeft,
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 900),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          const SectionIntro(
-                            title: 'Buffer de etiquetas',
-                            subtitle: 'Seriais aprovados aguardando impressão Zebra, agrupados por OP.',
-                            icon: Icons.label_outline,
-                          ),
-                          if (printFailure != null)
-                            ActionSectionCard(
-                              icon: Icons.print_disabled,
-                              title: 'Falha de impressão',
-                              accentColor: DipontoColors.error,
-                              child: Text(
-                                printFailure,
-                                style: const TextStyle(color: DipontoColors.error),
-                              ),
-                            ),
-                          for (final group in groups)
-                            ActionSectionCard(
-                              icon: Icons.inventory_2_outlined,
-                              title: 'OP ${group.numeroOp}',
-                              subtitle: '${group.count} etiqueta(s) pendente(s)',
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  if (group.orphanCount > 0)
-                                    Padding(
-                                      padding: const EdgeInsets.only(bottom: 8),
-                                      child: Chip(
-                                        label: Text('${group.orphanCount} órfã(s)'),
-                                        visualDensity: VisualDensity.compact,
-                                      ),
-                                    ),
-                                  Align(
-                                    alignment: Alignment.centerRight,
-                                    child: Wrap(
-                                      spacing: 4,
-                                      children: [
-                                        TextButton.icon(
-                                          onPressed: () => _deleteLabelsForOp(
-                                            context,
-                                            ref,
-                                            group.numeroOp,
-                                            group.count,
-                                          ),
-                                          icon: const Icon(Icons.delete_outline, size: 18),
-                                          label: const Text('Excluir OP'),
-                                          style: TextButton.styleFrom(
-                                            foregroundColor: DipontoColors.error,
-                                          ),
-                                        ),
-                                        TextButton.icon(
-                                          onPressed: () => _printPending(context, ref, group.entries),
-                                          icon: const Icon(Icons.print, size: 18),
-                                          label: const Text('Imprimir lote'),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  for (final entry in group.entries)
-                                    ListTile(
-                                      dense: true,
-                                      contentPadding: EdgeInsets.zero,
-                                      leading: const Icon(Icons.qr_code, color: DipontoColors.primary),
-                                      title: Text(
-                                        entry.serial,
-                                        style: const TextStyle(fontFamily: 'monospace'),
-                                      ),
-                                      subtitle: Text(dateFmt.format(entry.createdAt.toLocal())),
-                                      trailing: IconButton(
-                                        tooltip: 'Excluir etiqueta',
-                                        icon: const Icon(Icons.delete_outline, size: 20),
-                                        color: DipontoColors.error.withValues(alpha: 0.85),
-                                        onPressed: () => _deleteLabel(context, ref, entry),
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              ScreenBottomBar(
-                hint: kDebugMode ? 'Modo debug: exportar ZPL disponível' : null,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    if (kDebugMode) ...[
-                      OutlinedButton.icon(
-                        onPressed: () => _downloadZpl(context, ref, entries),
-                        icon: const Icon(Icons.download_outlined),
-                        label: const Text(PortugueseLabels.baixarArquivoZpl),
-                      ),
-                      const SizedBox(height: 8),
-                    ],
-                    FilledButton.icon(
-                      onPressed: entries.isEmpty
-                          ? null
-                          : () => _printPending(context, ref, entries),
-                      icon: const Icon(Icons.print),
-                      label: Text('Imprimir pendentes (${entries.length})'),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-
-  Future<void> _downloadZpl(
-    BuildContext context,
-    WidgetRef ref,
-    List<LabelBufferEntry> entries,
-  ) async {
-    if (entries.isEmpty) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Não há seriais no buffer para exportar')),
-        );
-      }
-      return;
-    }
-
-    final op = entries.first.numeroOp;
-    final timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
-    final db = ref.read(databaseProvider);
-    final suggestedName = 'etiquetas_${op}_$timestamp.zpl';
-    final items = await resolveLabelZplItems(db, entries.map((e) => e.serial).toList());
-    final zpl = generateZplForItems(items);
-
-    final location = await getSaveLocation(
-      suggestedName: suggestedName,
-      acceptedTypeGroups: const [
-        XTypeGroup(label: 'ZPL', extensions: ['zpl']),
-      ],
-    );
-    if (location == null) return;
-
-    await File(location.path).writeAsString(zpl);
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Arquivo salvo: ${location.path}')),
-      );
-    }
-  }
-
-  Future<void> _deleteLabel(
-    BuildContext context,
-    WidgetRef ref,
-    LabelBufferEntry entry,
-  ) async {
-    final ok = await _confirmDelete(
-      context,
-      title: 'Excluir etiqueta?',
-      message: 'Remover ${entry.serial} do buffer de impressão?',
-    );
-    if (!ok || !context.mounted) return;
-
-    await ref.read(databaseProvider).removeLabelsFromBuffer([entry.id]);
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Etiqueta ${entry.serial} removida')),
-      );
-    }
-  }
-
-  Future<void> _deleteLabelsForOp(
-    BuildContext context,
-    WidgetRef ref,
-    String numeroOp,
-    int count,
-  ) async {
-    final ok = await _confirmDelete(
-      context,
-      title: 'Excluir etiquetas da OP?',
-      message: 'Remover $count etiqueta(s) pendentes da OP $numeroOp?',
-    );
-    if (!ok || !context.mounted) return;
-
-    await ref.read(databaseProvider).removeLabelsForOp(numeroOp);
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Etiquetas da OP $numeroOp removidas')),
-      );
-    }
-  }
-
-  Future<void> _printPending(
-    BuildContext context,
-    WidgetRef ref,
-    List<LabelBufferEntry> entries,
-  ) async {
-    final config = ref.read(appConfigProvider);
-    final db = ref.read(databaseProvider);
-    LabelPrinterTransport printer;
-    try {
-      printer = createLabelPrinterTransport(config);
-    } catch (e) {
-      ref.read(printFailureProvider.notifier).state =
-          formatPrinterError(e, config.printerMode);
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(formatPrinterError(e, config.printerMode))),
-        );
-      }
-      return;
-    }
-
-    final items = await resolveLabelZplItems(db, entries.map((e) => e.serial).toList());
-    final printEntries = <({int id, LabelZplItem item})>[];
-    for (var i = 0; i < entries.length; i++) {
-      printEntries.add((id: entries[i].id, item: items[i]));
-    }
-    final result = await printLabelBatches(
-      entries: printEntries,
-      sendZpl: (batch) => printer.sendZpl(generateZplLabelRow(batch)),
-    );
-
-    if (result.printedIds.isNotEmpty) {
-      await db.removeLabelsFromBuffer(result.printedIds);
-    }
-
-    if (result.error != null) {
-      ref.read(printFailureProvider.notifier).state =
-          formatPrinterError(result.error!, config.printerMode);
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(formatPrinterError(result.error!, config.printerMode))),
-        );
-      }
-      return;
-    }
-
-    ref.read(printFailureProvider.notifier).state = null;
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Etiquetas enviadas à impressora')),
-      );
-    }
+    return _LaserMarkQueueScreen(ref: ref);
   }
 }
 
@@ -507,6 +155,11 @@ class _LaserMarkQueueScreen extends ConsumerWidget {
         context,
         title: 'Gravação',
         actions: [
+          IconButton(
+            tooltip: 'Gerar serial para gravação',
+            icon: const Icon(Icons.add_circle_outline),
+            onPressed: () => showManualSerialDialog(context, this.ref),
+          ),
           IconButton(
             tooltip: 'Buscar / regravar serial',
             icon: const Icon(Icons.search),
@@ -542,13 +195,18 @@ class _LaserMarkQueueScreen extends ConsumerWidget {
               icon: Icons.precision_manufacturing_outlined,
               title: 'Fila de gravação vazia',
               subtitle:
-                  'Seriais aprovados aparecem aqui. Acione F2 no DiatuCAD para gravar o próximo.',
+                  'Use + no topo para gerar serial manualmente, ou aguarde aprovações do lote. '
+                  'Acione F2 no DiatuCAD para gravar.',
             );
           }
 
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                child: LaserMarkCallout(entry: entries.first),
+              ),
               StatusChipHeader(
                 chips: [
                   StatusChipData(
@@ -576,7 +234,8 @@ class _LaserMarkQueueScreen extends ConsumerWidget {
                         children: [
                           const SectionIntro(
                             title: 'Fila de gravação laser',
-                            subtitle: 'Acione F2 no DiatuCAD para gravar o próximo serial da fila.',
+                            subtitle:
+                                'F2 no DiatuCAD grava serial (DataMatrix) e modelo (texto) de cada peça.',
                             icon: Icons.precision_manufacturing_outlined,
                           ),
                           if (markFailure != null)
@@ -592,71 +251,29 @@ class _LaserMarkQueueScreen extends ConsumerWidget {
                           ActionSectionCard(
                             icon: Icons.queue_play_next,
                             title: 'Próximos seriais',
-                            subtitle: 'Ordem de envio via TCP ao DiatuCAD',
+                            subtitle: 'Serial + modelo via TCP ao DiatuCAD',
                             child: Column(
                               children: [
                                 for (var i = 0; i < entries.length; i++) ...[
                                   if (i > 0) const Divider(height: 1),
-                                  Builder(
-                                    builder: (context) {
-                                      final entry = entries[i];
-                                      final inProgress = entry.status == 'in_progress';
-                                      return ListTile(
-                                        contentPadding: EdgeInsets.zero,
-                                        leading: inProgress
-                                            ? CircleAvatar(
-                                                radius: 14,
-                                                backgroundColor: DipontoColors.primary
-                                                    .withValues(alpha: 0.2),
-                                                child: const Icon(
-                                                  Icons.play_arrow,
-                                                  size: 16,
-                                                  color: DipontoColors.primary,
-                                                ),
-                                              )
-                                            : entry.pinned
-                                                ? const Icon(
-                                                    Icons.push_pin,
-                                                    color: DipontoColors.primary,
-                                                  )
-                                                : CircleAvatar(
-                                                    radius: 14,
-                                                    backgroundColor: DipontoColors.primary
-                                                        .withValues(alpha: 0.15),
-                                                    child: Text(
-                                                      '${i + 1}',
-                                                      style: const TextStyle(
-                                                        fontSize: 12,
-                                                        fontWeight: FontWeight.w600,
-                                                        color: DipontoColors.primary,
-                                                      ),
-                                                    ),
-                                                  ),
-                                        title: Text(
-                                          entry.serial,
-                                          style: const TextStyle(fontFamily: 'monospace'),
-                                        ),
-                                        subtitle: Text(
-                                          inProgress
-                                              ? 'Em gravação no DiatuCAD · OP ${entry.numeroOp}'
-                                              : 'OP ${entry.numeroOp} · ${dateFmt.format(entry.createdAt)}',
-                                        ),
-                                        trailing: IconButton(
-                                          tooltip: inProgress
-                                              ? 'Aguarde a gravação terminar'
-                                              : 'Remover da fila',
-                                          icon: const Icon(Icons.delete_outline, size: 20),
-                                          color: DipontoColors.error.withValues(alpha: 0.85),
-                                          onPressed: inProgress
-                                              ? null
-                                              : () => _deleteMarkQueueEntry(
-                                                    context,
-                                                    this.ref,
-                                                    entry,
-                                                  ),
-                                        ),
-                                      );
-                                    },
+                                  MarkQueueEntryTile(
+                                    entry: entries[i],
+                                    index: i,
+                                    dateFmt: dateFmt,
+                                    trailing: IconButton(
+                                      tooltip: entries[i].status == 'in_progress'
+                                          ? 'Aguarde a gravação terminar'
+                                          : 'Remover da fila',
+                                      icon: const Icon(Icons.delete_outline, size: 20),
+                                      color: DipontoColors.error.withValues(alpha: 0.85),
+                                      onPressed: entries[i].status == 'in_progress'
+                                          ? null
+                                          : () => _deleteMarkQueueEntry(
+                                                context,
+                                                this.ref,
+                                                entries[i],
+                                              ),
+                                    ),
                                   ),
                                 ],
                               ],

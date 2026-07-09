@@ -37,8 +37,12 @@ int test_url(void)
         printf("test_url: https LAN rejected\n");
         return 1;
     }
-    if (pure_ota_url_allowed_ex("http://192.168.1.10/fw.bin", NULL, true)) {
-        printf("test_url: http accepted with require_https\n");
+    if (!pure_ota_url_allowed_ex("http://192.168.1.10/fw.bin", NULL, true)) {
+        printf("test_url: LAN http rejected with require_https\n");
+        return 1;
+    }
+    if (pure_ota_url_allowed_ex("http://evil.com/fw.bin", NULL, true)) {
+        printf("test_url: public http accepted with require_https\n");
         return 1;
     }
     if (pure_ota_url_valid("ftp://bad/file.bin")) {

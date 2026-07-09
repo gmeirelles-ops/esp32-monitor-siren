@@ -28,8 +28,9 @@ Tópico: `{site}/bancada-{NN}/status`
 
 ## Dedupe (app)
 
-- Ignorar mensagem se `(numero_op, ts_ms)` já gravado.
+- Ignorar mensagem se `(numero_op, ts_ms)` já gravado (canônico — spec 006).
 - Replay da fila offline: mesmo `ts_ms` → descartar.
+- Legado sem `ts_ms`: `(numero_op, sequencial, veredito, potencia_media)`.
 
 ## Heartbeat (transições)
 

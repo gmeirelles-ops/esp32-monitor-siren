@@ -34,6 +34,9 @@ const Map<String, String> rejectionMotivoLabels = {
   'set_bancada_falha': 'Falha ao alterar bancada',
   'batch_nvs_fault': 'Falha ao gravar lote na memória do dispositivo',
   'lote_cheio': 'Cota do lote atingida — não é possível testar mais',
+  'peca_ja_aprovada': 'Aguarde — peça já aprovada',
+  'teste_estado_invalido': 'Teste não permitido neste estado — aguarde a bancada',
+  'pzem_falha': 'PZEM desconectado — ligue o medidor e aguarde recuperação',
   'lote_inativo': 'Nenhum lote ativo no dispositivo',
   'batch_sem_confirmacao': 'Lote enviado mas sem confirmação do dispositivo',
   'mqtt_desconectado': 'MQTT desconectado',
@@ -44,3 +47,10 @@ const Map<String, String> rejectionMotivoLabels = {
 String formatRejectionMotivo(String motivo) {
   return rejectionMotivoLabels[motivo] ?? motivo;
 }
+
+/// Cooldown pós-aprovação — aviso integrado no cartão do operador.
+bool isCooldownRejection(String? motivo) => motivo == 'peca_ja_aprovada';
+
+/// Rejeições passageiras: não persistem após teste nem geram snackbar inferior.
+bool isTransientRejection(String? motivo) =>
+    motivo == 'peca_ja_aprovada' || motivo == 'teste_estado_invalido';

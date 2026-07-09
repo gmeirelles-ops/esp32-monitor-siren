@@ -470,6 +470,12 @@ class _UsbTab extends StatelessWidget {
             children: [
               if (!Platform.isWindows)
                 const Text('Disponível apenas no app Windows com cabo USB.'),
+              if (Platform.isWindows)
+                const Text(
+                  'Grava ota_0 + ota_1 (e otadata se estiver na mesma pasta do .bin). '
+                  'Use o .bin de build/ ou release/ apos idf.py build.',
+                ),
+              const SizedBox(height: 12),
               DropdownButtonFormField<String>(
                 value: ports.contains(selectedPort) ? selectedPort : null,
                 decoration: const InputDecoration(labelText: 'Porta COM'),
@@ -490,7 +496,7 @@ class _UsbTab extends StatelessWidget {
                 items: const [
                   DropdownMenuItem(
                     value: UsbFlashMode.appOnly,
-                    child: Text('Atualizar app (0x20000)'),
+                    child: Text('Atualizar firmware (ota_0 + ota_1)'),
                   ),
                   DropdownMenuItem(
                     value: UsbFlashMode.full,
@@ -510,7 +516,10 @@ class _UsbTab extends StatelessWidget {
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   title: const Text('Pasta build/'),
-                  subtitle: Text(buildDir ?? 'Deve conter bootloader, partition, ota_data e app'),
+                  subtitle: Text(
+                    buildDir ??
+                        'Deve conter bootloader/, partition_table/, ota_data_initial.bin e sirene-validator.bin',
+                  ),
                   trailing: OutlinedButton(
                     onPressed: busy ? null : onPickBuildDir,
                     child: const Text('Escolher pasta'),

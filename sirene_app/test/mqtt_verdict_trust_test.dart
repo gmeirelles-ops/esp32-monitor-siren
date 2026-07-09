@@ -106,8 +106,8 @@ void main() {
       ),
     );
 
-    final buffer = await db.getLabelBuffer();
-    expect(buffer, hasLength(1));
-    expect(buffer.single.serial, isNotEmpty);
+    final queue = await db.getPendingMarkQueue();
+    expect(queue, hasLength(1));
+    expect(queue.single.serial, isNotEmpty);
   });
 }

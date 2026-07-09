@@ -40,10 +40,13 @@ void main() {
   Future<ProviderContainer> createContainer(AppDatabase db) async {
     final prefs = await createTestPrefs();
     final container = ProviderContainer(
-      overrides: [
-        ...devicesTestOverrides(db: db, prefs: prefs),
-        mqttServiceProvider.overrideWithValue(MqttService()..testMode = true),
-      ],
+      overrides: devicesTestOverrides(
+        db: db,
+        prefs: prefs,
+        devices: {
+          'dev1': DeviceInfo(deviceId: 'dev1')..bancadaNum = 1,
+        },
+      ),
     );
     addTearDown(container.dispose);
     return container;

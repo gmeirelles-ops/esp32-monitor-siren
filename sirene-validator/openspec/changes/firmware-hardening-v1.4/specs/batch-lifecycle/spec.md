@@ -1,13 +1,23 @@
-## MODIFIED Requirements
+## SUPERSEDED
+
+> **Status:** Superseded by `specs/006-batch-duplicate-sequence` (FR-006, sessão 2026-07-09).
+>
+> O requisito abaixo ("SET_BATCH com mesmo OP preserva aprovados") **não** se aplica mais.
+> Todo `SET_BATCH` MUST zerar `aprovados`, aplicar `proximo_sequencial` do payload e limpar
+> `ultimo_veredito`, mesmo reutilizando a mesma OP.
+
+---
+
+## MODIFIED Requirements (historical — v1.4)
 
 ### Requirement: SET_BATCH com mesmo OP preserva aprovados
 
-O firmware SHALL preservar `aprovados` e `proximo_sequencial` quando `SET_BATCH` receber o mesmo `numero_op` do lote ativo; SHALL reiniciar `aprovados` e usar `proximo_sequencial` do payload quando `numero_op` for diferente.
+~~O firmware SHALL preservar `aprovados` e `proximo_sequencial` quando `SET_BATCH` receber o mesmo `numero_op` do lote ativo~~ **REVOGADO por spec 006.**
 
 #### Scenario: Reconfigurar limites do mesmo OP
 
 - **WHEN** lote `2026001` tem 2 aprovados e chega `SET_BATCH` com mesmo `numero_op` e novos limites de potência
-- **THEN** `aprovados` permanece 2 e sequencial não é resetado para 1 salvo se payload trouxer valor maior
+- **THEN** ~~`aprovados` permanece 2~~ **REVOGADO** — spec 006 exige reset completo da sessão
 
 #### Scenario: Novo OP
 

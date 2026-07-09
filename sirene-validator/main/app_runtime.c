@@ -39,6 +39,11 @@ void app_last_test_get(app_last_test_t *out)
     *out = s_last_test;
 }
 
+void app_last_test_clear(void)
+{
+    memset(&s_last_test, 0, sizeof(s_last_test));
+}
+
 void app_runtime_init(SemaphoreHandle_t batch_mu, QueueHandle_t work_q, QueueHandle_t pzem_q)
 {
     s_batch_mu = batch_mu;

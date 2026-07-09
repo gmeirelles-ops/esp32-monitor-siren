@@ -124,7 +124,7 @@ class _BatchLiveScreenState extends ConsumerState<BatchLiveScreen> {
     final batch = device?.activeBatch;
     final estado = device?.estado ?? DeviceFsmState.unknown;
     final testsAsync = ref.watch(batchLiveTestsProvider(widget.numeroOp));
-    final labelCountAsync = ref.watch(labelBufferCountProvider);
+    final markCountAsync = ref.watch(batchLiveMarkQueueProvider(widget.numeroOp));
     final retestMode = ref.watch(retestModeProvider);
     final activeOp = ref.watch(activeOperatorProvider).valueOrNull;
     final operador = activeOp != null
@@ -132,12 +132,6 @@ class _BatchLiveScreenState extends ConsumerState<BatchLiveScreen> {
         : (ref.watch(authStateProvider).valueOrNull?.email ?? 'Operação local');
     final productsAsync = ref.watch(productsStreamProvider);
     final bancadaLabel = formatBancadaLabelFromMap(widget.deviceId, bancadas);
-
-    ref.listen(latestRejectionProvider, (prev, next) {
-      if (next != null && next.deviceId == widget.deviceId) {
-        _showSnack('Rejeição: ${formatRejectionMotivo(next.rejection.motivo)}');
-      }
-    });
 
     ref.listen(latestNvsFaultProvider, (prev, next) {
       if (next != null && next.deviceId == widget.deviceId) {
@@ -149,7 +143,7 @@ class _BatchLiveScreenState extends ConsumerState<BatchLiveScreen> {
 
     ref.listen(duplicateSerialProvider, (prev, next) {
       if (next != null && next.deviceId == widget.deviceId) {
-        _showSnack('Serial duplicado ${next.serial} — etiqueta não emitida');
+        _showSnack('Serial duplicado ${next.serial} — gravação não enfileirada');
       }
     });
 
@@ -187,7 +181,7 @@ class _BatchLiveScreenState extends ConsumerState<BatchLiveScreen> {
           : null,
     );
     final metrics = mergeFirmwareAprovados(metricsRaw, firmwareCount);
-    final labelCount = labelCountAsync.valueOrNull ?? 0;
+    final markCount = markCountAsync.valueOrNull?.length ?? 0;
     final demoMode = ref.watch(demoModeProvider);
     final isGestor = ref.watch(activeOperatorIsGestorProvider);
 
@@ -215,10 +209,10 @@ class _BatchLiveScreenState extends ConsumerState<BatchLiveScreen> {
                 color: DipontoColors.success,
                 highlight: true,
               ),
-            if (labelCount > 0)
+            if (markCount > 0)
               StatusChipData(
-                icon: Icons.label_outline,
-                label: '$labelCount etiqueta(s)',
+                icon: Icons.precision_manufacturing_outlined,
+                label: '$markCount p/ gravar',
                 color: DipontoColors.primaryLight,
               ),
             if (demoMode)
@@ -261,50 +255,75 @@ class _BatchLiveScreenState extends ConsumerState<BatchLiveScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Expanded(
-            child: ScreenPageLayout(
-              maxWidth: 900,
-              header: StatusChipHeader(chips: chips),
-              intro: SectionIntro(
-                title: isGestor ? 'Painel ao vivo' : 'Teste',
-                subtitle: isGestor ? introSubtitle : (productName ?? operador),
-                icon: isGestor ? Icons.monitor_heart_outlined : Icons.play_circle_outline,
-              ),
-              children: [
-                if (demoMode && isGestor) const DemoModeBanner(compact: true),
-                if (isGestor) ...[
-                  if (device?.lastNvsFault != null)
-                    _NvsFaultBanner(alert: device!.lastNvsFault!),
-                  if (device?.lastRejection != null)
-                    _RejectionBanner(motivo: device!.lastRejection!.motivo),
-                ] else ...[
-                  if (device?.lastNvsFault != null)
-                    BatchLiveOperatorAlert(
-                      isError: false,
-                      message: device!.lastNvsFault!.detalhe ??
-                          formatRejectionMotivo(device!.lastNvsFault!.evento),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final showEngravingPanel = constraints.maxWidth >= 960;
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(
+                      flex: showEngravingPanel ? 3 : 1,
+                      child: ScreenPageLayout(
+                        maxWidth: showEngravingPanel ? double.infinity : 900,
+                        header: StatusChipHeader(chips: chips),
+                        intro: SectionIntro(
+                          title: isGestor ? 'Painel ao vivo' : 'Teste',
+                          subtitle: isGestor ? introSubtitle : (productName ?? operador),
+                          icon: isGestor ? Icons.monitor_heart_outlined : Icons.play_circle_outline,
+                        ),
+                        children: [
+                          if (demoMode && isGestor) const DemoModeBanner(compact: true),
+                          if (isGestor) ...[
+                            if (device?.lastNvsFault != null)
+                              _NvsFaultBanner(alert: device!.lastNvsFault!),
+                            if (device?.lastRejection != null &&
+                                !isTransientRejection(device!.lastRejection!.motivo))
+                              _RejectionBanner(motivo: device!.lastRejection!.motivo),
+                          ] else ...[
+                            if (device?.lastNvsFault != null)
+                              BatchLiveOperatorAlert(
+                                isError: false,
+                                message: device!.lastNvsFault!.detalhe ??
+                                    formatRejectionMotivo(device!.lastNvsFault!.evento),
+                              ),
+                            if (device?.lastRejection != null &&
+                                !isTransientRejection(device!.lastRejection!.motivo))
+                              BatchLiveOperatorAlert(
+                                message: formatRejectionMotivo(device!.lastRejection!.motivo),
+                              ),
+                          ],
+                          _BatchLiveBody(
+                            deviceId: widget.deviceId,
+                            numeroOp: widget.numeroOp,
+                            device: device,
+                            estado: estado,
+                            batch: batch,
+                            productName: productName,
+                            bancadaLabel: bancadaLabel,
+                            operador: operador,
+                            retestMode: retestMode,
+                            syncingRetest: _syncingRetest,
+                            onRetestChanged: _toggleRetest,
+                            onSimulateOnce: _simulateTest,
+                            simulating: _simulating,
+                            isGestor: isGestor,
+                          ),
+                        ],
+                      ),
                     ),
-                  if (device?.lastRejection != null)
-                    BatchLiveOperatorAlert(
-                      message: formatRejectionMotivo(device!.lastRejection!.motivo),
-                    ),
-                ],
-                _BatchLiveBody(
-                  deviceId: widget.deviceId,
-                  numeroOp: widget.numeroOp,
-                  device: device,
-                  estado: estado,
-                  batch: batch,
-                  productName: productName,
-                  bancadaLabel: bancadaLabel,
-                  operador: operador,
-                  retestMode: retestMode,
-                  syncingRetest: _syncingRetest,
-                  onRetestChanged: _toggleRetest,
-                  onSimulateOnce: _simulateTest,
-                  simulating: _simulating,
-                  isGestor: isGestor,
-                ),
-              ],
+                    if (showEngravingPanel) ...[
+                      const VerticalDivider(width: 1),
+                      SizedBox(
+                        width: 300,
+                        child: BatchLiveEngravingPanel(
+                          numeroOp: widget.numeroOp,
+                          idProduto: batch?.idProduto,
+                        ),
+                      ),
+                    ],
+                  ],
+                );
+              },
             ),
           ),
           ScreenBottomBar(
@@ -378,6 +397,9 @@ class _BatchLiveBody extends ConsumerWidget {
       ref.read(mqttServiceProvider).currentState,
     );
     final mqttDisconnected = mqttState != AppMqttConnectionState.connected;
+    final deviceOffline = device != null && !device!.isOnline && batch != null;
+    final proximoSeq = device?.firmwareProximoSequencial ?? batch?.proximoSequencial;
+    final rejectionMotivo = device?.lastRejection?.motivo;
 
     final liveResult = device?.lastTestResult?.numeroOp == numeroOp
         ? device?.lastTestResult
@@ -505,6 +527,9 @@ class _BatchLiveBody extends ConsumerWidget {
                 mqttDisconnected: mqttDisconnected,
                 filaOffline: device?.fila ?? 0,
                 awaitingMqtt: device?.awaitingMqttResult ?? false,
+                proximoSequencial: proximoSeq,
+                deviceOffline: deviceOffline,
+                lastRejectionMotivo: rejectionMotivo,
               ),
               const SizedBox(height: 16),
               BatchLiveOperatorProgress(

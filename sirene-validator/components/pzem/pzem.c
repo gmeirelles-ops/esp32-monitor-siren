@@ -246,13 +246,29 @@ bool pzem_is_fault(void)
     return s_fault;
 }
 
-void pzem_clear_fault(void)
+bool pzem_try_recover(void)
 {
+    uart_flush_input(PZEM_UART_NUM);
     s_consecutive_errors = 0;
-    float dummy;
+    float dummy = 0;
     if (pzem_send_read_power(&dummy)) {
         report_fault(false);
+        ESP_LOGI(TAG, "PZEM recuperado (0x%02X, %.1f W)", s_slave_addr, dummy);
+        return true;
     }
+#if !CONFIG_DEV_MOCK_PZEM
+    if (pzem_detect_slave_addr() && pzem_send_read_power(&dummy)) {
+        report_fault(false);
+        ESP_LOGI(TAG, "PZEM recuperado apos redetect (0x%02X, %.1f W)", s_slave_addr, dummy);
+        return true;
+    }
+#endif
+    return false;
+}
+
+void pzem_clear_fault(void)
+{
+    (void)pzem_try_recover();
 }
 
 uint8_t pzem_get_slave_addr(void)
@@ -279,6 +295,7 @@ bool pzem_measure_cycle(uint32_t duration_sec, uint32_t inrush_discard_ms, pzem_
     uint32_t last_sample_ms = 0;
 
     double sum = 0;
+    uint32_t cycle_read_fails = 0;
     while (xTaskGetTickCount() < cycle_end) {
         esp_task_wdt_reset();
         if (pzem_is_fault()) {
@@ -306,9 +323,19 @@ bool pzem_measure_cycle(uint32_t duration_sec, uint32_t inrush_discard_ms, pzem_
             }
         }
         if (!read_ok) {
+            cycle_read_fails++;
+            if (pzem_is_fault() || cycle_read_fails >= PZEM_SAMPLE_READ_RETRIES) {
+                out->uart_error = true;
+                break;
+            }
+#if CONFIG_PZEM_FAST_READ
+            vTaskDelay(pdMS_TO_TICKS(50));
+#else
             vTaskDelay(pdMS_TO_TICKS(100));
+#endif
             continue;
         }
+        cycle_read_fails = 0;
 #endif
         if (xTaskGetTickCount() >= inrush_end) {
             sum += power;
@@ -324,7 +351,11 @@ bool pzem_measure_cycle(uint32_t duration_sec, uint32_t inrush_discard_ms, pzem_
                 }
             }
         }
+#if CONFIG_PZEM_FAST_READ
+        vTaskDelay(pdMS_TO_TICKS(50));
+#else
         vTaskDelay(pdMS_TO_TICKS(100));
+#endif
     }
 
     if (out->sample_count == 0) {

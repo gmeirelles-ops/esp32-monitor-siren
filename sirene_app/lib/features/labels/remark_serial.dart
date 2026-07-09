@@ -5,6 +5,8 @@ import '../../core/config/app_config.dart';
 import '../../core/database/database.dart';
 import '../labels/label_print_logic.dart';
 import '../labels/label_printer.dart';
+import '../labels/laser_mark_callout.dart';
+import '../labels/mark_queue_ui.dart';
 import '../labels/marking_providers.dart';
 import '../labels/serial_marking_backend.dart';
 import '../labels/zpl_generator.dart';
@@ -54,6 +56,8 @@ RemarkUiCopy remarkUiCopy(MarkingMode mode, String serial) {
     successMessage: 'Etiqueta $serial reenviada à impressora',
   );
 }
+
+bool remarkRequiresConfirmation(MarkingMode mode) => mode == MarkingMode.labels;
 
 Future<bool> confirmRemark(
   BuildContext context,
@@ -127,15 +131,26 @@ Future<void> remarkSerialIfConfirmed({
   required String numeroOp,
 }) async {
   final mode = ref.read(appConfigProvider).markingMode;
-  if (!await confirmRemark(context, mode, serial)) return;
+  if (remarkRequiresConfirmation(mode)) {
+    if (!await confirmRemark(context, mode, serial)) return;
+  }
   if (!context.mounted) return;
 
   final message = await executeRemark(ref: ref, serial: serial, numeroOp: numeroOp);
   if (!context.mounted || message == null) return;
 
   final isError = message.contains('Erro') || message.contains('erro');
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(content: Text(message)),
-  );
-  if (isError) return;
+  if (isError) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    return;
+  }
+
+  if (mode == MarkingMode.laser) {
+    final modelo = await resolveModelNameFromSerial(ref.read(databaseProvider), serial);
+    if (!context.mounted) return;
+    showLaserEnqueuedFeedback(context, serial: serial, modelo: modelo);
+    return;
+  }
+
+  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
 }

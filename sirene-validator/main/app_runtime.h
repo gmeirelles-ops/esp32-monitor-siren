@@ -64,3 +64,4 @@ typedef struct {
 
 void app_last_test_set(bool approved, float potencia_media, uint32_t sequencial, int64_t ts_ms);
 void app_last_test_get(app_last_test_t *out);
+void app_last_test_clear(void);

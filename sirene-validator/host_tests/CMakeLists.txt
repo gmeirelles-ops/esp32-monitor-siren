@@ -18,6 +18,7 @@ add_executable(host_tests
     test_batch_quota.c
     test_batch_validation.c
     test_batch_retest.c
+    test_batch_cooldown.c
     test_ensaio.c
     test_site.c
     test_host_lan.c

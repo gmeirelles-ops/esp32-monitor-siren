@@ -13,9 +13,8 @@ config SIRENE_OTA_REQUIRE_HTTPS
     bool "Require HTTPS URLs for OTA_UPDATE command"
     default y
     help
-        Rejects http:// OTA URLs from MQTT. LAN HTTP OTA still possible
-        when disabled (e.g. development). Secure Boot signing is a
-        separate manufacturing step — enable via ESP-IDF Secure Boot
-        menu when the signing pipeline is ready.
+        When enabled, rejects http:// OTA URLs except on private LAN
+        (192.168/10/172.16) and *.local hosts. Public http:// is blocked;
+        https:// on LAN is always allowed.
 
 endmenu

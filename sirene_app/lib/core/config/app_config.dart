@@ -43,7 +43,7 @@ class AppConfig {
   static const defaultPrinterHost = '192.168.1.50';
   static const defaultPrinterPort = 9100;
   static const defaultPrinterMode = PrinterMode.usb;
-  static const defaultMarkingMode = MarkingMode.labels;
+  static const defaultMarkingMode = MarkingMode.laser;
   static const defaultLaserTcpPort = 9101;
   static const defaultLaserTcpCommand = 'TCP: Give me string';
   static const defaultLaserModelCommand = 'TCP: model';
@@ -74,8 +74,8 @@ class AppConfig {
     return Platform.isWindows ? PrinterMode.usb : PrinterMode.network;
   }
 
-  MarkingMode get markingMode =>
-      MarkingMode.fromStorage(_prefs.getString('marking_mode'));
+  /// Marcação física: somente gravação laser DiatuCAD.
+  MarkingMode get markingMode => MarkingMode.laser;
 
   int get laserTcpPort => _prefs.getInt('laser_tcp_port') ?? defaultLaserTcpPort;
 

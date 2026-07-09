@@ -89,6 +89,24 @@ bool pure_batch_approval_updates_counters(bool modo_reteste, bool approved)
     return approved && !modo_reteste;
 }
 
+bool pure_batch_blocks_repeat_after_approval(
+    bool modo_reteste,
+    bool last_test_valid,
+    bool last_was_approved,
+    int64_t last_test_ts_ms,
+    int64_t now_ts_ms,
+    uint32_t cooldown_ms)
+{
+    if (modo_reteste || !last_test_valid || !last_was_approved) {
+        return false;
+    }
+    if (cooldown_ms == 0) {
+        return false;
+    }
+    int64_t elapsed = now_ts_ms - last_test_ts_ms;
+    return elapsed >= 0 && elapsed < (int64_t)cooldown_ms;
+}
+
 bool pure_batch_copy_str(char *dst, size_t dst_len, const char *src)
 {
     if (!dst || dst_len == 0 || !src || src[0] == '\0') {
@@ -248,25 +266,29 @@ bool pure_ota_url_allowed_ex(const char *url, const char *extra_allowed_host, bo
     if (!pure_ota_url_valid(url)) {
         return false;
     }
-    if (require_https && strncmp(url, "https://", 8) != 0) {
-        return false;
-    }
 
     char host[128];
     if (!pure_ota_extract_host(url, host, sizeof(host))) {
         return false;
     }
 
-    if (pure_host_is_private_lan(host)) {
-        return true;
+    const bool lan_or_local =
+        pure_host_is_private_lan(host) || strstr(host, ".local") != NULL;
+    const bool extra_host =
+        extra_allowed_host && extra_allowed_host[0] != '\0' &&
+        strcmp(host, extra_allowed_host) == 0;
+
+    if (!lan_or_local && !extra_host) {
+        return false;
     }
-    if (strstr(host, ".local") != NULL) {
-        return true;
+
+    /* Block http:// only for non-LAN hosts when HTTPS is required. */
+    if (require_https && strncmp(url, "https://", 8) != 0 && !lan_or_local &&
+        strstr(host, ".local") == NULL) {
+        return false;
     }
-    if (extra_allowed_host && extra_allowed_host[0] != '\0' && strcmp(host, extra_allowed_host) == 0) {
-        return true;
-    }
-    return false;
+
+    return true;
 }
 
 bool pure_ota_url_allowed(const char *url, const char *extra_allowed_host)

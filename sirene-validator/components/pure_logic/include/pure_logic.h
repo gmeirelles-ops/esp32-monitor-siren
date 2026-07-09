@@ -39,6 +39,15 @@ bool pure_batch_quota_reached(uint32_t aprovados, uint32_t quantidade_total);
 /// Aprovação em modo reteste não consome cota nem sequencial.
 bool pure_batch_approval_updates_counters(bool modo_reteste, bool approved);
 
+/// Bloqueia novo teste de produção logo após aprovação (006 FR-004).
+bool pure_batch_blocks_repeat_after_approval(
+    bool modo_reteste,
+    bool last_test_valid,
+    bool last_was_approved,
+    int64_t last_test_ts_ms,
+    int64_t now_ts_ms,
+    uint32_t cooldown_ms);
+
 typedef struct {
     char numero_op[16];
     char id_produto[4];

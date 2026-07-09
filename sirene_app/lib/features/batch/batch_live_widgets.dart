@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/database/batch_metrics.dart';
@@ -6,10 +7,16 @@ import '../../core/database/database.dart';
 import '../../core/database/veredito.dart';
 import '../../core/theme/diponto_theme.dart';
 import '../../shared/portuguese_labels.dart';
+import '../../shared/widgets/rejection_labels.dart';
 import '../../shared/widgets/action_section_card.dart';
 import '../../shared/widgets/empty_state_view.dart';
 import '../../shared/widgets/simple_bar_chart.dart';
+import '../labels/laser_mark_callout.dart';
+import '../labels/manual_serial_dialog.dart';
+import '../labels/mark_queue_ui.dart';
+import '../labels/marking_providers.dart';
 import '../mqtt/models/mqtt_messages.dart';
+import 'batch_live_providers.dart';
 
 /// Cartão hero: estado FSM + último resultado do teste.
 class BatchLiveLastTestHero extends StatelessWidget {
@@ -638,6 +645,9 @@ class BatchLiveOperatorHero extends StatelessWidget {
     this.mqttDisconnected = false,
     this.filaOffline = 0,
     this.awaitingMqtt = false,
+    this.proximoSequencial,
+    this.deviceOffline = false,
+    this.lastRejectionMotivo,
   });
 
   final DeviceFsmState estado;
@@ -650,9 +660,17 @@ class BatchLiveOperatorHero extends StatelessWidget {
   final bool mqttDisconnected;
   final int filaOffline;
   final bool awaitingMqtt;
+  /// Próxima peça esperada (firmware heartbeat).
+  final int? proximoSequencial;
+  /// Bancada sem heartbeat recente mas lote ativo.
+  final bool deviceOffline;
+  final String? lastRejectionMotivo;
 
   @override
   Widget build(BuildContext context) {
+    final cooldownBlocked = isCooldownRejection(lastRejectionMotivo);
+    final batchReady = estado == DeviceFsmState.batchReady;
+
     if (liveResult != null && liveResult!.numeroOp == numeroOp) {
       final approved = liveResult!.isApproved;
       final accent = approved ? DipontoColors.success : DipontoColors.error;
@@ -687,6 +705,16 @@ class BatchLiveOperatorHero extends StatelessWidget {
                       ),
                 ),
               ),
+            const SizedBox(height: 12),
+            _OperatorStatusPill(
+              icon: Icons.format_list_numbered,
+              label: 'Seq ${liveResult!.sequencial}',
+            ),
+            _OperatorActionHint(
+              cooldownBlocked: cooldownBlocked,
+              proximoSequencial: proximoSequencial,
+              batchReady: batchReady,
+            ),
           ],
         ),
       );
@@ -763,19 +791,20 @@ class BatchLiveOperatorHero extends StatelessWidget {
 
     final latest = _resolveLatest();
     if (latest == null) {
-      final accent = mqttDisconnected ? DipontoColors.error : DipontoColors.primary;
+      final offline = deviceOffline || mqttDisconnected;
+      final accent = offline ? DipontoColors.error : DipontoColors.primary;
       return _OperatorHeroCard(
         accent: accent,
         child: Column(
           children: [
             Icon(
-              mqttDisconnected ? Icons.cloud_off : Icons.touch_app,
+              offline ? Icons.cloud_off : Icons.touch_app,
               size: 56,
               color: accent,
             ),
             const SizedBox(height: 16),
             Text(
-              mqttDisconnected ? 'Sem conexão MQTT' : 'Pressione o botão',
+              offline ? 'Bancada offline' : 'Pressione o botão',
               style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                     fontWeight: FontWeight.bold,
                     color: accent,
@@ -784,14 +813,30 @@ class BatchLiveOperatorHero extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              mqttDisconnected
-                  ? 'Resultados não chegam até reconectar'
+              offline
+                  ? 'Confira o visor da bancada (OLED). O app reconcilia ao reconectar.'
                   : 'O teste só inicia pelo botão físico da bancada',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: DipontoColors.onSurface.withValues(alpha: 0.65),
                   ),
               textAlign: TextAlign.center,
             ),
+            if (proximoSequencial != null && !cooldownBlocked) ...[
+              const SizedBox(height: 12),
+              Text(
+                'Próxima peça: sequencial $proximoSequencial',
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+            if (cooldownBlocked)
+              _OperatorActionHint(
+                cooldownBlocked: true,
+                proximoSequencial: proximoSequencial,
+                batchReady: batchReady,
+              ),
             if (filaOffline > 0) ...[
               const SizedBox(height: 16),
               _OperatorStatusPill(
@@ -861,6 +906,11 @@ class BatchLiveOperatorHero extends StatelessWidget {
               if (latest.serial != null)
                 _OperatorStatusPill(icon: Icons.qr_code_2, label: latest.serial!),
             ],
+          ),
+          _OperatorActionHint(
+            cooldownBlocked: cooldownBlocked,
+            proximoSequencial: proximoSequencial,
+            batchReady: batchReady,
           ),
         ],
       ),
@@ -1049,6 +1099,69 @@ class BatchLiveOperatorAlert extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+/// Hint abaixo do veredito: bloqueio (cooldown) ou próxima peça liberada.
+class _OperatorActionHint extends StatelessWidget {
+  const _OperatorActionHint({
+    required this.cooldownBlocked,
+    this.proximoSequencial,
+    required this.batchReady,
+  });
+
+  final bool cooldownBlocked;
+  final int? proximoSequencial;
+  final bool batchReady;
+
+  @override
+  Widget build(BuildContext context) {
+    if (cooldownBlocked) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 16),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: Colors.orange.withValues(alpha: 0.14),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: Colors.orange.withValues(alpha: 0.45)),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.pause_circle_outline, color: Colors.orange.shade800, size: 22),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Aguarde — peça já aprovada. Libera em alguns segundos.',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: Colors.orange.shade900,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (batchReady && proximoSequencial != null) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 16),
+        child: Text(
+          'Próxima peça liberada — sequencial $proximoSequencial',
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: DipontoColors.primary,
+              ),
+          textAlign: TextAlign.center,
+        ),
+      );
+    }
+
+    return const SizedBox.shrink();
   }
 }
 
@@ -1253,4 +1366,124 @@ void showBatchHistorySheet(BuildContext context, List<TestResult> tests) {
       ),
     ),
   );
+}
+
+/// Painel lateral: seriais aguardando gravação laser (serial + modelo).
+class BatchLiveEngravingPanel extends ConsumerWidget {
+  const BatchLiveEngravingPanel({
+    required this.numeroOp,
+    this.idProduto,
+    super.key,
+  });
+
+  final String numeroOp;
+  final String? idProduto;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final queueAsync = ref.watch(batchLiveMarkQueueProvider(numeroOp));
+    final markFailure = ref.watch(markFailureProvider);
+    final dateFmt = DateFormat('HH:mm');
+
+    return Material(
+      color: DipontoColors.surface.withValues(alpha: 0.5),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 8, 8),
+            child: Row(
+              children: [
+                const Icon(Icons.precision_manufacturing_outlined, color: DipontoColors.primary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Gravação',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Gerar serial manual',
+                  icon: const Icon(Icons.add_circle_outline),
+                  onPressed: () => showManualSerialDialog(
+                    context,
+                    ref,
+                    initialNumeroOp: numeroOp,
+                    initialIdProduto: idProduto,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: queueAsync.when(
+              loading: () => const SizedBox.shrink(),
+              error: (_, __) => Text(
+                'F2 no DiatuCAD grava serial e modelo do próximo da fila.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: DipontoColors.onSurface.withValues(alpha: 0.65),
+                    ),
+              ),
+              data: (entries) {
+                if (entries.isEmpty) {
+                  return Text(
+                    'F2 no DiatuCAD grava serial e modelo do próximo da fila.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: DipontoColors.onSurface.withValues(alpha: 0.65),
+                        ),
+                  );
+                }
+                return LaserMarkCallout(entry: entries.first);
+              },
+            ),
+          ),
+          if (markFailure != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+              child: Text(
+                markFailure,
+                style: const TextStyle(color: DipontoColors.error, fontSize: 12),
+              ),
+            ),
+          const SizedBox(height: 8),
+          Expanded(
+            child: queueAsync.when(
+              loading: () => const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+              error: (e, _) => Center(child: Text('Erro: $e', style: const TextStyle(fontSize: 12))),
+              data: (entries) {
+                if (entries.isEmpty) {
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Text(
+                        'Nenhum serial aguardando gravação nesta OP.\n'
+                        'Aprovações e seriais manuais aparecem aqui.',
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: DipontoColors.onSurface.withValues(alpha: 0.55),
+                            ),
+                      ),
+                    ),
+                  );
+                }
+                return ListView.separated(
+                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
+                  itemCount: entries.length,
+                  separatorBuilder: (_, __) => const Divider(height: 1),
+                  itemBuilder: (context, i) => MarkQueueEntryTile(
+                    entry: entries[i],
+                    index: i,
+                    dateFmt: dateFmt,
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

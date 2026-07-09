@@ -38,9 +38,15 @@ void main() {
   );
 
   Future<ProviderContainer> createContainer(AppDatabase db) async {
-    final prefs = await createTestPrefs(useLaserMarking: false);
+    final prefs = await createTestPrefs();
     final container = ProviderContainer(
-      overrides: devicesTestOverrides(db: db, prefs: prefs),
+      overrides: devicesTestOverrides(
+        db: db,
+        prefs: prefs,
+        devices: {
+          'dev1': DeviceInfo(deviceId: 'dev1')..bancadaNum = 1,
+        },
+      ),
     );
     addTearDown(container.dispose);
     return container;
@@ -88,10 +94,10 @@ void main() {
       await notifier.simulateTestResult('dev1', forceApproved: true);
     }
 
-    final buffer = await db.getLabelBuffer();
-    expect(buffer, hasLength(4));
+    final queue = await db.getPendingMarkQueue();
+    expect(queue, hasLength(4));
 
-    final seriais = buffer.map((e) => e.serial).toList();
+    final seriais = queue.map((e) => e.serial).toList();
     expect(seriais.toSet(), hasLength(4));
 
     final sequenciais = seriais
@@ -120,10 +126,10 @@ void main() {
     await notifier.processTestResult('dev1', rejectedTest(2));
     await notifier.processTestResult('dev1', approvedTest(2, aprovadosNoLote: 2));
 
-    final buffer = await db.getLabelBuffer();
-    expect(buffer, hasLength(2));
+    final queue = await db.getPendingMarkQueue();
+    expect(queue, hasLength(2));
 
-    final sequenciais = buffer
+    final sequenciais = queue
         .map((e) => int.parse(e.serial.substring(e.serial.length - 5, e.serial.length - 1)))
         .toList()
       ..sort();
@@ -145,7 +151,7 @@ void main() {
     expect(container.read(devicesProvider)['dev1']!.activeBatch!.proximoSequencial, 3);
   });
 
-  test('buffer de etiquetas lista todas as entradas da OP', () async {
+  test('fila laser lista todas as entradas da OP', () async {
     final db = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(db.close);
     final container = await createContainer(db);
@@ -157,7 +163,7 @@ void main() {
       await notifier.simulateTestResult('dev1', forceApproved: true);
     }
 
-    final entries = await db.watchLabelBuffer().first;
+    final entries = await db.getPendingMarkQueue();
     expect(entries, hasLength(4));
     expect(entries.every((e) => e.numeroOp == 'OP-SEQ'), isTrue);
     expect(entries.map((e) => e.serial).toSet(), hasLength(4));

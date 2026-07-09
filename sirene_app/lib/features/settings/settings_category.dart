@@ -23,7 +23,7 @@ extension SettingsCategoryMeta on SettingsCategory {
         SettingsCategory.posto => 'Operador e bancadas',
         SettingsCategory.manutencao => 'Wi-Fi, série e reset',
         SettingsCategory.rede => 'Broker MQTT',
-        SettingsCategory.marcacao => 'Etiquetas ou laser',
+        SettingsCategory.marcacao => 'Gravação laser Diatu',
         SettingsCategory.nuvem => 'Firestore e sync',
         SettingsCategory.produtividade => 'Metas e paradas',
       };

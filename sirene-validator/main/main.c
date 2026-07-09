@@ -3,6 +3,7 @@
 
 #include "app_runtime.h"
 #include "batch_cmd.h"
+#include "batch_storage.h"
 #include "board_config.h"
 #include "button.h"
 #include "calibration.h"
@@ -25,6 +26,7 @@
 #include "offline_queue.h"
 #include "oled_display.h"
 #include "ota_update.h"
+#include "pure_logic.h"
 #include "pzem.h"
 #include "relay.h"
 #include "sdkconfig.h"
@@ -38,7 +40,6 @@ static SemaphoreHandle_t s_batch_mu;
 static QueueHandle_t s_work_queue;
 static QueueHandle_t s_button_queue;
 static QueueHandle_t s_pzem_queue;
-static int64_t s_last_button_press_us;
 
 static void publish_hardware_fault_boot(const char *falha)
 {
@@ -153,8 +154,6 @@ static void on_pzem_fault(bool fault)
         restore = app_batch()->active ? STATE_BATCH_READY : STATE_IDLE;
     }
     hardware_fault_enter(restore, "pzem_uart");
-    relay_set(false);
-    line_actuator_safe_all();
 }
 
 static void on_ota_status(const char *json)
@@ -209,15 +208,33 @@ static void worker_task(void *arg)
                 ESP_LOGI(TAG, "botao — parar ensaio");
                 *app_ensaio_stop() = true;
             } else if (!*app_calibrating()) {
-                int64_t now = esp_timer_get_time();
-                if (s_last_button_press_us > 0 &&
-                    (now - s_last_button_press_us) < 800000LL &&
-                    state_machine_get() == STATE_BATCH_READY) {
-                    ESP_LOGI(TAG, "duplo toque — cancelar lote");
-                    batch_cmd_end_batch_with_reason("botao_duplo");
-                    s_last_button_press_us = 0;
+                bool block_repeat = false;
+                app_batch_lock();
+                bool modo_reteste = app_batch()->modo_reteste;
+                app_batch_unlock();
+                app_last_test_t last;
+                app_last_test_get(&last);
+                if (pure_batch_blocks_repeat_after_approval(
+                        modo_reteste,
+                        last.valid,
+                        last.valid && strcmp(last.veredito, "APROVADO") == 0,
+                        last.ts_ms,
+                        app_now_ts_ms(),
+                        POST_APPROVAL_COOLDOWN_MS)) {
+                    block_repeat = true;
+                }
+                if (block_repeat) {
+                    ESP_LOGI(TAG, "botao — peca ja aprovada (cooldown)");
+                    mqtt_bridge_publish_rejection("peca_ja_aprovada");
+                    led_feedback_signal(FEEDBACK_REJECTED);
+                } else if (pzem_is_fault() || state_machine_get() == STATE_HARDWARE_FAULT) {
+                    ESP_LOGW(TAG, "botao — PZEM em falha, aguardando reconexao");
+                    mqtt_bridge_publish_rejection("pzem_falha");
+                    led_feedback_signal(FEEDBACK_REJECTED);
+                } else if (!state_machine_can_start_test()) {
+                    mqtt_bridge_publish_rejection("teste_estado_invalido");
+                    led_feedback_signal(FEEDBACK_REJECTED);
                 } else {
-                    s_last_button_press_us = now;
                     uint32_t duration;
                     app_batch_lock();
                     duration = app_batch()->tempo_teste_sec;
@@ -245,16 +262,18 @@ static void hardware_monitor_task(void *arg)
         esp_task_wdt_reset();
         if (state_machine_get() == STATE_HARDWARE_FAULT) {
             int64_t now = esp_timer_get_time();
-            if (now - last_pzem_recover_us >= 5000000LL) {
+            if (now - last_pzem_recover_us >= 3000000LL) {
                 last_pzem_recover_us = now;
-                pzem_clear_fault();
-                if (!pzem_is_fault()) {
+                if (pzem_try_recover()) {
                     app_state_t restore = *app_state_before_fault();
-                    if (restore == STATE_TESTING) {
-                        restore = batch_storage_has_active() ? STATE_BATCH_READY : STATE_IDLE;
-                    }
+                    restore = restore == STATE_TESTING
+                                  ? (batch_storage_has_active() ? STATE_BATCH_READY : STATE_IDLE)
+                                  : restore;
                     state_machine_set(restore);
+                    led_feedback_signal(FEEDBACK_NONE);
                     app_publish_or_queue("alerta", "{\"tipo\":\"hardware\",\"evento\":\"recuperado\"}");
+                    ESP_LOGI(TAG, "PZEM recuperado — estado %s", state_machine_name(restore));
+                    telemetry_publish_now();
                 }
             }
         }

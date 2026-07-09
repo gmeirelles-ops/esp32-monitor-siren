@@ -36,6 +36,14 @@ config SIRENE_WIFI_AP_PASSWORD
     help
         Empty = derive from device MAC (sv + 6 hex). Non-empty = fixed AP password.
 
+config SIRENE_POST_APPROVAL_COOLDOWN_MS
+    int "Post-approval button cooldown (ms)"
+    default 2000
+    range 500 30000
+    help
+        After an approval, block new production tests for this many milliseconds
+        unless modo_reteste is active (006 FR-004).
+
 config SIRENE_MQTT_LAN_INSECURE_TLS
     bool "Allow insecure TLS for private-LAN MQTT brokers"
     default y

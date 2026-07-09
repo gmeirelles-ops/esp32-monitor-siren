@@ -15,6 +15,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/task.h"
+#include "button.h"
 #include "led_feedback.h"
 #include "line_actuator.h"
 #include "mqtt_bridge.h"
@@ -30,16 +31,38 @@
 
 static const char *TAG = "mqtt_cmd";
 
+static app_state_t hardware_fault_normalize_restore(app_state_t restore_state)
+{
+    if (restore_state == STATE_TESTING) {
+        return batch_storage_has_active() ? STATE_BATCH_READY : STATE_IDLE;
+    }
+    return restore_state;
+}
+
 void hardware_fault_enter(app_state_t restore_state, const char *falha)
 {
-    if (state_machine_get() != STATE_HARDWARE_FAULT) {
-        *app_state_before_fault() = restore_state;
+    restore_state = hardware_fault_normalize_restore(restore_state);
+    relay_set(false);
+    button_set_test_in_progress(false);
+    line_actuator_safe_all();
+
+    bool was_fault = (state_machine_get() == STATE_HARDWARE_FAULT);
+    if (state_machine_get() == STATE_TESTING) {
         state_machine_set(STATE_HARDWARE_FAULT);
+        was_fault = false;
+    }
+
+    if (!was_fault) {
+        if (state_machine_get() != STATE_HARDWARE_FAULT) {
+            *app_state_before_fault() = restore_state;
+            state_machine_set(STATE_HARDWARE_FAULT);
+        }
         led_feedback_signal(FEEDBACK_FAULT);
-        line_actuator_safe_all();
         char alerta[128];
         snprintf(alerta, sizeof(alerta), "{\"tipo\":\"hardware\",\"falha\":\"%s\"}", falha);
         app_publish_or_queue("alerta", alerta);
+        ESP_LOGW(TAG, "falha hardware: %s — testes bloqueados ate PZEM voltar (restaura %s)",
+                 falha, state_machine_name(restore_state));
     }
 }
 

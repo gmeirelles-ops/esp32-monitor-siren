@@ -1,0 +1,12 @@
+Firmware sirene-validator 1.8.10 — teste OTA
+=============================================
+
+Mudança: apenas bump de versão (1.8.9 → 1.8.10) para validar OTA.
+
+Como atualizar:
+  Duplo clique em OTA-ATUALIZAR.bat  (BANCADA=1)
+  ou: .\scripts\ota_update_windows.ps1 -Bancada 1
+
+Validação:
+  Heartbeat: firmware_version "1.8.10"
+  Status OTA: tipo "ota", evento "sucesso"

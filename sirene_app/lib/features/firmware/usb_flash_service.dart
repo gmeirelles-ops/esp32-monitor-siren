@@ -109,9 +109,19 @@ class UsbFlashService {
 
     late final List<String> flashArgs;
     if (mode == UsbFlashMode.appOnly) {
-      flashArgs = buildAppOnlyFlashArgs(
-        comPort: normalizeComPort(comPort),
+      final normalizedPort = normalizeComPort(comPort);
+      final otaData = p.join(p.dirname(appBinPath), 'ota_data_initial.bin');
+      String? otaDataPath;
+      if (await File(otaData).exists()) {
+        otaDataPath = otaData;
+        onLog?.call('otadata: $otaData');
+      } else {
+        onLog?.call('otadata ausente na pasta do .bin — gravando ota_0 + ota_1');
+      }
+      flashArgs = buildOtaDualFlashArgs(
+        comPort: normalizedPort,
         appBinPath: appBinPath,
+        otaDataPath: otaDataPath,
       );
     } else {
       final dir = buildDirectory;

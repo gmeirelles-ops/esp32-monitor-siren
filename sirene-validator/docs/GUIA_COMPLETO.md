@@ -311,8 +311,7 @@ mosquitto_pub -h $BROKER -p 443 -u devices -P '<senha>' -q 1 \
 ```
 
 - Todos os campos são obrigatórios; validação rejeita `tempo_teste` fora de 1–120 s, potências invertidas, `id_produto` ≠ 3 dígitos, `ano` ≠ 2 dígitos
-- `aprovados` é zerado apenas quando `numero_op` **muda**; reenvio com mesmo OP preserva progresso
-- `proximo_sequencial` no mesmo OP usa `max(atual, payload)` — não regride acidentalmente
+- **006:** cada `SET_BATCH` zera `aprovados` e aplica `proximo_sequencial` do payload; limpa `ultimo_veredito` (mesmo OP reutilizada)
 - Rejeitado durante `TESTING` ou `OTA_UPDATING`
 - **ACK** em `status`: `{"tipo":"batch","evento":"configurado","numero_op":"...","estado":"BATCH_READY"}`
 - Ao atingir `quantidade_total` aprovados, lote encerra automaticamente com `{"tipo":"batch","evento":"encerrado","motivo":"cota_atingida"}`
@@ -331,7 +330,7 @@ ou
 
 Limpa NVS do lote e vai para `IDLE`. Publica `{"tipo":"batch","evento":"encerrado","motivo":"operador"}`. Rejeitado durante `TESTING`, calibração ou OTA.
 
-**Botão físico:** duplo toque rápido (&lt; 800 ms) com lote em `BATCH_READY` — mesmo efeito (`motivo":"botao_duplo"`).
+**Botão físico:** apenas inicia teste (toque simples). Encerrar lote somente pelo app (`END_BATCH` / `CANCEL_BATCH`).
 
 #### START_CALIBRATION — Modo calibração
 
@@ -415,6 +414,8 @@ Com opção de apagar broker MQTT salvo:
 ```
 
 - URL deve começar com `http://` ou `https://`
+- Host deve ser **LAN privada** (192.168.x, 10.x, 172.16–31.x) ou `*.local`
+- Com `CONFIG_SIRENE_OTA_REQUIRE_HTTPS` (padrão): `http://` é aceito **só na LAN**; `http://` em host público é rejeitado (`ota_url_invalida`)
 - Rejeitado durante `TESTING`
 - Relé desligado durante o download
 
@@ -489,6 +490,7 @@ Códigos de `motivo`:
 | `ota_falha_inicio` | Falha ao iniciar task OTA |
 | `fila_cheia` | Fila interna de comandos MQTT cheia |
 | `pzem_ocupado` | Calibração/teste já em andamento |
+| `peca_ja_aprovada` | Botão pressionado dentro de 5 s após aprovação (sem modo reteste) |
 | `cmd_durante_teste` | Comando bloqueado durante TESTING |
 
 #### Confirmação de lote (`status`) — v1.4+

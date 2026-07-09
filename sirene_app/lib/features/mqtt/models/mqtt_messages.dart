@@ -258,6 +258,10 @@ class DeviceInfo {
   DateTime? batchStartedAt;
   /// True após TESTING→BATCH_READY até `tipo:teste` ser processado.
   bool awaitingMqttResult = false;
+  /// Último heartbeat (reconciliação 006).
+  HeartbeatMessage? lastHeartbeat;
+  /// Próximo sequencial do firmware (fonte da verdade).
+  int? firmwareProximoSequencial;
 }
 
 class BatchConfig {

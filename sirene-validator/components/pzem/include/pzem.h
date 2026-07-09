@@ -13,6 +13,7 @@ bool pzem_boot_self_test(void);
 bool pzem_is_fault(void);
 void pzem_mark_fault(void);
 void pzem_clear_fault(void);
+bool pzem_try_recover(void);
 uint8_t pzem_get_slave_addr(void);
 uint32_t pzem_get_fault_count(void);
 

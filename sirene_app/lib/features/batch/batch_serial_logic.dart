@@ -7,12 +7,22 @@ String resolveBatchYear([DateTime? now]) {
   return y.toString().padLeft(2, '0');
 }
 
+/// Próximo sequencial para um **novo** cadastro de lote (006 FR-006).
+///
+/// Não usa histórico global — firmware zera contadores; serial de produção
+/// começa no inicial do produto ou em 1.
+int resolveNewBatchSequencial({int? sequencialInicial}) {
+  if (sequencialInicial == null || sequencialInicial < 1) {
+    return 1;
+  }
+  return sequencialInicial;
+}
+
 /// Próximo sequencial para `SET_BATCH`, a partir do contador local e do
 /// [sequencialInicial] do produto (quando os seriais não começam em 0001).
 ///
-/// O firmware, ao receber `SET_BATCH` na mesma OP, preserva o sequencial
-/// corrente e só avança se o payload trouxer valor maior (`max(atual, payload)`)
-/// — ver `batch_cmd.c` em sirene-validator.
+/// O firmware, ao receber `SET_BATCH`, aplica o sequencial do payload
+/// com reset de contadores (006) — ver `batch_cmd.c` em sirene-validator.
 Future<int> resolveProximoSequencial(
   AppDatabase db,
   String idProduto,

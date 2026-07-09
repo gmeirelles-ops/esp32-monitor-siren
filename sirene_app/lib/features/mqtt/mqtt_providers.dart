@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/config/app_config.dart';
 import '../../core/constants/mqtt_topics.dart';
+import '../../core/database/batch_metrics.dart';
 import '../../core/database/database.dart';
 import '../../core/providers/core_providers.dart';
 import '../../core/services/app_log.dart';
@@ -20,6 +21,7 @@ import '../labels/zpl_generator.dart';
 import '../serial/itf_check_digit.dart';
 import 'message_pump.dart';
 import 'mqtt_status_parser.dart';
+import '../../shared/widgets/rejection_labels.dart';
 import '../batch/batch_live_providers.dart';
 import '../batch/batch_serial_logic.dart';
 import '../dashboard/dashboard_providers.dart';
@@ -58,10 +60,6 @@ AppMqttConnectionState resolveMqttConnectionDisplayState(
     error: (_, __) => AppMqttConnectionState.disconnected,
   );
 }
-
-typedef DeviceRejectionEvent = ({String deviceId, RejectionMessage rejection});
-
-final latestRejectionProvider = StateProvider<DeviceRejectionEvent?>((ref) => null);
 
 typedef DeviceNvsFaultEvent = ({String deviceId, NvsFaultAlertMessage alert});
 
@@ -102,6 +100,10 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
   final Map<String, int> _batchAckEpoch = {};
   final Set<String> _autoEndBatchSent = {};
   final Map<int, String> _bancadaToDeviceId = {};
+  final Map<String, Timer> _verdictWatchdogTimers = {};
+  final Map<String, Timer> _cooldownRejectionTimers = {};
+
+  static const _verdictWatchdogDuration = Duration(seconds: 15);
 
   void _init() {
     try {
@@ -169,14 +171,109 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
     }
   }
 
+  void _cancelVerdictWatchdog(String deviceId) {
+    _verdictWatchdogTimers.remove(deviceId)?.cancel();
+  }
+
+  void _scheduleVerdictWatchdog(String deviceId) {
+    _cancelVerdictWatchdog(deviceId);
+    _verdictWatchdogTimers[deviceId] = Timer(_verdictWatchdogDuration, () {
+      unawaited(_onVerdictWatchdog(deviceId));
+    });
+  }
+
+  Future<void> _onVerdictWatchdog(String deviceId) async {
+    final device = state[deviceId];
+    if (device == null) return;
+    if (device.estado != DeviceFsmState.testing && !device.awaitingMqttResult) {
+      return;
+    }
+    final hb = device.lastHeartbeat;
+    if (hb != null) {
+      await _tryProcessHeartbeatLastTest(deviceId, hb);
+      await _reconcileFromHeartbeat(deviceId, hb);
+    }
+    final after = state[deviceId];
+    if (after != null &&
+        (after.estado == DeviceFsmState.testing || after.awaitingMqttResult)) {
+      after.awaitingMqttResult = false;
+      state = {...state};
+      unawaited(AppLog.write('MQTT: watchdog 15s — saiu de Testando/Aguardando ($deviceId)'));
+    }
+  }
+
+  /// Reconcilia contadores, sequencial e seriais pendentes com o firmware (006).
+  Future<void> _reconcileFromHeartbeat(String deviceId, HeartbeatMessage hb) async {
+    final device = state[deviceId];
+    final batch = device?.activeBatch;
+    if (device == null || batch == null) return;
+
+    final hbOp = hb.numeroOp;
+    if (hbOp == null || hbOp.isEmpty || hbOp != batch.numeroOp) return;
+
+    if (hb.proximoSequencial != null && hb.proximoSequencial! > 0) {
+      device.firmwareProximoSequencial = hb.proximoSequencial;
+      if (device.activeBatch!.proximoSequencial != hb.proximoSequencial) {
+        device.activeBatch = batch.copyWith(proximoSequencial: hb.proximoSequencial);
+      }
+    }
+
+    final db = _ref.read(databaseProvider);
+    final since = device.batchStartedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+    final sessionTests = await db.getTestsByOpSince(batch.numeroOp, since);
+    final sessionMetrics = computeSessionBatchMetrics(sessionTests);
+
+    final hbAprovados = hb.aprovados ?? 0;
+    if (hb.ultimoVeredito != null &&
+        hb.ultimoVeredito!.isNotEmpty &&
+        (hbAprovados > sessionMetrics.aprovados ||
+            (hb.ultimoVeredito == 'REPROVADO' && device.awaitingMqttResult))) {
+      await _tryProcessHeartbeatLastTest(deviceId, hb);
+    }
+
+    if (hbAprovados > sessionMetrics.aprovados) {
+      await _syncMarkingForOp(db, batch.numeroOp, since: device.batchStartedAt);
+    }
+
+    device.awaitingMqttResult = false;
+    state = {...state};
+  }
+
   void _emitRejection(String deviceId, RejectionMessage rejection) {
     final device = _getOrCreate(deviceId);
     device.lastRejection = rejection;
     _rejectionEpoch[deviceId] = (_rejectionEpoch[deviceId] ?? 0) + 1;
-    _ref.read(latestRejectionProvider.notifier).state = (
-      deviceId: deviceId,
-      rejection: rejection,
-    );
+    if (isTransientRejection(rejection.motivo)) {
+      _scheduleTransientRejectionClear(deviceId, rejection.motivo);
+    }
+  }
+
+  void _scheduleTransientRejectionClear(String deviceId, String motivo) {
+    _cooldownRejectionTimers[deviceId]?.cancel();
+    final delay = motivo == 'peca_ja_aprovada'
+        ? postApprovalCooldownDuration
+        : const Duration(seconds: 4);
+    _cooldownRejectionTimers[deviceId] = Timer(delay, () {
+      _clearTransientRejection(deviceId);
+    });
+  }
+
+  void _clearTransientRejection(String deviceId) {
+    _cooldownRejectionTimers[deviceId]?.cancel();
+    _cooldownRejectionTimers.remove(deviceId);
+    final device = state[deviceId];
+    final motivo = device?.lastRejection?.motivo;
+    if (isTransientRejection(motivo)) {
+      device!.lastRejection = null;
+      state = {...state};
+    }
+  }
+
+  void _clearRejectionAfterTest(String deviceId) {
+    final device = state[deviceId];
+    if (device?.lastRejection == null) return;
+    device!.lastRejection = null;
+    state = {...state};
   }
 
   void _emitBatchConfigured(String deviceId, BatchEventMessage event) {
@@ -272,6 +369,10 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
       device.lastSeen = now;
       if (online) {
         await _ref.read(databaseProvider).syncBancadaFromFirmware(deviceId, bancadaNum);
+        final hb = device.lastHeartbeat;
+        if (hb != null && device.activeBatch != null) {
+          await _reconcileFromHeartbeat(deviceId, hb);
+        }
       }
       if (!online) {
         await _ref.read(firestoreSyncServiceProvider).enqueueDeviceUpdate(
@@ -287,8 +388,12 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
     } else if (topic.endsWith('/heartbeat')) {
       final hb = MqttParser.parseHeartbeat(payload);
       if (hb != null) {
+        device.lastHeartbeat = hb;
         final prevEstado = device.estado;
         device.estado = hb.estado;
+        if (hb.proximoSequencial != null && hb.proximoSequencial! > 0) {
+          device.firmwareProximoSequencial = hb.proximoSequencial;
+        }
         final batch = device.activeBatch;
         if (hb.numeroOp != null &&
             hb.numeroOp!.isNotEmpty &&
@@ -304,33 +409,26 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
           device.firmwareAprovados = null;
           device.firmwareAprovadosOp = null;
         }
-        if (hb.ultimoVeredito != null &&
-            batch != null &&
-            hb.numeroOp == batch.numeroOp) {
-          final dbMetrics = await _ref.read(databaseProvider).getBatchMetrics(batch.numeroOp);
-          final sessionMetrics = device.batchStartedAt != null
-              ? computeSessionBatchMetrics(
-                  await _ref.read(databaseProvider).getTestsByOpSince(
-                    batch.numeroOp,
-                    device.batchStartedAt!,
-                  ),
-                )
-              : dbMetrics;
-          if ((hb.aprovados ?? 0) > sessionMetrics.aprovados) {
-            await _tryProcessHeartbeatLastTest(deviceId, hb);
-          }
-        }
         if (prevEstado == DeviceFsmState.testing &&
             hb.estado != DeviceFsmState.testing) {
           final processed = await _tryProcessHeartbeatLastTest(deviceId, hb);
           if (!processed) {
             device.awaitingMqttResult = true;
+            _scheduleVerdictWatchdog(deviceId);
+          } else {
+            _cancelVerdictWatchdog(deviceId);
           }
         } else if (hb.ultimoVeredito != null &&
             hb.estado == DeviceFsmState.batchReady &&
             device.awaitingMqttResult) {
           await _tryProcessHeartbeatLastTest(deviceId, hb);
+          _cancelVerdictWatchdog(deviceId);
         }
+        if (prevEstado != DeviceFsmState.testing && hb.estado == DeviceFsmState.testing) {
+          _clearTransientRejection(deviceId);
+          _scheduleVerdictWatchdog(deviceId);
+        }
+        await _reconcileFromHeartbeat(deviceId, hb);
         final batchAfterHb = device.activeBatch;
         if (batchAfterHb != null &&
             hb.numeroOp != null &&
@@ -428,8 +526,7 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
         if (batchEvent.isConfigured) {
           _emitBatchConfigured(deviceId, batchEvent);
         } else if (batchEvent.isEnded) {
-          clearActiveBatch(deviceId);
-          _setDeviceEstado(deviceId, DeviceFsmState.idle);
+          await _finalizeBatchLocally(deviceId);
         }
         device.lastSeen = now;
       }
@@ -483,9 +580,10 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
 
     final db = _ref.read(databaseProvider);
     if (test.tsMs != null &&
-        await db.testExistsByOpTsMsSequencial(numeroOp, test.tsMs!, test.sequencial)) {
+        await db.testExistsByOpAndTsMs(numeroOp, test.tsMs!)) {
       device!.lastTestResult = test;
       device.awaitingMqttResult = false;
+      _cancelVerdictWatchdog(deviceId);
       state = {...state};
       await _ensureMarkingForTest(db, test);
       await _maybeAutoEndBatch(deviceId, test: test);
@@ -493,6 +591,7 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
     }
 
     await processTestResult(deviceId, test);
+    _cancelVerdictWatchdog(deviceId);
     return true;
   }
 
@@ -505,19 +604,16 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
   }) async {
     final device = _getOrCreate(deviceId);
     device.lastTestResult = test;
+    _clearRejectionAfterTest(deviceId);
 
     final db = _ref.read(databaseProvider);
     if (test.tsMs != null) {
-      if (await db.testExistsByOpTsMsSequencial(
-        test.numeroOp,
-        test.tsMs!,
-        test.sequencial,
-      )) {
+      if (await db.testExistsByOpAndTsMs(test.numeroOp, test.tsMs!)) {
         unawaited(AppLog.write(
-          'MQTT: teste duplicado ignorado OP=${test.numeroOp} ts_ms=${test.tsMs} seq=${test.sequencial}',
+          'MQTT: teste duplicado ignorado OP=${test.numeroOp} ts_ms=${test.tsMs}',
         ));
         if (!(isRetest ?? _ref.read(retestModeProvider))) {
-          await _ensureMarkingForTest(_ref.read(databaseProvider), test);
+          await _ensureMarkingForTest(db, test);
           await _maybeAutoEndBatch(deviceId, test: test);
         }
         return;
@@ -571,10 +667,17 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
           deviceId: deviceId,
           serial: candidate,
         );
-      } else {
-        serial = candidate;
+        unawaited(AppLog.write(
+          'MQTT: serial duplicado bloqueado OP=${test.numeroOp} seq=${test.sequencial} serial=$candidate',
+        ));
+        return;
       }
+      serial = candidate;
     }
+
+    device.awaitingMqttResult = false;
+    _cancelVerdictWatchdog(deviceId);
+    state = {...state};
 
     await db.insertTestResult(
       deviceId: deviceId,
@@ -592,7 +695,6 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
       isRetest: retest,
       firmwareTsMs: test.tsMs,
     );
-    device.awaitingMqttResult = false;
     _ref.read(localDataRevisionProvider.notifier).state++;
     state = {...state};
 
@@ -863,8 +965,11 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
     device.batchStartedAt = DateTime.now();
     device.firmwareAprovados = null;
     device.firmwareAprovadosOp = null;
+    device.firmwareProximoSequencial = batch.proximoSequencial;
     device.lastTestResult = null;
     device.awaitingMqttResult = false;
+    device.lastRejection = null;
+    _cancelVerdictWatchdog(deviceId);
     _batchStartedAt[deviceId] = device.batchStartedAt!;
     state = {...state};
   }
@@ -876,7 +981,10 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
       device.batchStartedAt = null;
       device.firmwareAprovados = null;
       device.firmwareAprovadosOp = null;
+      device.firmwareProximoSequencial = null;
       device.awaitingMqttResult = false;
+      device.lastHeartbeat = null;
+      _cancelVerdictWatchdog(deviceId);
       state = {...state};
     }
   }
@@ -963,30 +1071,19 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
     return false;
   }
 
-  /// Publica END_BATCH e retorna motivo de rejeição, ou null se aceito.
-  Future<String?> sendEndBatch(String deviceId) async {
-    if (_ref.read(demoModeProvider)) {
-      _ref.read(demoAutoPlayProvider.notifier).state = false;
-      clearActiveBatch(deviceId);
-      _setDeviceEstado(deviceId, DeviceFsmState.idle);
-      _ref.read(retestModeProvider.notifier).state = false;
-      return null;
-    }
-
-    final service = _ref.read(mqttServiceProvider);
+  /// Lock OP, sync cloud, flush labels/marking — shared by END_BATCH and firmware `encerrado`.
+  Future<void> _finalizeBatchLocally(String deviceId) async {
     final device = state[deviceId];
     final batch = device?.activeBatch;
     final startedAt = _batchStartedAt[deviceId];
-    if (service.currentState == AppMqttConnectionState.connected) {
-      await _publishForDevice(deviceId, {'cmd': 'END_BATCH'});
-      final rejection = await waitForRejection(deviceId);
-      if (rejection != null) return rejection;
-    }
 
     if (batch != null) {
-      await _ref.read(databaseProvider).lockOp(batch.numeroOp);
+      final db = _ref.read(databaseProvider);
+      await _syncMarkingForOp(db, batch.numeroOp, since: device?.batchStartedAt);
+      await _flushLabelsForOp(db, batch.numeroOp);
+      await db.lockOp(batch.numeroOp);
     }
-    if (batch != null && startedAt != null) {
+    if (batch != null && startedAt != null && !_ref.read(demoModeProvider)) {
       await _ref.read(firestoreSyncServiceProvider).enqueueBatch(
         batch: batch,
         deviceId: deviceId,
@@ -1001,6 +1098,26 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
     _ref.read(retestModeProvider.notifier).state = false;
     clearActiveBatch(deviceId);
     _setDeviceEstado(deviceId, DeviceFsmState.idle);
+  }
+
+  /// Publica END_BATCH e retorna motivo de rejeição, ou null se aceito.
+  Future<String?> sendEndBatch(String deviceId) async {
+    if (_ref.read(demoModeProvider)) {
+      _ref.read(demoAutoPlayProvider.notifier).state = false;
+      await _finalizeBatchLocally(deviceId);
+      return null;
+    }
+
+    final service = _ref.read(mqttServiceProvider);
+    if (service.currentState != AppMqttConnectionState.connected) {
+      return 'mqtt_desconectado';
+    }
+
+    await _publishForDevice(deviceId, {'cmd': 'END_BATCH'});
+    final rejection = await waitForRejection(deviceId);
+    if (rejection != null) return rejection;
+
+    await _finalizeBatchLocally(deviceId);
     return null;
   }
 
@@ -1051,6 +1168,14 @@ class DevicesNotifier extends StateNotifier<Map<String, DeviceInfo>> {
   void dispose() {
     _sub?.cancel();
     _staleTimer?.cancel();
+    for (final t in _verdictWatchdogTimers.values) {
+      t.cancel();
+    }
+    _verdictWatchdogTimers.clear();
+    for (final t in _cooldownRejectionTimers.values) {
+      t.cancel();
+    }
+    _cooldownRejectionTimers.clear();
     super.dispose();
   }
 }

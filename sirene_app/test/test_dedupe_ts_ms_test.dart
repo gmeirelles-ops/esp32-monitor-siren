@@ -91,7 +91,7 @@ void main() {
     expect(rows.single.firmwareTsMs, 2001);
   });
 
-  test('mesmo ts_ms com sequencial diferente grava dois registros', () async {
+  test('mesmo ts_ms com sequencial diferente grava um registro (dedupe op+ts_ms)', () async {
     final db = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(db.close);
     final prefs = await createTestPrefs();
@@ -131,7 +131,8 @@ void main() {
     );
 
     final rows = await db.testsForOp(batch.numeroOp);
-    expect(rows, hasLength(2));
+    expect(rows, hasLength(1));
+    expect(rows.single.firmwareTsMs, 9001);
   });
 
   test('insert grava veredito antes de etiqueta (aprovado com serial)', () async {

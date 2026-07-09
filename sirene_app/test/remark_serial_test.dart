@@ -17,5 +17,10 @@ void main() {
       expect(copy.dialogTitle, 'Regravar serial');
       expect(copy.dialogBody, contains('DiatuCAD'));
     });
+
+    test('modo laser nao exige confirmacao', () {
+      expect(remarkRequiresConfirmation(MarkingMode.laser), isFalse);
+      expect(remarkRequiresConfirmation(MarkingMode.labels), isTrue);
+    });
   });
 }

@@ -167,7 +167,9 @@ typedef struct {
 
 /**
 
- * Contract 004: veredito → GPIO/LED → NVS → MQTT (publish_test_result last).
+ * Contract 004: NVS → MQTT/estado → GPIO/LED → OLED.
+
+ * On NVS failure after approval counter update, MUST NOT pulse GPIO/actuator.
 
  */
 
@@ -180,6 +182,61 @@ static void batch_cmd_apply_verdict(batch_verdict_ctx_t *ctx)
     bool *nvs_fault = app_batch_nvs_fault();
 
 
+
+    app_batch_lock();
+
+    if (ctx->approved) {
+
+        if (pure_batch_approval_updates_counters(ctx->modo_reteste, ctx->approved)) {
+
+            uint32_t prev_aprovados = batch->aprovados;
+
+            uint32_t prev_sequencial = batch->proximo_sequencial;
+
+            batch->aprovados++;
+
+            batch->proximo_sequencial++;
+
+            if (!batch_storage_save(batch)) {
+
+                batch->aprovados = prev_aprovados;
+
+                batch->proximo_sequencial = prev_sequencial;
+
+                *nvs_fault = true;
+
+                app_batch_unlock();
+
+                batch_cmd_publish_nvs_fault();
+
+                return;
+
+            }
+
+            *nvs_fault = false;
+
+        }
+
+    }
+
+    uint32_t aprovados_now = batch->aprovados;
+
+    app_batch_unlock();
+
+    /* MQTT + estado antes de GPIO/OLED (I2C lento) — app vê APROVADO sem esperar 30s. */
+    app_last_test_set(ctx->approved, ctx->potencia_media, ctx->sequencial_usado, app_now_ts_ms());
+    publish_test_result(ctx->approved, ctx->potencia_media, ctx->sequencial_usado);
+    offline_queue_sync_now();
+    telemetry_publish_now();
+
+    bool quota_done = ctx->approved && !ctx->modo_reteste &&
+                      pure_batch_quota_reached(aprovados_now, ctx->quantidade_total);
+    if (quota_done) {
+        state_machine_set(STATE_BATCH_READY);
+        batch_cmd_end_batch_with_reason("cota_atingida");
+    } else {
+        state_machine_set(STATE_BATCH_READY);
+    }
 
     if (ctx->measure_end_us > 0) {
         if (ctx->approved) {
@@ -241,56 +298,6 @@ static void batch_cmd_apply_verdict(batch_verdict_ctx_t *ctx)
 
 
 
-    app_batch_lock();
-
-    if (ctx->approved) {
-
-        if (pure_batch_approval_updates_counters(ctx->modo_reteste, ctx->approved)) {
-
-            uint32_t prev_aprovados = batch->aprovados;
-
-            uint32_t prev_sequencial = batch->proximo_sequencial;
-
-            batch->aprovados++;
-
-            batch->proximo_sequencial++;
-
-            if (!batch_storage_save(batch)) {
-
-                batch->aprovados = prev_aprovados;
-
-                batch->proximo_sequencial = prev_sequencial;
-
-                *nvs_fault = true;
-
-                app_batch_unlock();
-
-                batch_cmd_publish_nvs_fault();
-
-                return;
-
-            }
-
-            *nvs_fault = false;
-
-        }
-
-    }
-
-    uint32_t aprovados_now = batch->aprovados;
-
-    app_batch_unlock();
-
-
-
-    app_last_test_set(ctx->approved, ctx->potencia_media, ctx->sequencial_usado, app_now_ts_ms());
-
-    publish_test_result(ctx->approved, ctx->potencia_media, ctx->sequencial_usado);
-
-    offline_queue_sync_now();
-
-    telemetry_publish_now();
-
     oled_display_on_test_result(ctx->approved, ctx->potencia_media);
 
     app_batch_lock();
@@ -299,22 +306,6 @@ static void batch_cmd_apply_verdict(batch_verdict_ctx_t *ctx)
 
     app_batch_unlock();
 
-
-
-    bool quota_done = ctx->approved && !ctx->modo_reteste &&
-                      pure_batch_quota_reached(aprovados_now, ctx->quantidade_total);
-
-    if (quota_done) {
-
-        state_machine_set(STATE_BATCH_READY);
-
-        batch_cmd_end_batch_with_reason("cota_atingida");
-
-    } else {
-
-        state_machine_set(STATE_BATCH_READY);
-
-    }
 
 }
 
@@ -379,6 +370,14 @@ void batch_cmd_run_test_cycle(uint32_t duration_sec)
 
 
     if (!state_machine_can_start_test() || pzem_is_fault() || ota_update_is_active()) {
+
+        if (pzem_is_fault() || state_machine_get() == STATE_HARDWARE_FAULT) {
+
+            led_feedback_signal(FEEDBACK_REJECTED);
+
+            mqtt_bridge_publish_rejection("pzem_falha");
+
+        }
 
         return;
 
@@ -622,35 +621,15 @@ bool batch_cmd_parse_set_batch(cJSON *root)
 
     backup = *batch;
 
-
-
-    bool same_op = batch->active && pure_batch_same_op(batch->numero_op, in.numero_op);
-
-    uint32_t preserved_aprovados = same_op ? batch->aprovados : 0;
-
-    uint32_t preserved_sequencial = same_op ? batch->proximo_sequencial : in.proximo_sequencial;
-
-    bool preserved_reteste = same_op ? batch->modo_reteste : false;
-
-    if (same_op && in.proximo_sequencial > preserved_sequencial) {
-
-        preserved_sequencial = in.proximo_sequencial;
-
-    }
-
-
-
     item = cJSON_GetObjectItem(root, "modo_reteste");
 
-    bool modo_reteste = preserved_reteste;
+    bool modo_reteste = false;
 
     if (cJSON_IsBool(item)) {
 
         modo_reteste = cJSON_IsTrue(item);
 
     }
-
-
 
     strcpy(batch->numero_op, in.numero_op);
 
@@ -666,16 +645,15 @@ bool batch_cmd_parse_set_batch(cJSON *root)
 
     batch->quantidade_total = in.quantidade_total;
 
-    batch->proximo_sequencial = preserved_sequencial;
+    batch->proximo_sequencial = in.proximo_sequencial;
 
-    batch->aprovados = preserved_aprovados;
+    batch->aprovados = 0;
 
     batch->modo_reteste = modo_reteste;
 
     batch->active = true;
 
-
-
+    app_last_test_clear();
     if (!batch_storage_save(batch)) {
 
         *batch = backup;
@@ -759,6 +737,8 @@ void batch_cmd_end_batch_with_reason(const char *motivo)
     memset(app_batch(), 0, sizeof(batch_context_t));
 
     app_batch_unlock();
+
+    app_last_test_clear();
 
     batch_storage_clear();
 

@@ -1,0 +1,36 @@
+Firmware sirene-validator 1.7.6 — OTA (003 test-flow-resilience)
+================================================================
+
+## Script automático (recomendado)
+
+```powershell
+cd c:\dev\diponto-sirene\sirene-validator
+.\scripts\ota_update_windows.ps1 -Bancada 1
+```
+
+Ou dê duplo clique em `OTA-ATUALIZAR.bat` (edite `BANCADA=` no arquivo).
+
+O script:
+- Usa `release\sirene-validator.bin` (ou `build\` se release não existir)
+- Detecta IP **192.168.x** (ignora WSL 172.20.0.1)
+- Sobe HTTP na porta 8080 e publica `OTA_UPDATE` via MQTT (TLS 443)
+- Opcional: `-AllowFirewall` (Admin), `-MqttPassword '...'`, `-ServeOnly`
+
+Arquivo OTA: sirene-validator.bin (ou sirene-validator-1.7.6.bin)
+Build: ESP-IDF 5.5, perfil sdkconfig do repositório (produção)
+
+Mudanças vs 1.7.5
+-----------------
+- Heartbeat imediato ao entrar em TESTING e após publicar resultado
+- Fix build IDF 5.5 (OLED I2C scl_speed_hz)
+
+OTA manual (MQTT Explorer)
+--------------------------
+1. Sirva o .bin: `.\scripts\ota_update_windows.ps1 -Bancada 1 -ServeOnly`
+2. Publique em `producao/bancada-NN/comando`:
+   {"cmd":"OTA_UPDATE","url":"http://<IP-PC>:8080/sirene-validator.bin"}
+
+Validação pós-OTA
+-----------------
+- Heartbeat: firmware_version "1.7.6"
+- Durante teste: estado TESTING aparece em < 2 s no app

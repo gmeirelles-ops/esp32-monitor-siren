@@ -107,17 +107,15 @@ class _AppGateState extends ConsumerState<AppGate> with WidgetsBindingObserver {
       ref.read(devicesProvider);
       await AppLog.write('Bootstrap: MQTT/devices ok');
 
-      if (ref.read(appConfigProvider).markingMode == MarkingMode.laser) {
-        try {
-          final processor = ref.read(markQueueProcessorProvider);
-          await processor.ensureRunning();
-          processor.start();
-          if (processor.lastError != null) {
-            await AppLog.write('Bootstrap: laser indisponível', error: processor.lastError);
-          }
-        } catch (e, st) {
-          await AppLog.write('Bootstrap: laser TCP indisponível', error: e, stack: st);
+      try {
+        final processor = ref.read(markQueueProcessorProvider);
+        await processor.ensureRunning();
+        processor.start();
+        if (processor.lastError != null) {
+          await AppLog.write('Bootstrap: laser indisponível', error: processor.lastError);
         }
+      } catch (e, st) {
+        await AppLog.write('Bootstrap: laser TCP indisponível', error: e, stack: st);
       }
       await AppLog.write('Bootstrap: concluído');
       if (mounted) {
@@ -212,11 +210,11 @@ class SireneAppShell extends ConsumerStatefulWidget {
 class _SireneAppShellState extends ConsumerState<SireneAppShell> {
   int _index = 0;
 
-  List<({Widget screen, IconData icon, String label})> _navEntries(bool isGestor, bool isLaser) {
-    final labelsEntry = (
-      screen: const LabelsScreen(),
-      icon: isLaser ? Icons.precision_manufacturing : Icons.label,
-      label: isLaser ? 'Gravação' : 'Etiquetas',
+  List<({Widget screen, IconData icon, String label})> _navEntries(bool isGestor) {
+    const labelsEntry = (
+      screen: LabelsScreen(),
+      icon: Icons.precision_manufacturing,
+      label: 'Gravação',
     );
 
     if (!isGestor) {
@@ -267,10 +265,9 @@ class _SireneAppShellState extends ConsumerState<SireneAppShell> {
 
   @override
   Widget build(BuildContext context) {
-    final isLaser = ref.watch(appConfigProvider).markingMode == MarkingMode.laser;
     final isGestor = ref.watch(activeOperatorIsGestorProvider);
     final demoMode = ref.watch(demoModeProvider);
-    final navEntries = _navEntries(isGestor, isLaser);
+    final navEntries = _navEntries(isGestor);
     final safeIndex = _index >= navEntries.length ? 0 : _index;
 
     return LayoutBuilder(

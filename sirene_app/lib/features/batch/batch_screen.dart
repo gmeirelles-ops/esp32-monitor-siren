@@ -97,10 +97,7 @@ class _BatchScreenState extends ConsumerState<BatchScreen> {
 
     final ano = resolveBatchYear();
     final db = ref.read(databaseProvider);
-    final proximoSequencial = await resolveProximoSequencial(
-      db,
-      product.idProduto,
-      ano,
+    final proximoSequencial = resolveNewBatchSequencial(
       sequencialInicial: product.sequencialInicial,
     );
 
@@ -187,12 +184,6 @@ class _BatchScreenState extends ConsumerState<BatchScreen> {
     final deviceId = resolveActiveDeviceId(ref);
     final device = deviceId != null ? devices[deviceId] : null;
     final activeBatch = device?.activeBatch;
-
-    ref.listen(latestRejectionProvider, (prev, next) {
-      if (next != null) {
-        _showSnack('Rejeição (${next.deviceId}): ${next.rejection.motivo}');
-      }
-    });
 
     return Scaffold(
       appBar: screenAppBar(context, title: 'Lote'),

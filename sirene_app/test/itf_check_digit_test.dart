@@ -38,5 +38,21 @@ void main() {
       expect(extractIdProdutoFromSerial('12'), isNull);
       expect(extractIdProdutoFromSerial('ABC2600198'), isNull);
     });
+
+    test('monta serial a partir do corpo de 9 dígitos', () {
+      expect(composeItfSerial('123260019'), '1232600198');
+    });
+
+    test('valida serial ITF e produto', () {
+      expect(isValidItfSerial('1232600198'), isTrue);
+      expect(isValidItfSerial('1232600199'), isFalse);
+      expect(validateItfSerialForProduct('1232600198', '123'), isNull);
+      expect(
+        validateItfSerialForProduct('1232600198', '999'),
+        isNotNull,
+      );
+      expect(parseSequencialFromSerial('0372600013'), 1);
+      expect(parseAnoFromSerial('0372600013'), '26');
+    });
   });
 }

@@ -8,6 +8,7 @@ int test_url(void);
 int test_batch_quota(void);
 int test_batch_validation(void);
 int test_batch_retest(void);
+int test_batch_cooldown(void);
 int test_ensaio(void);
 
 int test_site(void);
@@ -26,6 +27,7 @@ int main(void)
     failures += test_batch_quota();
     failures += test_batch_validation();
     failures += test_batch_retest();
+    failures += test_batch_cooldown();
     failures += test_ensaio();
     failures += test_site();
     failures += test_host_lan();

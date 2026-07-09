@@ -70,7 +70,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   late final TextEditingController _laserTcpCommand;
   late final TextEditingController _laserModelCommand;
   PrinterMode _printerMode = PrinterMode.usb;
-  MarkingMode _markingMode = MarkingMode.labels;
+  MarkingMode _markingMode = MarkingMode.laser;
   String? _printerWindowsName;
   String? _bancadaDeviceId;
   List<String> _windowsPrinters = [];
@@ -142,20 +142,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Future<void> _save() async {
-    if (_markingMode == MarkingMode.laser && _laserTcpCommand.text.trim().isEmpty) {
+    if (_laserTcpCommand.text.trim().isEmpty) {
       _showMessage(
         'Informe o comando TCP. Padrão recomendado: ${AppConfig.defaultLaserTcpCommand}',
       );
       return;
     }
-    if (_markingMode == MarkingMode.laser && _laserModelCommand.text.trim().isEmpty) {
+    if (_laserModelCommand.text.trim().isEmpty) {
       _showMessage(
         'Informe o comando TCP do modelo. Padrão recomendado: ${AppConfig.defaultLaserModelCommand}',
       );
       return;
     }
-    if (_markingMode == MarkingMode.laser &&
-        _laserTcpCommand.text.trim() == _laserModelCommand.text.trim()) {
+    if (_laserTcpCommand.text.trim() == _laserModelCommand.text.trim()) {
       _showMessage('Os comandos TCP do serial e do modelo devem ser diferentes.');
       return;
     }
@@ -186,7 +185,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       await config.setPrinterWindowsName(_printerWindowsName!);
     }
     await config.setStationId(stationId);
-    await config.setMarkingMode(_markingMode);
+    await config.setMarkingMode(MarkingMode.laser);
     await config.setLaserTcpPort(int.tryParse(_laserTcpPort.text) ?? AppConfig.defaultLaserTcpPort);
     final laserCommand = _laserTcpCommand.text.trim().isEmpty
         ? AppConfig.defaultLaserTcpCommand
@@ -199,11 +198,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     await config.setYieldTargetPct(_yieldTargetPct);
     await config.setShiftStartHour(_shiftStartHour);
 
-    if (_markingMode == MarkingMode.laser) {
-      ref.read(markQueueProcessorProvider).start();
-    } else {
-      ref.read(markQueueProcessorProvider).stop();
-    }
+    ref.read(markQueueProcessorProvider).start();
 
     ref.invalidate(appConfigProvider);
     ref.read(devicesProvider.notifier).reconnect();
@@ -226,9 +221,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
 
     if (mounted) {
-      if (_markingMode == MarkingMode.laser &&
-          (laserCommand != AppConfig.defaultLaserTcpCommand ||
-              laserModelCommand != AppConfig.defaultLaserModelCommand)) {
+      if (laserCommand != AppConfig.defaultLaserTcpCommand ||
+          laserModelCommand != AppConfig.defaultLaserModelCommand) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
@@ -1324,169 +1318,52 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           icon: _selectedCategory.icon,
         ),
         ActionSectionCard(
-          icon: Icons.tune,
-          title: 'Modo de marcação',
-          subtitle: 'Etiquetas Zebra ou gravação laser Diatu',
+          icon: Icons.precision_manufacturing_outlined,
+          title: 'Gravação laser DiatuCAD',
+          subtitle: 'Servidor TCP no app — F2 grava serial e modelo do produto',
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              SegmentedButton<MarkingMode>(
-                segments: const [
-                  ButtonSegment(
-                    value: MarkingMode.labels,
-                    label: Text('Etiquetas (Zebra)'),
-                    icon: Icon(Icons.label_outline),
-                  ),
-                  ButtonSegment(
-                    value: MarkingMode.laser,
-                    label: Text('Gravação laser (Diatu)'),
-                    icon: Icon(Icons.precision_manufacturing),
-                  ),
-                ],
-                selected: {_markingMode},
-                onSelectionChanged: (selection) {
-                  setState(() => _markingMode = selection.first);
-                },
+              TextField(
+                controller: _laserTcpPort,
+                decoration: const InputDecoration(
+                  labelText: 'Porta TCP (servidor no app)',
+                  helperText: 'DiatuCAD conecta neste PC (127.0.0.1 se mesma máquina)',
+                ),
+                keyboardType: TextInputType.number,
               ),
-              if (_markingMode == MarkingMode.laser) ...[
-                const SizedBox(height: 16),
-                TextField(
-                  controller: _laserTcpPort,
-                  decoration: const InputDecoration(
-                    labelText: 'Porta TCP (servidor no app)',
-                    helperText: 'DiatuCAD conecta neste PC (127.0.0.1 se mesma máquina)',
-                  ),
-                  keyboardType: TextInputType.number,
+              const SizedBox(height: 8),
+              TextField(
+                controller: _laserTcpCommand,
+                decoration: InputDecoration(
+                  labelText: 'Comando TCP do serial (DataMatrix)',
+                  helperText:
+                      'Objeto DataMatrix no DiatuCAD — padrão: ${AppConfig.defaultLaserTcpCommand}',
                 ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: _laserTcpCommand,
-                  decoration: InputDecoration(
-                    labelText: 'Comando TCP do serial (DataMatrix)',
-                    helperText:
-                        'Objeto DataMatrix no DiatuCAD — padrão: ${AppConfig.defaultLaserTcpCommand}',
-                  ),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _laserModelCommand,
+                decoration: InputDecoration(
+                  labelText: 'Comando TCP do modelo (texto)',
+                  helperText:
+                      'Objeto de texto no DiatuCAD — padrão: ${AppConfig.defaultLaserModelCommand}',
                 ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: _laserModelCommand,
-                  decoration: InputDecoration(
-                    labelText: 'Comando TCP do modelo (texto)',
-                    helperText:
-                        'Objeto de texto no DiatuCAD — padrão: ${AppConfig.defaultLaserModelCommand}',
-                  ),
+              ),
+              const SizedBox(height: 8),
+              const LaserDiagnosticsPanel(),
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: OutlinedButton.icon(
+                  onPressed: _testLaserMark,
+                  icon: const Icon(Icons.bolt_outlined),
+                  label: const Text('Testar gravação'),
                 ),
-                const SizedBox(height: 8),
-                const LaserDiagnosticsPanel(),
-                const SizedBox(height: 8),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: OutlinedButton.icon(
-                    onPressed: _testLaserMark,
-                    icon: const Icon(Icons.bolt_outlined),
-                    label: const Text('Testar gravação'),
-                  ),
-                ),
-              ],
+              ),
             ],
           ),
         ),
-        if (_markingMode == MarkingMode.labels)
-          ActionSectionCard(
-            icon: Icons.print_outlined,
-            title: 'Impressora Zebra',
-            subtitle: Platform.isWindows ? 'USB local ou rede' : 'Modo rede',
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                if (Platform.isWindows)
-                  SegmentedButton<PrinterMode>(
-                    segments: const [
-                      ButtonSegment(
-                        value: PrinterMode.usb,
-                        label: Text('USB (local)'),
-                        icon: Icon(Icons.usb),
-                      ),
-                      ButtonSegment(
-                        value: PrinterMode.network,
-                        label: Text('Rede'),
-                        icon: Icon(Icons.lan_outlined),
-                      ),
-                    ],
-                    selected: {_printerMode},
-                    onSelectionChanged: (selection) {
-                      setState(() => _printerMode = selection.first);
-                    },
-                  )
-                else
-                  const Text(
-                    'Impressão USB disponível apenas no Windows. Usando modo rede.',
-                    style: TextStyle(fontSize: 13),
-                  ),
-                const SizedBox(height: 12),
-                if (_printerMode == PrinterMode.usb && Platform.isWindows) ...[
-                  Row(
-                    children: [
-                      Expanded(
-                        child: DropdownButtonFormField<String>(
-                          value: _windowsPrinters.contains(_printerWindowsName)
-                              ? _printerWindowsName
-                              : null,
-                          decoration: const InputDecoration(
-                            labelText: 'Impressora Windows',
-                            helperText: 'ZT230 via USB com driver Zebra ZPL',
-                          ),
-                          items: [
-                            for (final name in _windowsPrinters)
-                              DropdownMenuItem(value: name, child: Text(name)),
-                          ],
-                          onChanged: _windowsPrinters.isEmpty
-                              ? null
-                              : (value) => setState(() => _printerWindowsName = value),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      IconButton(
-                        tooltip: 'Atualizar lista',
-                        onPressed: _loadingPrinters ? null : _refreshWindowsPrinters,
-                        icon: _loadingPrinters
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(strokeWidth: 2),
-                              )
-                            : const Icon(Icons.refresh),
-                      ),
-                    ],
-                  ),
-                ] else ...[
-                  ResponsiveFieldRow(
-                    flexes: const [7, 3],
-                    children: [
-                      TextField(
-                        controller: _printerHost,
-                        decoration: const InputDecoration(labelText: 'IP'),
-                      ),
-                      TextField(
-                        controller: _printerPort,
-                        decoration: const InputDecoration(labelText: 'Porta (padrão 9100)'),
-                        keyboardType: TextInputType.number,
-                      ),
-                    ],
-                  ),
-                ],
-                const SizedBox(height: 8),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: OutlinedButton.icon(
-                    onPressed: _testPrint,
-                    icon: const Icon(Icons.print_outlined),
-                    label: const Text('Testar impressão'),
-                  ),
-                ),
-              ],
-            ),
-          ),
       ],
     );
   }

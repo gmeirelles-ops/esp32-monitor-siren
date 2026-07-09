@@ -2,18 +2,39 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sirene_app/features/firmware/usb_flash_logic.dart';
 
 void main() {
-  group('buildAppOnlyFlashArgs', () {
-    test('inclui offset 0x20000 e --no-stub', () {
-      final args = buildAppOnlyFlashArgs(comPort: 'COM3', appBinPath: r'C:\fw\sirene-validator.bin');
+  group('buildOtaDualFlashArgs', () {
+    test('grava ota_0 e ota_1 com mesmo binario', () {
+      final args = buildOtaDualFlashArgs(
+        comPort: 'COM3',
+        appBinPath: r'C:\fw\sirene-validator.bin',
+      );
       expect(args, contains('COM3'));
       expect(args, contains('--no-stub'));
       expect(args, contains(FirmwareFlashOffsets.appImage));
-      expect(args.last, r'C:\fw\sirene-validator.bin');
+      expect(args, contains(FirmwareFlashOffsets.ota1Image));
+      expect(args.where((a) => a == r'C:\fw\sirene-validator.bin').length, 2);
+    });
+
+    test('inclui otadata quando informado', () {
+      final args = buildOtaDualFlashArgs(
+        comPort: 'COM3',
+        appBinPath: r'C:\fw\sirene-validator.bin',
+        otaDataPath: r'C:\fw\ota_data_initial.bin',
+      );
+      expect(args, contains(FirmwareFlashOffsets.otaData));
+      expect(args, contains(r'C:\fw\ota_data_initial.bin'));
+    });
+  });
+
+  group('buildAppOnlyFlashArgs', () {
+    test('alias grava ambos slots OTA', () {
+      final args = buildAppOnlyFlashArgs(comPort: 'COM3', appBinPath: r'C:\fw\sirene-validator.bin');
+      expect(args, contains(FirmwareFlashOffsets.ota1Image));
     });
   });
 
   group('buildFullFlashArgs', () {
-    test('inclui quatro imagens', () {
+    test('inclui bootloader, partition, otadata e app em ambos slots OTA', () {
       final args = buildFullFlashArgs(
         comPort: 'COM5',
         bootloaderPath: 'boot.bin',
@@ -21,9 +42,10 @@ void main() {
         otaDataPath: 'ota.bin',
         appBinPath: 'app.bin',
       );
-      expect(args.where((a) => a.startsWith('0x')).length, 4);
+      expect(args.where((a) => a.startsWith('0x')).length, 5);
+      expect(args.where((a) => a == 'app.bin').length, 2);
       expect(args, contains('boot.bin'));
-      expect(args, contains('app.bin'));
+      expect(args, contains(FirmwareFlashOffsets.ota1Image));
     });
   });
 

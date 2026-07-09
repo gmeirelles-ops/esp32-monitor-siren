@@ -8,6 +8,9 @@ import '../mqtt/models/mqtt_messages.dart';
 
 export '../../core/database/batch_metrics.dart';
 
+/// Alinhado ao CONFIG_SIRENE_POST_APPROVAL_COOLDOWN_MS do firmware (2s).
+const postApprovalCooldownDuration = Duration(seconds: 2);
+
 /// Sessão corrente usou simulador de desenvolvimento.
 final batchDevSimulatorUsedProvider = StateProvider<bool>((ref) => false);
 
@@ -39,3 +42,13 @@ final labelBufferCountProvider = StreamProvider<int>((ref) {
   ref.watch(localDataRevisionProvider);
   return ref.watch(databaseProvider).watchLabelBufferCount();
 });
+
+/// Fila de gravação laser filtrada pela OP do lote ativo.
+final batchLiveMarkQueueProvider = StreamProvider.family<List<MarkQueueEntry>, String>(
+  (ref, numeroOp) {
+    ref.watch(localDataRevisionProvider);
+    return ref.watch(databaseProvider).watchPendingMarkQueue().map(
+          (entries) => entries.where((e) => e.numeroOp == numeroOp).toList(),
+        );
+  },
+);

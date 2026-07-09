@@ -16,7 +16,7 @@ param(
     [int]$MqttPort = 443,
     [switch]$MqttTls,
     [string]$MqttUser = "devices",
-    [string]$MqttPassword = "",
+    [string]$MqttPassword = "w1FefRLm+q1_O8H",
     [string]$LanIp = "",
     [int]$HttpPort = 8080,
     [string]$BinPath = "",

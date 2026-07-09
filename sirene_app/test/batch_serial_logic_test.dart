@@ -26,6 +26,17 @@ void main() {
     });
   });
 
+  group('resolveNewBatchSequencial', () {
+    test('returns 1 without inicial', () {
+      expect(resolveNewBatchSequencial(), 1);
+      expect(resolveNewBatchSequencial(sequencialInicial: 0), 1);
+    });
+
+    test('returns product inicial when set', () {
+      expect(resolveNewBatchSequencial(sequencialInicial: 450), 450);
+    });
+  });
+
   group('resolveProximoSequencial', () {
     late AppDatabase db;
 
