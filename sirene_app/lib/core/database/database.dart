@@ -28,6 +28,7 @@ class TestResults extends Table {
   RealColumn get potenciaMax => real().nullable()();
   IntColumn get operatorId => integer().nullable()();
   BoolColumn get isRetest => boolean().withDefault(const Constant(false))();
+
   /// Timestamp do firmware (`ts_ms` no MQTT) — chave de dedupe.
   IntColumn get firmwareTsMs => integer().nullable()();
   DateTimeColumn get createdAt => dateTime()();
@@ -54,6 +55,7 @@ class MarkQueueEntries extends Table {
 class Products extends Table {
   TextColumn get idProduto => text()();
   TextColumn get nome => text()();
+  TextColumn get manual => text().withDefault(const Constant(''))();
   RealColumn get potenciaRef => real()();
   RealColumn get potenciaMin => real()();
   RealColumn get potenciaMax => real()();
@@ -61,6 +63,7 @@ class Products extends Table {
   IntColumn get tempoTesteSec => integer().withDefault(const Constant(5))();
   DateTimeColumn get calibradoEm => dateTime().nullable()();
   TextColumn get calibradoDeviceId => text().nullable()();
+
   /// Próximo sequencial mínimo de série (quando não começa em 0001).
   IntColumn get sequencialInicial => integer().nullable()();
 
@@ -160,6 +163,7 @@ class EnsaioRecords extends Table {
   IntColumn get totalSeconds => integer()();
   DateTimeColumn get startedAt => dateTime()();
   DateTimeColumn get endedAt => dateTime().nullable()();
+
   /// running | concluido | interrompido | falha
   TextColumn get status => text()();
   IntColumn get ciclos => integer().withDefault(const Constant(0))();
@@ -198,93 +202,96 @@ class AppDatabase extends _$AppDatabase {
   }
 
   @override
-  int get schemaVersion => 19;
+  int get schemaVersion => 20;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
-        onCreate: (m) async {
-          await m.createAll();
-        },
-        onUpgrade: (m, from, to) async {
-          if (from < 2) {
-            await m.createTable(products);
-          }
-          if (from < 3) {
-            await m.createTable(syncQueue);
-          }
-          if (from < 4) {
-            await m.createTable(serialCounters);
-            await _backfillSerialCounters();
-          }
-          if (from < 5) {
-            await m.addColumn(testResults, testResults.operador);
-          }
-          if (from < 6) {
-            await m.createTable(hardwareEvents);
-          }
-          if (from < 7) {
-            await m.createTable(calibrationHistory);
-            await m.createTable(opLocks);
-          }
-          if (from < 8) {
-            await m.database.customStatement(
-              'CREATE INDEX IF NOT EXISTS idx_test_results_serial ON test_results(serial)',
-            );
-            await m.database.customStatement(
-              'CREATE INDEX IF NOT EXISTS idx_test_results_created_at ON test_results(created_at)',
-            );
-            await m.database.customStatement(
-              'CREATE INDEX IF NOT EXISTS idx_sync_queue_attempts ON sync_queue(attempts)',
-            );
-          }
-          if (from < 9) {
-            await m.createTable(operators);
-          }
-          if (from < 10) {
-            await m.addColumn(testResults, testResults.isRetest);
-          }
-          if (from < 11) {
-            await m.createTable(bancadas);
-            await _backfillBancadas();
-          }
-          if (from < 12) {
-            await m.addColumn(syncQueue, syncQueue.documentPath);
-          }
-          if (from < 13) {
-            await m.createTable(markQueueEntries);
-          }
-          if (from < 14) {
-            await _addColumnIfNotExists(m, testResults, testResults.tempoTesteSec);
-            await _addColumnIfNotExists(m, testResults, testResults.potenciaMin);
-            await _addColumnIfNotExists(m, testResults, testResults.potenciaMax);
-            await _addColumnIfNotExists(m, testResults, testResults.operatorId);
-            await _addColumnIfNotExists(m, operators, operators.updatedAt);
-            if (!await _tableExists(m, remarkLogs.actualTableName)) {
-              await m.createTable(remarkLogs);
-            }
-          }
-          if (from < 15) {
-            await _addColumnIfNotExists(m, operators, operators.isGestor);
-          }
-          if (from < 16) {
-            await m.createTable(downtimeEvents);
-          }
-          if (from < 17) {
-            await m.createTable(ensaioRecords);
-          }
-          if (from < 18) {
-            await _addColumnIfNotExists(m, products, products.sequencialInicial);
-          }
-          if (from < 19) {
-            await _addColumnIfNotExists(m, testResults, testResults.firmwareTsMs);
-            await m.database.customStatement(
-              'CREATE INDEX IF NOT EXISTS idx_test_results_op_ts_ms '
-              'ON test_results(numero_op, firmware_ts_ms) '
-              'WHERE firmware_ts_ms IS NOT NULL',
-            );
-          }
-        },
-      );
+    onCreate: (m) async {
+      await m.createAll();
+    },
+    onUpgrade: (m, from, to) async {
+      if (from < 2) {
+        await m.createTable(products);
+      }
+      if (from < 3) {
+        await m.createTable(syncQueue);
+      }
+      if (from < 4) {
+        await m.createTable(serialCounters);
+        await _backfillSerialCounters();
+      }
+      if (from < 5) {
+        await m.addColumn(testResults, testResults.operador);
+      }
+      if (from < 6) {
+        await m.createTable(hardwareEvents);
+      }
+      if (from < 7) {
+        await m.createTable(calibrationHistory);
+        await m.createTable(opLocks);
+      }
+      if (from < 8) {
+        await m.database.customStatement(
+          'CREATE INDEX IF NOT EXISTS idx_test_results_serial ON test_results(serial)',
+        );
+        await m.database.customStatement(
+          'CREATE INDEX IF NOT EXISTS idx_test_results_created_at ON test_results(created_at)',
+        );
+        await m.database.customStatement(
+          'CREATE INDEX IF NOT EXISTS idx_sync_queue_attempts ON sync_queue(attempts)',
+        );
+      }
+      if (from < 9) {
+        await m.createTable(operators);
+      }
+      if (from < 10) {
+        await m.addColumn(testResults, testResults.isRetest);
+      }
+      if (from < 11) {
+        await m.createTable(bancadas);
+        await _backfillBancadas();
+      }
+      if (from < 12) {
+        await m.addColumn(syncQueue, syncQueue.documentPath);
+      }
+      if (from < 13) {
+        await m.createTable(markQueueEntries);
+      }
+      if (from < 14) {
+        await _addColumnIfNotExists(m, testResults, testResults.tempoTesteSec);
+        await _addColumnIfNotExists(m, testResults, testResults.potenciaMin);
+        await _addColumnIfNotExists(m, testResults, testResults.potenciaMax);
+        await _addColumnIfNotExists(m, testResults, testResults.operatorId);
+        await _addColumnIfNotExists(m, operators, operators.updatedAt);
+        if (!await _tableExists(m, remarkLogs.actualTableName)) {
+          await m.createTable(remarkLogs);
+        }
+      }
+      if (from < 15) {
+        await _addColumnIfNotExists(m, operators, operators.isGestor);
+      }
+      if (from < 16) {
+        await m.createTable(downtimeEvents);
+      }
+      if (from < 17) {
+        await m.createTable(ensaioRecords);
+      }
+      if (from < 18) {
+        await _addColumnIfNotExists(m, products, products.sequencialInicial);
+      }
+      if (from < 19) {
+        await _addColumnIfNotExists(m, testResults, testResults.firmwareTsMs);
+        await m.database.customStatement(
+          'CREATE INDEX IF NOT EXISTS idx_test_results_op_ts_ms '
+          'ON test_results(numero_op, firmware_ts_ms) '
+          'WHERE firmware_ts_ms IS NOT NULL',
+        );
+      }
+      if (from < 20) {
+        await _addColumnIfNotExists(m, products, products.manual);
+      }
+    },
+  );
 
   Future<void> _backfillBancadas() async {
     final existing = await select(bancadas).get();
@@ -311,16 +318,13 @@ class AppDatabase extends _$AppDatabase {
 
   /// Garante registro de bancada e retorna o número sequencial (1, 2, 3…).
   Future<int> ensureBancada(String deviceId) async {
-    final existing = await (select(bancadas)
-          ..where((b) => b.deviceId.equals(deviceId)))
-        .getSingleOrNull();
+    final existing = await (select(
+      bancadas,
+    )..where((b) => b.deviceId.equals(deviceId))).getSingleOrNull();
     if (existing != null) return existing.numero;
 
     return into(bancadas).insert(
-      BancadasCompanion.insert(
-        deviceId: deviceId,
-        createdAt: DateTime.now(),
-      ),
+      BancadasCompanion.insert(deviceId: deviceId, createdAt: DateTime.now()),
     );
   }
 
@@ -339,11 +343,13 @@ class AppDatabase extends _$AppDatabase {
       return numero;
     }
 
-    final byNum = await (select(bancadas)..where((b) => b.numero.equals(numero)))
-        .getSingleOrNull();
+    final byNum = await (select(
+      bancadas,
+    )..where((b) => b.numero.equals(numero))).getSingleOrNull();
     if (byNum != null) {
-      await (update(bancadas)..where((b) => b.numero.equals(numero)))
-          .write(BancadasCompanion(deviceId: Value(deviceId)));
+      await (update(bancadas)..where((b) => b.numero.equals(numero))).write(
+        BancadasCompanion(deviceId: Value(deviceId)),
+      );
       return numero;
     }
 
@@ -358,13 +364,15 @@ class AppDatabase extends _$AppDatabase {
   }
 
   Future<Bancada?> getBancadaByDevice(String deviceId) {
-    return (select(bancadas)..where((b) => b.deviceId.equals(deviceId)))
-        .getSingleOrNull();
+    return (select(
+      bancadas,
+    )..where((b) => b.deviceId.equals(deviceId))).getSingleOrNull();
   }
 
   Future<String?> getDeviceIdByBancadaNumero(int numero) async {
-    final row = await (select(bancadas)..where((b) => b.numero.equals(numero)))
-        .getSingleOrNull();
+    final row = await (select(
+      bancadas,
+    )..where((b) => b.numero.equals(numero))).getSingleOrNull();
     return row?.deviceId;
   }
 
@@ -374,17 +382,21 @@ class AppDatabase extends _$AppDatabase {
   }
 
   Stream<Map<String, int>> watchBancadaNumeros() {
-    return select(bancadas).watch().map(
-          (rows) => {for (final r in rows) r.deviceId: r.numero},
-        );
+    return select(
+      bancadas,
+    ).watch().map((rows) => {for (final r in rows) r.deviceId: r.numero});
   }
 
   Future<List<Bancada>> getAllBancadasOrdered() {
-    return (select(bancadas)..orderBy([(b) => OrderingTerm.asc(b.numero)])).get();
+    return (select(
+      bancadas,
+    )..orderBy([(b) => OrderingTerm.asc(b.numero)])).get();
   }
 
   Stream<List<Bancada>> watchAllBancadasOrdered() {
-    return (select(bancadas)..orderBy([(b) => OrderingTerm.asc(b.numero)])).watch();
+    return (select(
+      bancadas,
+    )..orderBy([(b) => OrderingTerm.asc(b.numero)])).watch();
   }
 
   Future<int> insertEnsaioRecord({
@@ -445,7 +457,9 @@ class AppDatabase extends _$AppDatabase {
   }
 
   Future<EnsaioRecord?> getEnsaioRecord(int id) {
-    return (select(ensaioRecords)..where((e) => e.id.equals(id))).getSingleOrNull();
+    return (select(
+      ensaioRecords,
+    )..where((e) => e.id.equals(id))).getSingleOrNull();
   }
 
   /// IDs de dispositivo ordenados pelo número da bancada (para filtros).
@@ -460,9 +474,9 @@ class AppDatabase extends _$AppDatabase {
   /// Popula `SerialCounters` a partir do histórico de seriais aprovados.
   /// O serial tem o formato produto(3)+ano(2)+sequencial(4)+dígito(1).
   Future<void> _backfillSerialCounters() async {
-    final rows = await (select(testResults)
-          ..where((t) => t.serial.isNotNull()))
-        .get();
+    final rows = await (select(
+      testResults,
+    )..where((t) => t.serial.isNotNull())).get();
     final maxByKey = <String, int>{};
     final anoByKey = <String, String>{};
     final produtoByKey = <String, String>{};
@@ -493,8 +507,9 @@ class AppDatabase extends _$AppDatabase {
   }
 
   Future<TestResult?> findTestResultBySerial(String serial) {
-    return (select(testResults)..where((t) => t.serial.equals(serial)))
-        .getSingleOrNull();
+    return (select(
+      testResults,
+    )..where((t) => t.serial.equals(serial))).getSingleOrNull();
   }
 
   Future<List<TestResult>> searchSerials(String query, {int limit = 10}) {
@@ -505,14 +520,18 @@ class AppDatabase extends _$AppDatabase {
         .get();
   }
 
-  Future<List<String>> searchSerialPrefixes(String prefix, {int limit = 50}) async {
+  Future<List<String>> searchSerialPrefixes(
+    String prefix, {
+    int limit = 50,
+  }) async {
     final trimmed = prefix.trim();
     if (trimmed.isEmpty) return [];
 
-    final rows = await (select(testResults)
-          ..where((t) => t.serial.isNotNull() & t.serial.like('$trimmed%'))
-          ..orderBy([(t) => OrderingTerm.desc(t.createdAt)]))
-        .get();
+    final rows =
+        await (select(testResults)
+              ..where((t) => t.serial.isNotNull() & t.serial.like('$trimmed%'))
+              ..orderBy([(t) => OrderingTerm.desc(t.createdAt)]))
+            .get();
 
     final seen = <String>{};
     final result = <String>[];
@@ -530,10 +549,11 @@ class AppDatabase extends _$AppDatabase {
     final trimmed = serial.trim();
     if (trimmed.isEmpty) return null;
 
-    final attempts = await (select(testResults)
-          ..where((t) => t.serial.equals(trimmed))
-          ..orderBy([(t) => OrderingTerm.asc(t.createdAt)]))
-        .get();
+    final attempts =
+        await (select(testResults)
+              ..where((t) => t.serial.equals(trimmed))
+              ..orderBy([(t) => OrderingTerm.asc(t.createdAt)]))
+            .get();
     if (attempts.isEmpty) return null;
 
     Product? product;
@@ -541,9 +561,9 @@ class AppDatabase extends _$AppDatabase {
       product = await getProduct(trimmed.substring(0, 3));
     }
 
-    final pendingLabel = await (select(labelBufferEntries)
-          ..where((t) => t.serial.equals(trimmed)))
-        .getSingleOrNull();
+    final pendingLabel = await (select(
+      labelBufferEntries,
+    )..where((t) => t.serial.equals(trimmed))).getSingleOrNull();
 
     return SirenTraceability(
       serial: trimmed,
@@ -623,7 +643,9 @@ class AppDatabase extends _$AppDatabase {
   }
 
   Future<BatchMetrics> getBatchMetrics(String numeroOp) async {
-    final rows = await (select(testResults)..where((t) => t.numeroOp.equals(numeroOp))).get();
+    final rows = await (select(
+      testResults,
+    )..where((t) => t.numeroOp.equals(numeroOp))).get();
     return computeBatchMetrics(rows);
   }
 
@@ -642,27 +664,36 @@ class AppDatabase extends _$AppDatabase {
   }) async {
     final rows = since != null
         ? await getTestsByOpSince(numeroOp, since)
-        : await (select(testResults)..where((t) => t.numeroOp.equals(numeroOp))).get();
+        : await (select(
+            testResults,
+          )..where((t) => t.numeroOp.equals(numeroOp))).get();
     return rows
         .where((r) => !r.isRetest && isApprovedVeredito(r.veredito))
         .where((r) => r.serial != null && r.serial!.trim().isNotEmpty)
         .toList();
   }
 
-  Future<List<TestResult>> getTestsByOpSince(String numeroOp, DateTime since) async {
-    final rows = await (select(testResults)..where((t) => t.numeroOp.equals(numeroOp))).get();
+  Future<List<TestResult>> getTestsByOpSince(
+    String numeroOp,
+    DateTime since,
+  ) async {
+    final rows = await (select(
+      testResults,
+    )..where((t) => t.numeroOp.equals(numeroOp))).get();
     return rows.where((r) => !r.createdAt.isBefore(since)).toList();
   }
 
   Future<bool> markQueueContainsSerial(String serial) async {
-    final row = await (select(markQueueEntries)..where((t) => t.serial.equals(serial)))
-        .getSingleOrNull();
+    final row = await (select(
+      markQueueEntries,
+    )..where((t) => t.serial.equals(serial))).getSingleOrNull();
     return row != null;
   }
 
   Future<bool> labelBufferContainsSerial(String serial) async {
-    final row = await (select(labelBufferEntries)..where((t) => t.serial.equals(serial)))
-        .getSingleOrNull();
+    final row = await (select(
+      labelBufferEntries,
+    )..where((t) => t.serial.equals(serial))).getSingleOrNull();
     return row != null;
   }
 
@@ -680,15 +711,15 @@ class AppDatabase extends _$AppDatabase {
   }
 
   Future<List<LabelBufferEntry>> getLabelBuffer() {
-    return (select(labelBufferEntries)
-          ..orderBy([(t) => OrderingTerm.asc(t.createdAt)]))
-        .get();
+    return (select(
+      labelBufferEntries,
+    )..orderBy([(t) => OrderingTerm.asc(t.createdAt)])).get();
   }
 
   Stream<List<LabelBufferEntry>> watchLabelBuffer() {
-    return (select(labelBufferEntries)
-          ..orderBy([(t) => OrderingTerm.asc(t.createdAt)]))
-        .watch();
+    return (select(
+      labelBufferEntries,
+    )..orderBy([(t) => OrderingTerm.asc(t.createdAt)])).watch();
   }
 
   Stream<int> watchLabelBufferCount() {
@@ -703,7 +734,9 @@ class AppDatabase extends _$AppDatabase {
   }
 
   Future<int> removeLabelsForOp(String numeroOp) async {
-    return (delete(labelBufferEntries)..where((t) => t.numeroOp.equals(numeroOp))).go();
+    return (delete(
+      labelBufferEntries,
+    )..where((t) => t.numeroOp.equals(numeroOp))).go();
   }
 
   Future<int> labelBufferCount() async {
@@ -741,23 +774,20 @@ class AppDatabase extends _$AppDatabase {
 
   Future<void> markQueueInProgress(int id) async {
     await (update(markQueueEntries)..where((t) => t.id.equals(id))).write(
-      const MarkQueueEntriesCompanion(
-        status: Value('in_progress'),
-      ),
+      const MarkQueueEntriesCompanion(status: Value('in_progress')),
     );
   }
 
   Future<void> markQueueDelivered(int id) async {
     await (update(markQueueEntries)..where((t) => t.id.equals(id))).write(
-      MarkQueueEntriesCompanion(
-        status: const Value('delivered'),
-      ),
+      MarkQueueEntriesCompanion(status: const Value('delivered')),
     );
   }
 
   Future<void> markQueueRequeue(int id) async {
-    final row = await (select(markQueueEntries)..where((t) => t.id.equals(id)))
-        .getSingleOrNull();
+    final row = await (select(
+      markQueueEntries,
+    )..where((t) => t.id.equals(id))).getSingleOrNull();
     if (row == null) return;
     await (update(markQueueEntries)..where((t) => t.id.equals(id))).write(
       MarkQueueEntriesCompanion(
@@ -768,9 +798,9 @@ class AppDatabase extends _$AppDatabase {
   }
 
   Future<int> requeueAllInProgressMarks() async {
-    final stuck = await (select(markQueueEntries)
-          ..where((t) => t.status.equals('in_progress')))
-        .get();
+    final stuck = await (select(
+      markQueueEntries,
+    )..where((t) => t.status.equals('in_progress'))).get();
     for (final row in stuck) {
       await markQueueRequeue(row.id);
     }
@@ -786,8 +816,9 @@ class AppDatabase extends _$AppDatabase {
   }
 
   Future<void> markQueueFailed(int id, String error) async {
-    final row = await (select(markQueueEntries)..where((t) => t.id.equals(id)))
-        .getSingleOrNull();
+    final row = await (select(
+      markQueueEntries,
+    )..where((t) => t.id.equals(id))).getSingleOrNull();
     if (row == null) return;
     await (update(markQueueEntries)..where((t) => t.id.equals(id))).write(
       MarkQueueEntriesCompanion(
@@ -835,20 +866,27 @@ class AppDatabase extends _$AppDatabase {
   }
 
   Stream<List<Product>> watchProducts() {
-    return (select(products)..orderBy([(t) => OrderingTerm.asc(t.idProduto)])).watch();
+    return (select(
+      products,
+    )..orderBy([(t) => OrderingTerm.asc(t.idProduto)])).watch();
   }
 
   Future<List<Product>> getProducts() {
-    return (select(products)..orderBy([(t) => OrderingTerm.asc(t.idProduto)])).get();
+    return (select(
+      products,
+    )..orderBy([(t) => OrderingTerm.asc(t.idProduto)])).get();
   }
 
   Future<Product?> getProduct(String idProduto) {
-    return (select(products)..where((t) => t.idProduto.equals(idProduto))).getSingleOrNull();
+    return (select(
+      products,
+    )..where((t) => t.idProduto.equals(idProduto))).getSingleOrNull();
   }
 
   Future<void> upsertProduct({
     required String idProduto,
     required String nome,
+    String manual = '',
     required double potenciaRef,
     required double potenciaMin,
     required double potenciaMax,
@@ -862,6 +900,7 @@ class AppDatabase extends _$AppDatabase {
       ProductsCompanion.insert(
         idProduto: idProduto,
         nome: nome,
+        manual: Value(manual),
         potenciaRef: potenciaRef,
         potenciaMin: potenciaMin,
         potenciaMax: potenciaMax,
@@ -877,6 +916,7 @@ class AppDatabase extends _$AppDatabase {
   Future<void> updateProductMetadata({
     required String idProduto,
     required String nome,
+    String manual = '',
     required double toleranciaPct,
     required int tempoTesteSec,
     required double potenciaMin,
@@ -886,6 +926,7 @@ class AppDatabase extends _$AppDatabase {
     await (update(products)..where((t) => t.idProduto.equals(idProduto))).write(
       ProductsCompanion(
         nome: Value(nome),
+        manual: Value(manual),
         toleranciaPct: Value(toleranciaPct),
         tempoTesteSec: Value(tempoTesteSec),
         potenciaMin: Value(potenciaMin),
@@ -932,10 +973,7 @@ class AppDatabase extends _$AppDatabase {
 
   Future<void> markFailed(int id, String error, {required int attempts}) async {
     await (update(syncQueue)..where((t) => t.id.equals(id))).write(
-      SyncQueueCompanion(
-        attempts: Value(attempts),
-        lastError: Value(error),
-      ),
+      SyncQueueCompanion(attempts: Value(attempts), lastError: Value(error)),
     );
   }
 
@@ -984,17 +1022,16 @@ class AppDatabase extends _$AppDatabase {
 
   Future<void> resetSyncAttempts(int id) async {
     await (update(syncQueue)..where((t) => t.id.equals(id))).write(
-      const SyncQueueCompanion(
-        attempts: Value(0),
-        lastError: Value(null),
-      ),
+      const SyncQueueCompanion(attempts: Value(0), lastError: Value(null)),
     );
   }
 
   Future<int> resetAllFailedSyncAttempts() async {
-    final failed = await (select(syncQueue)
-          ..where((t) => t.attempts.isBiggerOrEqualValue(syncQueueMaxAttempts)))
-        .get();
+    final failed =
+        await (select(syncQueue)..where(
+              (t) => t.attempts.isBiggerOrEqualValue(syncQueueMaxAttempts),
+            ))
+            .get();
     for (final item in failed) {
       await resetSyncAttempts(item.id);
     }
@@ -1049,7 +1086,9 @@ class AppDatabase extends _$AppDatabase {
         .get();
   }
 
-  Stream<List<CalibrationHistoryData>> watchCalibrationHistory(String idProduto) {
+  Stream<List<CalibrationHistoryData>> watchCalibrationHistory(
+    String idProduto,
+  ) {
     return (select(calibrationHistory)
           ..where((t) => t.idProduto.equals(idProduto))
           ..orderBy([
@@ -1067,7 +1106,9 @@ class AppDatabase extends _$AppDatabase {
   }
 
   Stream<List<Operator>> watchAllOperators() {
-    return (select(operators)..orderBy([(t) => OrderingTerm.asc(t.nome)])).watch();
+    return (select(
+      operators,
+    )..orderBy([(t) => OrderingTerm.asc(t.nome)])).watch();
   }
 
   Future<Operator?> getOperatorById(int id) {
@@ -1075,7 +1116,8 @@ class AppDatabase extends _$AppDatabase {
   }
 
   Future<bool> operatorCodigoExists(String codigo, {int? excludeId}) async {
-    final query = select(operators)..where((t) => t.codigo.equals(codigo.trim()));
+    final query = select(operators)
+      ..where((t) => t.codigo.equals(codigo.trim()));
     if (excludeId != null) {
       query.where((t) => t.id.equals(excludeId).not());
     }
@@ -1123,7 +1165,9 @@ class AppDatabase extends _$AppDatabase {
   }
 
   Future<List<Operator>> getAllOperators() {
-    return (select(operators)..orderBy([(t) => OrderingTerm.asc(t.nome)])).get();
+    return (select(
+      operators,
+    )..orderBy([(t) => OrderingTerm.asc(t.nome)])).get();
   }
 
   Future<void> upsertOperatorFromCloud({
@@ -1133,9 +1177,9 @@ class AppDatabase extends _$AppDatabase {
     bool isGestor = false,
     required DateTime updatedAt,
   }) async {
-    final existing = await (select(operators)
-          ..where((t) => t.codigo.equals(codigo.trim())))
-        .getSingleOrNull();
+    final existing = await (select(
+      operators,
+    )..where((t) => t.codigo.equals(codigo.trim()))).getSingleOrNull();
     if (existing != null) {
       final localUpdated = existing.updatedAt;
       if (localUpdated != null && localUpdated.isAfter(updatedAt)) {
@@ -1174,8 +1218,9 @@ class AppDatabase extends _$AppDatabase {
   }
 
   Future<bool> isOpLocked(String numeroOp) async {
-    final row = await (select(opLocks)..where((t) => t.numeroOp.equals(numeroOp)))
-        .getSingleOrNull();
+    final row = await (select(
+      opLocks,
+    )..where((t) => t.numeroOp.equals(numeroOp))).getSingleOrNull();
     return row != null;
   }
 
@@ -1199,8 +1244,12 @@ class AppDatabase extends _$AppDatabase {
     if (idProduto == null || idProduto.isEmpty) return rows;
     final prefix = idProduto.padLeft(3, '0').substring(0, 3);
     return rows
-        .where((r) =>
-            r.serial != null && r.serial!.length >= 3 && r.serial!.startsWith(prefix))
+        .where(
+          (r) =>
+              r.serial != null &&
+              r.serial!.length >= 3 &&
+              r.serial!.startsWith(prefix),
+        )
         .toList();
   }
 
@@ -1265,8 +1314,10 @@ class AppDatabase extends _$AppDatabase {
     );
     final byOp = <String, ({int total, int aprovados, DateTime? lastAt})>{};
     for (final r in rows) {
-      final current = byOp[r.numeroOp] ?? (total: 0, aprovados: 0, lastAt: null);
-      final lastAt = current.lastAt == null || r.createdAt.isAfter(current.lastAt!)
+      final current =
+          byOp[r.numeroOp] ?? (total: 0, aprovados: 0, lastAt: null);
+      final lastAt =
+          current.lastAt == null || r.createdAt.isAfter(current.lastAt!)
           ? r.createdAt
           : current.lastAt;
       byOp[r.numeroOp] = (
@@ -1275,17 +1326,18 @@ class AppDatabase extends _$AppDatabase {
         lastAt: lastAt,
       );
     }
-    final result = byOp.entries
-        .map(
-          (e) => BatchProductionSummary(
-            numeroOp: e.key,
-            total: e.value.total,
-            aprovados: e.value.aprovados,
-            lastTestAt: e.value.lastAt,
-          ),
-        )
-        .toList()
-      ..sort((a, b) => b.total.compareTo(a.total));
+    final result =
+        byOp.entries
+            .map(
+              (e) => BatchProductionSummary(
+                numeroOp: e.key,
+                total: e.value.total,
+                aprovados: e.value.aprovados,
+                lastTestAt: e.value.lastAt,
+              ),
+            )
+            .toList()
+          ..sort((a, b) => b.total.compareTo(a.total));
     return result;
   }
 
@@ -1312,7 +1364,8 @@ class AppDatabase extends _$AppDatabase {
 
     final result = <BatchReportSummary>[];
     for (final entry in byOp.entries) {
-      final tests = entry.value..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+      final tests = entry.value
+        ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
       var aprovados = 0;
       for (final t in tests) {
         if (isApprovedVeredito(t.veredito)) aprovados++;
@@ -1350,7 +1403,11 @@ class AppDatabase extends _$AppDatabase {
     );
     if (approvedOnly != null) {
       rows = rows
-          .where((r) => approvedOnly ? isApprovedVeredito(r.veredito) : !isApprovedVeredito(r.veredito))
+          .where(
+            (r) => approvedOnly
+                ? isApprovedVeredito(r.veredito)
+                : !isApprovedVeredito(r.veredito),
+          )
           .toList();
     }
     rows.sort((a, b) => a.createdAt.compareTo(b.createdAt));
@@ -1387,7 +1444,13 @@ class AppDatabase extends _$AppDatabase {
     for (var i = 0; i < days; i++) {
       final day = DateTime(start.year, start.month, start.day + i);
       final entry = byDay[day] ?? (total: 0, aprovados: 0);
-      result.add(DailyThroughput(day: day, total: entry.total, aprovados: entry.aprovados));
+      result.add(
+        DailyThroughput(
+          day: day,
+          total: entry.total,
+          aprovados: entry.aprovados,
+        ),
+      );
     }
     return result;
   }
@@ -1408,15 +1471,19 @@ class AppDatabase extends _$AppDatabase {
     for (final r in rows) {
       counts[r.falha] = (counts[r.falha] ?? 0) + 1;
     }
-    final result = counts.entries.map((e) => FaultCount(falha: e.key, count: e.value)).toList()
-      ..sort((a, b) => b.count.compareTo(a.count));
+    final result =
+        counts.entries
+            .map((e) => FaultCount(falha: e.key, count: e.value))
+            .toList()
+          ..sort((a, b) => b.count.compareTo(a.count));
     return result;
   }
 
   Future<int?> getLastSequencial(String idProduto, String ano) async {
-    final row = await (select(serialCounters)
-          ..where((t) => t.idProduto.equals(idProduto) & t.ano.equals(ano)))
-        .getSingleOrNull();
+    final row =
+        await (select(serialCounters)
+              ..where((t) => t.idProduto.equals(idProduto) & t.ano.equals(ano)))
+            .getSingleOrNull();
     return row?.lastSequencial;
   }
 
@@ -1434,7 +1501,9 @@ class AppDatabase extends _$AppDatabase {
   }) async {
     await transaction(() async {
       final current = await getLastSequencial(idProduto, ano);
-      final next = current == null ? sequencial : (sequencial > current ? sequencial : current);
+      final next = current == null
+          ? sequencial
+          : (sequencial > current ? sequencial : current);
       await into(serialCounters).insertOnConflictUpdate(
         SerialCountersCompanion.insert(
           idProduto: idProduto,
@@ -1452,25 +1521,26 @@ class AppDatabase extends _$AppDatabase {
     int firmwareTsMs,
     int sequencial,
   ) async {
-    final row = await (select(testResults)
-          ..where(
-            (t) =>
-                t.numeroOp.equals(numeroOp) &
-                t.firmwareTsMs.equals(firmwareTsMs) &
-                t.sequencial.equals(sequencial),
-          ))
-        .getSingleOrNull();
+    final row =
+        await (select(testResults)..where(
+              (t) =>
+                  t.numeroOp.equals(numeroOp) &
+                  t.firmwareTsMs.equals(firmwareTsMs) &
+                  t.sequencial.equals(sequencial),
+            ))
+            .getSingleOrNull();
     return row != null;
   }
 
   /// Evita reprocessar o mesmo teste MQTT (replay fila offline) por ts_ms.
   Future<bool> testExistsByOpAndTsMs(String numeroOp, int firmwareTsMs) async {
-    final row = await (select(testResults)
-          ..where(
-            (t) =>
-                t.numeroOp.equals(numeroOp) & t.firmwareTsMs.equals(firmwareTsMs),
-          ))
-        .getSingleOrNull();
+    final row =
+        await (select(testResults)..where(
+              (t) =>
+                  t.numeroOp.equals(numeroOp) &
+                  t.firmwareTsMs.equals(firmwareTsMs),
+            ))
+            .getSingleOrNull();
     return row != null;
   }
 
@@ -1481,48 +1551,67 @@ class AppDatabase extends _$AppDatabase {
     String veredito,
     double potenciaMedia,
   ) async {
-    final row = await (select(testResults)
-          ..where(
-            (t) =>
-                t.numeroOp.equals(numeroOp) &
-                t.sequencial.equals(sequencial) &
-                t.veredito.equals(veredito) &
-                t.potenciaMedia.equals(potenciaMedia) &
-                t.firmwareTsMs.isNull(),
-          ))
-        .getSingleOrNull();
+    final row =
+        await (select(testResults)..where(
+              (t) =>
+                  t.numeroOp.equals(numeroOp) &
+                  t.sequencial.equals(sequencial) &
+                  t.veredito.equals(veredito) &
+                  t.potenciaMedia.equals(potenciaMedia) &
+                  t.firmwareTsMs.isNull(),
+            ))
+            .getSingleOrNull();
     return row != null;
   }
 
   /// Evita reprocessar o mesmo teste (MQTT duplicado / fila offline do firmware).
-  Future<bool> testExistsForOpSequencial(String numeroOp, int sequencial) async {
-    final row = await (select(testResults)
-          ..where((t) => t.numeroOp.equals(numeroOp) & t.sequencial.equals(sequencial)))
-        .getSingleOrNull();
+  Future<bool> testExistsForOpSequencial(
+    String numeroOp,
+    int sequencial,
+  ) async {
+    final row =
+        await (select(testResults)..where(
+              (t) =>
+                  t.numeroOp.equals(numeroOp) & t.sequencial.equals(sequencial),
+            ))
+            .getSingleOrNull();
     return row != null;
   }
 
-  Future<bool> hasApprovedTestForOpSequencial(String numeroOp, int sequencial) async {
-    final row = await (select(testResults)
-          ..where((t) => t.numeroOp.equals(numeroOp) & t.sequencial.equals(sequencial)))
-        .getSingleOrNull();
+  Future<bool> hasApprovedTestForOpSequencial(
+    String numeroOp,
+    int sequencial,
+  ) async {
+    final row =
+        await (select(testResults)..where(
+              (t) =>
+                  t.numeroOp.equals(numeroOp) & t.sequencial.equals(sequencial),
+            ))
+            .getSingleOrNull();
     return row != null && isApprovedVeredito(row.veredito);
   }
 
   Future<bool> serialExists(String serial) async {
-    final row = await (select(testResults)..where((t) => t.serial.equals(serial)))
-        .getSingleOrNull();
+    final row = await (select(
+      testResults,
+    )..where((t) => t.serial.equals(serial))).getSingleOrNull();
     if (row != null) return true;
-    final buffered = await (select(labelBufferEntries)..where((t) => t.serial.equals(serial)))
-        .getSingleOrNull();
+    final buffered = await (select(
+      labelBufferEntries,
+    )..where((t) => t.serial.equals(serial))).getSingleOrNull();
     if (buffered != null) return true;
     return markQueueContainsSerial(serial);
   }
 
   /// Reconciliação dos sequenciais aprovados de um produto/ano.
-  Future<SerialReconciliation> reconcileSerials(String idProduto, String ano) async {
+  Future<SerialReconciliation> reconcileSerials(
+    String idProduto,
+    String ano,
+  ) async {
     final prefix = '$idProduto$ano';
-    final rows = await (select(testResults)..where((t) => t.serial.like('$prefix%'))).get();
+    final rows = await (select(
+      testResults,
+    )..where((t) => t.serial.like('$prefix%'))).get();
 
     final seqCount = <int, int>{};
     for (final row in rows) {
@@ -1539,13 +1628,18 @@ class AppDatabase extends _$AppDatabase {
     }
 
     final found = seqCount.keys.toList()..sort();
-    final duplicates = (seqCount.entries.where((e) => e.value > 1).map((e) => e.key).toList())
-      ..sort();
+    final duplicates =
+        (seqCount.entries.where((e) => e.value > 1).map((e) => e.key).toList())
+          ..sort();
     final gaps = <int>[];
     for (var s = found.first; s <= found.last; s++) {
       if (!seqCount.containsKey(s)) gaps.add(s);
     }
-    return SerialReconciliation(found: found, gaps: gaps, duplicates: duplicates);
+    return SerialReconciliation(
+      found: found,
+      gaps: gaps,
+      duplicates: duplicates,
+    );
   }
 
   Future<int> insertDowntime({
@@ -1590,7 +1684,9 @@ class AppDatabase extends _$AppDatabase {
     return total;
   }
 
-  Future<List<OperatorProductivity>> operatorProductivity({DateTime? since}) async {
+  Future<List<OperatorProductivity>> operatorProductivity({
+    DateTime? since,
+  }) async {
     final query = select(testResults);
     if (since != null) {
       query.where((t) => t.createdAt.isBiggerOrEqualValue(since));
@@ -1600,12 +1696,14 @@ class AppDatabase extends _$AppDatabase {
 
     for (final row in rows) {
       final key = row.operatorId?.toString() ?? row.operador ?? '—';
-      final label = row.operador ?? (row.operatorId != null ? '#${row.operatorId}' : '—');
+      final label =
+          row.operador ?? (row.operatorId != null ? '#${row.operatorId}' : '—');
       final current = byKey[key] ?? (label: label, total: 0, aprovados: 0);
       byKey[key] = (
         label: label,
         total: current.total + 1,
-        aprovados: current.aprovados + (isApprovedVeredito(row.veredito) ? 1 : 0),
+        aprovados:
+            current.aprovados + (isApprovedVeredito(row.veredito) ? 1 : 0),
       );
     }
 
@@ -1725,23 +1823,32 @@ class OeeMetrics {
   final double performancePct;
   final double qualityPct;
 
-  double get oeePct => (availabilityPct / 100) * (performancePct / 100) * (qualityPct / 100) * 100;
+  double get oeePct =>
+      (availabilityPct / 100) *
+      (performancePct / 100) *
+      (qualityPct / 100) *
+      100;
 }
 
 Future<bool> _tableExists(Migrator m, String tableName) async {
-  final rows = await m.database.customSelect(
-    "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ? LIMIT 1",
-    variables: [Variable.withString(tableName)],
-    readsFrom: {},
-  ).get();
+  final rows = await m.database
+      .customSelect(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ? LIMIT 1",
+        variables: [Variable.withString(tableName)],
+        readsFrom: {},
+      )
+      .get();
   return rows.isNotEmpty;
 }
 
-Future<bool> _columnExists(Migrator m, String tableName, String columnName) async {
-  final rows = await m.database.customSelect(
-    'PRAGMA table_info($tableName)',
-    readsFrom: {},
-  ).get();
+Future<bool> _columnExists(
+  Migrator m,
+  String tableName,
+  String columnName,
+) async {
+  final rows = await m.database
+      .customSelect('PRAGMA table_info($tableName)', readsFrom: {})
+      .get();
   return rows.any((row) => row.read<String>('name') == columnName);
 }
 

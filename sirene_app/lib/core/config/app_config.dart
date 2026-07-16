@@ -47,6 +47,7 @@ class AppConfig {
   static const defaultLaserTcpPort = 9101;
   static const defaultLaserTcpCommand = 'TCP: Give me string';
   static const defaultLaserModelCommand = 'TCP: model';
+  static const defaultLaserManualCommand = 'TCP: manual';
   static const laserTestSerial = '0000000000';
   static const staleDeviceTimeout = Duration(seconds: 90);
   static const defaultStationId = 'posto-01';
@@ -66,7 +67,8 @@ class AppConfig {
       _prefs.getString('mqtt_username') ?? defaultMqttUsername;
   String get mqttPassword =>
       _prefs.getString('mqtt_password') ?? defaultMqttPassword;
-  String get printerHost => _prefs.getString('printer_host') ?? defaultPrinterHost;
+  String get printerHost =>
+      _prefs.getString('printer_host') ?? defaultPrinterHost;
   int get printerPort => _prefs.getInt('printer_port') ?? defaultPrinterPort;
   PrinterMode get printerMode {
     final stored = _prefs.getString('printer_mode');
@@ -77,7 +79,8 @@ class AppConfig {
   /// Marcação física: somente gravação laser DiatuCAD.
   MarkingMode get markingMode => MarkingMode.laser;
 
-  int get laserTcpPort => _prefs.getInt('laser_tcp_port') ?? defaultLaserTcpPort;
+  int get laserTcpPort =>
+      _prefs.getInt('laser_tcp_port') ?? defaultLaserTcpPort;
 
   String get laserTcpCommand =>
       _prefs.getString('laser_tcp_command') ?? defaultLaserTcpCommand;
@@ -85,23 +88,32 @@ class AppConfig {
   String get laserModelCommand =>
       _prefs.getString('laser_model_command') ?? defaultLaserModelCommand;
 
-  String get printerWindowsName => _prefs.getString('printer_windows_name') ?? '';
+  String get laserManualCommand =>
+      _prefs.getString('laser_manual_command') ?? defaultLaserManualCommand;
+
+  String get printerWindowsName =>
+      _prefs.getString('printer_windows_name') ?? '';
   String? get selectedDeviceId => _prefs.getString('selected_device_id');
-  bool get bancadaSetupComplete => _prefs.getBool('bancada_setup_complete') ?? false;
+  bool get bancadaSetupComplete =>
+      _prefs.getBool('bancada_setup_complete') ?? false;
   bool get wifiProvisioned => _prefs.getBool('wifi_provisioned') ?? false;
   String get stationId => _prefs.getString('station_id') ?? defaultStationId;
   bool get syncEnabled => _prefs.getBool('sync_enabled') ?? false;
-  bool get cloudSetupComplete => _prefs.getBool('cloud_setup_complete') ?? false;
-  bool get cloudSyncNeedsAttention => _prefs.getBool('cloud_sync_needs_attention') ?? false;
+  bool get cloudSetupComplete =>
+      _prefs.getBool('cloud_setup_complete') ?? false;
+  bool get cloudSyncNeedsAttention =>
+      _prefs.getBool('cloud_sync_needs_attention') ?? false;
   DateTime? get lastCloudSyncAt {
     final raw = _prefs.getString('last_cloud_sync_at');
     if (raw == null || raw.isEmpty) return null;
     return DateTime.tryParse(raw);
   }
+
   bool get demoModeEnabled => _prefs.getBool('demo_mode_enabled') ?? false;
   double get yieldTargetPct =>
       _prefs.getDouble('yield_target_pct') ?? defaultYieldTargetPct;
-  int get shiftStartHour => _prefs.getInt('shift_start_hour') ?? defaultShiftStartHour;
+  int get shiftStartHour =>
+      _prefs.getInt('shift_start_hour') ?? defaultShiftStartHour;
   int? get activeOperatorId => _prefs.getInt('active_operator_id');
 
   /// Host/URL passado ao [MqttServerClient] (TCP ou `wss://host/path`).
@@ -121,30 +133,39 @@ class AppConfig {
     return 'mqtt://$mqttHost:$mqttPort';
   }
 
-  Future<void> setMqttHost(String value) => _prefs.setString('mqtt_host', value);
+  Future<void> setMqttHost(String value) =>
+      _prefs.setString('mqtt_host', value);
   Future<void> setMqttPort(int value) => _prefs.setInt('mqtt_port', value);
-  Future<void> setMqttSite(String value) =>
-      _prefs.setString('mqtt_site', value.trim().isEmpty ? defaultMqttSite : value.trim());
+  Future<void> setMqttSite(String value) => _prefs.setString(
+    'mqtt_site',
+    value.trim().isEmpty ? defaultMqttSite : value.trim(),
+  );
   Future<void> setMqttWebSocketPath(String value) =>
       _prefs.setString('mqtt_ws_path', value.trim());
   Future<void> setMqttUseWebSocket(bool value) =>
       _prefs.setBool('mqtt_use_ws', value);
-  Future<void> setMqttUseTls(bool value) => _prefs.setBool('mqtt_use_tls', value);
+  Future<void> setMqttUseTls(bool value) =>
+      _prefs.setBool('mqtt_use_tls', value);
   Future<void> setMqttUsername(String value) =>
       _prefs.setString('mqtt_username', value.trim());
   Future<void> setMqttPassword(String value) =>
       _prefs.setString('mqtt_password', value);
-  Future<void> setPrinterHost(String value) => _prefs.setString('printer_host', value);
-  Future<void> setPrinterPort(int value) => _prefs.setInt('printer_port', value);
+  Future<void> setPrinterHost(String value) =>
+      _prefs.setString('printer_host', value);
+  Future<void> setPrinterPort(int value) =>
+      _prefs.setInt('printer_port', value);
   Future<void> setPrinterMode(PrinterMode value) =>
       _prefs.setString('printer_mode', value.storageValue);
   Future<void> setMarkingMode(MarkingMode value) =>
       _prefs.setString('marking_mode', value.storageValue);
-  Future<void> setLaserTcpPort(int value) => _prefs.setInt('laser_tcp_port', value);
+  Future<void> setLaserTcpPort(int value) =>
+      _prefs.setInt('laser_tcp_port', value);
   Future<void> setLaserTcpCommand(String value) =>
       _prefs.setString('laser_tcp_command', value.trim());
   Future<void> setLaserModelCommand(String value) =>
       _prefs.setString('laser_model_command', value.trim());
+  Future<void> setLaserManualCommand(String value) =>
+      _prefs.setString('laser_manual_command', value.trim());
   Future<void> setPrinterWindowsName(String value) =>
       _prefs.setString('printer_windows_name', value.trim());
   Future<void> setSelectedDeviceId(String? value) async {
@@ -162,7 +183,9 @@ class AppConfig {
       _prefs.setBool('wifi_provisioned', value);
 
   /// Postos que já tinham bancada salva antes desta versão.
-  static Future<void> migrateBancadaSetupIfNeeded(SharedPreferences prefs) async {
+  static Future<void> migrateBancadaSetupIfNeeded(
+    SharedPreferences prefs,
+  ) async {
     if (prefs.containsKey('bancada_setup_complete')) return;
     if (prefs.containsKey('selected_device_id')) {
       await prefs.setBool('bancada_setup_complete', true);

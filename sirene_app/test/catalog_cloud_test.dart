@@ -23,6 +23,7 @@ void main() {
       final p = productFromFirestore({
         'id_produto': '123',
         'nome': 'Sirene X',
+        'manual': 'MAN-001',
         'potencia_ref': 20.0,
         'potencia_min': 18.0,
         'potencia_max': 22.0,
@@ -34,6 +35,7 @@ void main() {
       expect(p, isNotNull);
       expect(p!.idProduto, '123');
       expect(p.nome, 'Sirene X');
+      expect(p.manual, 'MAN-001');
       expect(p.potenciaMin, 18.0);
       expect(p.toleranciaPct, 10.0);
       expect(p.tempoTesteSec, 5);
@@ -124,11 +126,7 @@ void main() {
     test('pullAll retorna contagem de produtos e operadores', () async {
       final service = buildService(
         products: [
-          {
-            'id_produto': '1',
-            'potencia_ref': 20.0,
-            'tempo_teste_sec': 5,
-          },
+          {'id_produto': '1', 'potencia_ref': 20.0, 'tempo_teste_sec': 5},
         ],
         operators: [
           {

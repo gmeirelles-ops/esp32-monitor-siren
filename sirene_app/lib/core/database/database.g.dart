@@ -1751,6 +1751,16 @@ class $ProductsTable extends Products with TableInfo<$ProductsTable, Product> {
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _manualMeta = const VerificationMeta('manual');
+  @override
+  late final GeneratedColumn<String> manual = GeneratedColumn<String>(
+    'manual',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(''),
+  );
   static const VerificationMeta _potenciaRefMeta = const VerificationMeta(
     'potenciaRef',
   );
@@ -1846,6 +1856,7 @@ class $ProductsTable extends Products with TableInfo<$ProductsTable, Product> {
   List<GeneratedColumn> get $columns => [
     idProduto,
     nome,
+    manual,
     potenciaRef,
     potenciaMin,
     potenciaMax,
@@ -1882,6 +1893,12 @@ class $ProductsTable extends Products with TableInfo<$ProductsTable, Product> {
       );
     } else if (isInserting) {
       context.missing(_nomeMeta);
+    }
+    if (data.containsKey('manual')) {
+      context.handle(
+        _manualMeta,
+        manual.isAcceptableOrUnknown(data['manual']!, _manualMeta),
+      );
     }
     if (data.containsKey('potencia_ref')) {
       context.handle(
@@ -1978,6 +1995,10 @@ class $ProductsTable extends Products with TableInfo<$ProductsTable, Product> {
         DriftSqlType.string,
         data['${effectivePrefix}nome'],
       )!,
+      manual: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}manual'],
+      )!,
       potenciaRef: attachedDatabase.typeMapping.read(
         DriftSqlType.double,
         data['${effectivePrefix}potencia_ref'],
@@ -2022,6 +2043,7 @@ class $ProductsTable extends Products with TableInfo<$ProductsTable, Product> {
 class Product extends DataClass implements Insertable<Product> {
   final String idProduto;
   final String nome;
+  final String manual;
   final double potenciaRef;
   final double potenciaMin;
   final double potenciaMax;
@@ -2035,6 +2057,7 @@ class Product extends DataClass implements Insertable<Product> {
   const Product({
     required this.idProduto,
     required this.nome,
+    required this.manual,
     required this.potenciaRef,
     required this.potenciaMin,
     required this.potenciaMax,
@@ -2049,6 +2072,7 @@ class Product extends DataClass implements Insertable<Product> {
     final map = <String, Expression>{};
     map['id_produto'] = Variable<String>(idProduto);
     map['nome'] = Variable<String>(nome);
+    map['manual'] = Variable<String>(manual);
     map['potencia_ref'] = Variable<double>(potenciaRef);
     map['potencia_min'] = Variable<double>(potenciaMin);
     map['potencia_max'] = Variable<double>(potenciaMax);
@@ -2070,6 +2094,7 @@ class Product extends DataClass implements Insertable<Product> {
     return ProductsCompanion(
       idProduto: Value(idProduto),
       nome: Value(nome),
+      manual: Value(manual),
       potenciaRef: Value(potenciaRef),
       potenciaMin: Value(potenciaMin),
       potenciaMax: Value(potenciaMax),
@@ -2095,6 +2120,7 @@ class Product extends DataClass implements Insertable<Product> {
     return Product(
       idProduto: serializer.fromJson<String>(json['idProduto']),
       nome: serializer.fromJson<String>(json['nome']),
+      manual: serializer.fromJson<String>(json['manual']),
       potenciaRef: serializer.fromJson<double>(json['potenciaRef']),
       potenciaMin: serializer.fromJson<double>(json['potenciaMin']),
       potenciaMax: serializer.fromJson<double>(json['potenciaMax']),
@@ -2113,6 +2139,7 @@ class Product extends DataClass implements Insertable<Product> {
     return <String, dynamic>{
       'idProduto': serializer.toJson<String>(idProduto),
       'nome': serializer.toJson<String>(nome),
+      'manual': serializer.toJson<String>(manual),
       'potenciaRef': serializer.toJson<double>(potenciaRef),
       'potenciaMin': serializer.toJson<double>(potenciaMin),
       'potenciaMax': serializer.toJson<double>(potenciaMax),
@@ -2127,6 +2154,7 @@ class Product extends DataClass implements Insertable<Product> {
   Product copyWith({
     String? idProduto,
     String? nome,
+    String? manual,
     double? potenciaRef,
     double? potenciaMin,
     double? potenciaMax,
@@ -2138,6 +2166,7 @@ class Product extends DataClass implements Insertable<Product> {
   }) => Product(
     idProduto: idProduto ?? this.idProduto,
     nome: nome ?? this.nome,
+    manual: manual ?? this.manual,
     potenciaRef: potenciaRef ?? this.potenciaRef,
     potenciaMin: potenciaMin ?? this.potenciaMin,
     potenciaMax: potenciaMax ?? this.potenciaMax,
@@ -2155,6 +2184,7 @@ class Product extends DataClass implements Insertable<Product> {
     return Product(
       idProduto: data.idProduto.present ? data.idProduto.value : this.idProduto,
       nome: data.nome.present ? data.nome.value : this.nome,
+      manual: data.manual.present ? data.manual.value : this.manual,
       potenciaRef: data.potenciaRef.present
           ? data.potenciaRef.value
           : this.potenciaRef,
@@ -2187,6 +2217,7 @@ class Product extends DataClass implements Insertable<Product> {
     return (StringBuffer('Product(')
           ..write('idProduto: $idProduto, ')
           ..write('nome: $nome, ')
+          ..write('manual: $manual, ')
           ..write('potenciaRef: $potenciaRef, ')
           ..write('potenciaMin: $potenciaMin, ')
           ..write('potenciaMax: $potenciaMax, ')
@@ -2203,6 +2234,7 @@ class Product extends DataClass implements Insertable<Product> {
   int get hashCode => Object.hash(
     idProduto,
     nome,
+    manual,
     potenciaRef,
     potenciaMin,
     potenciaMax,
@@ -2218,6 +2250,7 @@ class Product extends DataClass implements Insertable<Product> {
       (other is Product &&
           other.idProduto == this.idProduto &&
           other.nome == this.nome &&
+          other.manual == this.manual &&
           other.potenciaRef == this.potenciaRef &&
           other.potenciaMin == this.potenciaMin &&
           other.potenciaMax == this.potenciaMax &&
@@ -2231,6 +2264,7 @@ class Product extends DataClass implements Insertable<Product> {
 class ProductsCompanion extends UpdateCompanion<Product> {
   final Value<String> idProduto;
   final Value<String> nome;
+  final Value<String> manual;
   final Value<double> potenciaRef;
   final Value<double> potenciaMin;
   final Value<double> potenciaMax;
@@ -2243,6 +2277,7 @@ class ProductsCompanion extends UpdateCompanion<Product> {
   const ProductsCompanion({
     this.idProduto = const Value.absent(),
     this.nome = const Value.absent(),
+    this.manual = const Value.absent(),
     this.potenciaRef = const Value.absent(),
     this.potenciaMin = const Value.absent(),
     this.potenciaMax = const Value.absent(),
@@ -2256,6 +2291,7 @@ class ProductsCompanion extends UpdateCompanion<Product> {
   ProductsCompanion.insert({
     required String idProduto,
     required String nome,
+    this.manual = const Value.absent(),
     required double potenciaRef,
     required double potenciaMin,
     required double potenciaMax,
@@ -2273,6 +2309,7 @@ class ProductsCompanion extends UpdateCompanion<Product> {
   static Insertable<Product> custom({
     Expression<String>? idProduto,
     Expression<String>? nome,
+    Expression<String>? manual,
     Expression<double>? potenciaRef,
     Expression<double>? potenciaMin,
     Expression<double>? potenciaMax,
@@ -2286,6 +2323,7 @@ class ProductsCompanion extends UpdateCompanion<Product> {
     return RawValuesInsertable({
       if (idProduto != null) 'id_produto': idProduto,
       if (nome != null) 'nome': nome,
+      if (manual != null) 'manual': manual,
       if (potenciaRef != null) 'potencia_ref': potenciaRef,
       if (potenciaMin != null) 'potencia_min': potenciaMin,
       if (potenciaMax != null) 'potencia_max': potenciaMax,
@@ -2301,6 +2339,7 @@ class ProductsCompanion extends UpdateCompanion<Product> {
   ProductsCompanion copyWith({
     Value<String>? idProduto,
     Value<String>? nome,
+    Value<String>? manual,
     Value<double>? potenciaRef,
     Value<double>? potenciaMin,
     Value<double>? potenciaMax,
@@ -2314,6 +2353,7 @@ class ProductsCompanion extends UpdateCompanion<Product> {
     return ProductsCompanion(
       idProduto: idProduto ?? this.idProduto,
       nome: nome ?? this.nome,
+      manual: manual ?? this.manual,
       potenciaRef: potenciaRef ?? this.potenciaRef,
       potenciaMin: potenciaMin ?? this.potenciaMin,
       potenciaMax: potenciaMax ?? this.potenciaMax,
@@ -2334,6 +2374,9 @@ class ProductsCompanion extends UpdateCompanion<Product> {
     }
     if (nome.present) {
       map['nome'] = Variable<String>(nome.value);
+    }
+    if (manual.present) {
+      map['manual'] = Variable<String>(manual.value);
     }
     if (potenciaRef.present) {
       map['potencia_ref'] = Variable<double>(potenciaRef.value);
@@ -2370,6 +2413,7 @@ class ProductsCompanion extends UpdateCompanion<Product> {
     return (StringBuffer('ProductsCompanion(')
           ..write('idProduto: $idProduto, ')
           ..write('nome: $nome, ')
+          ..write('manual: $manual, ')
           ..write('potenciaRef: $potenciaRef, ')
           ..write('potenciaMin: $potenciaMin, ')
           ..write('potenciaMax: $potenciaMax, ')
@@ -7538,6 +7582,7 @@ typedef $$ProductsTableCreateCompanionBuilder =
     ProductsCompanion Function({
       required String idProduto,
       required String nome,
+      Value<String> manual,
       required double potenciaRef,
       required double potenciaMin,
       required double potenciaMax,
@@ -7552,6 +7597,7 @@ typedef $$ProductsTableUpdateCompanionBuilder =
     ProductsCompanion Function({
       Value<String> idProduto,
       Value<String> nome,
+      Value<String> manual,
       Value<double> potenciaRef,
       Value<double> potenciaMin,
       Value<double> potenciaMax,
@@ -7579,6 +7625,11 @@ class $$ProductsTableFilterComposer
 
   ColumnFilters<String> get nome => $composableBuilder(
     column: $table.nome,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get manual => $composableBuilder(
+    column: $table.manual,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -7642,6 +7693,11 @@ class $$ProductsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get manual => $composableBuilder(
+    column: $table.manual,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<double> get potenciaRef => $composableBuilder(
     column: $table.potenciaRef,
     builder: (column) => ColumnOrderings(column),
@@ -7697,6 +7753,9 @@ class $$ProductsTableAnnotationComposer
 
   GeneratedColumn<String> get nome =>
       $composableBuilder(column: $table.nome, builder: (column) => column);
+
+  GeneratedColumn<String> get manual =>
+      $composableBuilder(column: $table.manual, builder: (column) => column);
 
   GeneratedColumn<double> get potenciaRef => $composableBuilder(
     column: $table.potenciaRef,
@@ -7769,6 +7828,7 @@ class $$ProductsTableTableManager
               ({
                 Value<String> idProduto = const Value.absent(),
                 Value<String> nome = const Value.absent(),
+                Value<String> manual = const Value.absent(),
                 Value<double> potenciaRef = const Value.absent(),
                 Value<double> potenciaMin = const Value.absent(),
                 Value<double> potenciaMax = const Value.absent(),
@@ -7781,6 +7841,7 @@ class $$ProductsTableTableManager
               }) => ProductsCompanion(
                 idProduto: idProduto,
                 nome: nome,
+                manual: manual,
                 potenciaRef: potenciaRef,
                 potenciaMin: potenciaMin,
                 potenciaMax: potenciaMax,
@@ -7795,6 +7856,7 @@ class $$ProductsTableTableManager
               ({
                 required String idProduto,
                 required String nome,
+                Value<String> manual = const Value.absent(),
                 required double potenciaRef,
                 required double potenciaMin,
                 required double potenciaMax,
@@ -7807,6 +7869,7 @@ class $$ProductsTableTableManager
               }) => ProductsCompanion.insert(
                 idProduto: idProduto,
                 nome: nome,
+                manual: manual,
                 potenciaRef: potenciaRef,
                 potenciaMin: potenciaMin,
                 potenciaMax: potenciaMax,

@@ -69,6 +69,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   late final TextEditingController _laserTcpPort;
   late final TextEditingController _laserTcpCommand;
   late final TextEditingController _laserModelCommand;
+  late final TextEditingController _laserManualCommand;
   PrinterMode _printerMode = PrinterMode.usb;
   MarkingMode _markingMode = MarkingMode.laser;
   String? _printerWindowsName;
@@ -97,9 +98,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     _laserTcpPort = TextEditingController(text: '${config.laserTcpPort}');
     _laserTcpCommand = TextEditingController(text: config.laserTcpCommand);
     _laserModelCommand = TextEditingController(text: config.laserModelCommand);
+    _laserManualCommand = TextEditingController(
+      text: config.laserManualCommand,
+    );
     _markingMode = config.markingMode;
-    _printerMode = Platform.isWindows ? config.printerMode : PrinterMode.network;
-    _printerWindowsName = config.printerWindowsName.isEmpty ? null : config.printerWindowsName;
+    _printerMode = Platform.isWindows
+        ? config.printerMode
+        : PrinterMode.network;
+    _printerWindowsName = config.printerWindowsName.isEmpty
+        ? null
+        : config.printerWindowsName;
     _bancadaDeviceId = config.selectedDeviceId;
     _yieldTargetPct = config.yieldTargetPct;
     _shiftStartHour = config.shiftStartHour;
@@ -122,6 +130,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     _laserTcpPort.dispose();
     _laserTcpCommand.dispose();
     _laserModelCommand.dispose();
+    _laserManualCommand.dispose();
     super.dispose();
   }
 
@@ -154,8 +163,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       );
       return;
     }
-    if (_laserTcpCommand.text.trim() == _laserModelCommand.text.trim()) {
-      _showMessage('Os comandos TCP do serial e do modelo devem ser diferentes.');
+    if (_laserManualCommand.text.trim().isEmpty) {
+      _showMessage(
+        'Informe o comando TCP do manual. Padrão recomendado: ${AppConfig.defaultLaserManualCommand}',
+      );
+      return;
+    }
+    final laserCommands = {
+      _laserTcpCommand.text.trim(),
+      _laserModelCommand.text.trim(),
+      _laserManualCommand.text.trim(),
+    };
+    if (laserCommands.length != 3) {
+      _showMessage(
+        'Os comandos TCP do serial, modelo e manual devem ser diferentes.',
+      );
       return;
     }
 
@@ -169,16 +191,22 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
     final config = ref.read(appConfigProvider);
     await config.setMqttHost(_mqttHost.text.trim());
-    await config.setMqttPort(int.tryParse(_mqttPort.text) ?? AppConfig.defaultMqttPort);
+    await config.setMqttPort(
+      int.tryParse(_mqttPort.text) ?? AppConfig.defaultMqttPort,
+    );
     await config.setMqttSite(_mqttSite.text.trim());
     await config.setMqttWebSocketPath(
-      _mqttWsPath.text.trim().isEmpty ? AppConfig.defaultMqttWebSocketPath : _mqttWsPath.text.trim(),
+      _mqttWsPath.text.trim().isEmpty
+          ? AppConfig.defaultMqttWebSocketPath
+          : _mqttWsPath.text.trim(),
     );
     await config.setMqttUseWebSocket(_mqttUseWebSocket);
     await config.setMqttUseTls(_mqttUseTls);
     await config.setMqttUsername(_mqttUsername.text.trim());
     await config.setMqttPassword(_mqttPassword.text);
-    await config.setPrinterMode(Platform.isWindows ? _printerMode : PrinterMode.network);
+    await config.setPrinterMode(
+      Platform.isWindows ? _printerMode : PrinterMode.network,
+    );
     await config.setPrinterHost(_printerHost.text.trim());
     await config.setPrinterPort(int.tryParse(_printerPort.text) ?? 9100);
     if (_printerWindowsName != null) {
@@ -186,7 +214,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
     await config.setStationId(stationId);
     await config.setMarkingMode(MarkingMode.laser);
-    await config.setLaserTcpPort(int.tryParse(_laserTcpPort.text) ?? AppConfig.defaultLaserTcpPort);
+    await config.setLaserTcpPort(
+      int.tryParse(_laserTcpPort.text) ?? AppConfig.defaultLaserTcpPort,
+    );
     final laserCommand = _laserTcpCommand.text.trim().isEmpty
         ? AppConfig.defaultLaserTcpCommand
         : _laserTcpCommand.text.trim();
@@ -195,6 +225,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ? AppConfig.defaultLaserModelCommand
         : _laserModelCommand.text.trim();
     await config.setLaserModelCommand(laserModelCommand);
+    final laserManualCommand = _laserManualCommand.text.trim().isEmpty
+        ? AppConfig.defaultLaserManualCommand
+        : _laserManualCommand.text.trim();
+    await config.setLaserManualCommand(laserManualCommand);
     await config.setYieldTargetPct(_yieldTargetPct);
     await config.setShiftStartHour(_shiftStartHour);
 
@@ -209,32 +243,39 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         final db = ref.read(databaseProvider);
         final repaired = await repairSyncQueuePayloads(db, stationId);
         if (repaired > 0) {
-          await AppLog.write('Sync: corrigiu station_id em $repaired item(ns) ao salvar posto');
+          await AppLog.write(
+            'Sync: corrigiu station_id em $repaired item(ns) ao salvar posto',
+          );
         }
         ensureSyncProcessorRunning(ref);
         await ref.read(syncQueueProcessorProvider).processQueue();
         ref.invalidate(syncStatusProvider);
         ref.invalidate(failedSyncItemsProvider);
       } catch (e, st) {
-        await AppLog.write('Sync: processQueue após salvar posto falhou', error: e, stack: st);
+        await AppLog.write(
+          'Sync: processQueue após salvar posto falhou',
+          error: e,
+          stack: st,
+        );
       }
     }
 
     if (mounted) {
       if (laserCommand != AppConfig.defaultLaserTcpCommand ||
-          laserModelCommand != AppConfig.defaultLaserModelCommand) {
+          laserModelCommand != AppConfig.defaultLaserModelCommand ||
+          laserManualCommand != AppConfig.defaultLaserManualCommand) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Comandos salvos. Confirme no DiatuCAD: serial="$laserCommand", modelo="$laserModelCommand"',
+              'Comandos salvos. Confirme no DiatuCAD: serial="$laserCommand", modelo="$laserModelCommand", manual="$laserManualCommand"',
             ),
             duration: const Duration(seconds: 6),
           ),
         );
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Configurações salvas')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Configurações salvas')));
       }
     }
   }
@@ -251,7 +292,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             decoration: const InputDecoration(labelText: 'Motivo'),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancelar'),
+            ),
             FilledButton(
               onPressed: () => Navigator.pop(ctx, c.text.trim()),
               child: const Text('Salvar'),
@@ -261,7 +305,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       },
     );
     if (reason == null || reason.isEmpty) return;
-    await ref.read(databaseProvider).insertDowntime(
+    await ref
+        .read(databaseProvider)
+        .insertDowntime(
           reason: reason,
           deviceId: ref.read(appConfigProvider).selectedDeviceId,
         );
@@ -325,7 +371,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ref.invalidate(syncQueueProcessorProvider);
         await kickSyncQueue(ref);
         if (!mounted) return;
-        _showMessage('Login na nuvem concluído. Sincronização automática retomada.');
+        _showMessage(
+          'Login na nuvem concluído. Sincronização automática retomada.',
+        );
       }
     } catch (e, st) {
       await AppLog.write('Sync: erro no login na nuvem', error: e, stack: st);
@@ -392,9 +440,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Future<void> _openProvisioning() async {
-    await Navigator.of(context).push(
-      MaterialPageRoute<void>(builder: (_) => const ProvisioningWizard()),
-    );
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute<void>(builder: (_) => const ProvisioningWizard()));
     if (mounted) setState(() {});
   }
 
@@ -407,13 +455,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
     final mqttService = ref.read(mqttServiceProvider);
     if (mqttService.currentState != AppMqttConnectionState.connected) {
-      _showMessage('MQTT desconectado — conecte ao broker antes de resetar a bancada');
+      _showMessage(
+        'MQTT desconectado — conecte ao broker antes de resetar a bancada',
+      );
       return;
     }
 
     final device = ref.read(devicesProvider)[deviceId];
     if (device?.estado == DeviceFsmState.testing) {
-      _showMessage('Bancada em teste — aguarde o fim do teste para resetar o Wi-Fi');
+      _showMessage(
+        'Bancada em teste — aguarde o fim do teste para resetar o Wi-Fi',
+      );
       return;
     }
     if (device?.estado == DeviceFsmState.otaUpdating) {
@@ -448,20 +500,27 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               CheckboxListTile(
                 contentPadding: EdgeInsets.zero,
                 title: const Text('Apagar broker MQTT na bancada também'),
-                subtitle: const Text('Remove host/porta MQTT gravados na NVS do ESP32'),
+                subtitle: const Text(
+                  'Remove host/porta MQTT gravados na NVS do ESP32',
+                ),
                 value: clearMqtt,
                 onChanged: (v) => setDialogState(() => clearMqtt = v ?? false),
               ),
             ],
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancelar'),
+            ),
             FilledButton(
               style: FilledButton.styleFrom(backgroundColor: Colors.red),
               onPressed: () {
                 if (confirmController.text.trim() != 'RESET') {
                   ScaffoldMessenger.of(ctx).showSnackBar(
-                    const SnackBar(content: Text('Digite RESET para confirmar')),
+                    const SnackBar(
+                      content: Text('Digite RESET para confirmar'),
+                    ),
                   );
                   return;
                 }
@@ -477,10 +536,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     confirmController.dispose();
     if (proceed != true || !mounted) return;
 
-    final rejection = await ref.read(devicesProvider.notifier).sendResetWifi(
-          deviceId,
-          clearMqtt: clearMqtt,
-        );
+    final rejection = await ref
+        .read(devicesProvider.notifier)
+        .sendResetWifi(deviceId, clearMqtt: clearMqtt);
     if (!mounted) return;
 
     if (rejection != null) {
@@ -501,7 +559,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           'para configurar o Wi-Fi novamente.',
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Depois')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Depois'),
+          ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Abrir assistente'),
@@ -545,18 +606,24 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 title: const Text('Sair da nuvem também'),
                 subtitle: const Text('Encerra sessão Firebase (opcional)'),
                 value: logoutFirebase,
-                onChanged: (v) => setDialogState(() => logoutFirebase = v ?? false),
+                onChanged: (v) =>
+                    setDialogState(() => logoutFirebase = v ?? false),
               ),
             ],
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancelar'),
+            ),
             FilledButton(
               style: FilledButton.styleFrom(backgroundColor: Colors.red),
               onPressed: () {
                 if (confirmController.text.trim() != 'ZERAR') {
                   ScaffoldMessenger.of(ctx).showSnackBar(
-                    const SnackBar(content: Text('Digite ZERAR para confirmar')),
+                    const SnackBar(
+                      content: Text('Digite ZERAR para confirmar'),
+                    ),
                   );
                   return;
                 }
@@ -573,7 +640,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     if (proceed != true || !mounted) return;
 
     try {
-      await ref.read(factoryResetServiceProvider).execute(logoutFirebase: logoutFirebase);
+      await ref
+          .read(factoryResetServiceProvider)
+          .execute(logoutFirebase: logoutFirebase);
       if (!mounted) return;
       await showDialog<void>(
         context: context,
@@ -584,7 +653,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             'e configure novamente a bancada e o Wi-Fi do posto.',
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK')),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('OK'),
+            ),
           ],
         ),
       );
@@ -597,9 +669,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Future<void> _logoutOperator() async {
     await clearOperatorSession(ref);
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Operador desconectado')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Operador desconectado')));
     }
   }
 
@@ -607,9 +679,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     await ref.read(authServiceProvider)?.signOut();
     await setSyncEnabled(ref, false);
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Sessão encerrada')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Sessão encerrada')));
     }
   }
 
@@ -660,11 +732,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       return;
     }
     try {
-      await AppLog.write('Sync: reprocessar falhas (item=${itemId ?? 'todos'})');
+      await AppLog.write(
+        'Sync: reprocessar falhas (item=${itemId ?? 'todos'})',
+      );
       await retryFailedSyncItems(ref, itemId: itemId);
       if (!mounted) return;
       _showMessage(
-        itemId != null ? 'Item reenfileirado para sync' : 'Falhas reenfileiradas para sync',
+        itemId != null
+            ? 'Item reenfileirado para sync'
+            : 'Falhas reenfileiradas para sync',
       );
     } catch (e, st) {
       await AppLog.write('Sync: erro ao reprocessar', error: e, stack: st);
@@ -704,10 +780,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final wifiProvisioned = ref.watch(wifiProvisionedProvider);
     final mqttAsync = ref.watch(mqttConnectionStateProvider);
     final mqttService = ref.watch(mqttServiceProvider);
-    final mqttConnected = resolveMqttConnectionDisplayState(
-      mqttAsync,
-      mqttService.currentState,
-    ) == AppMqttConnectionState.connected;
+    final mqttConnected =
+        resolveMqttConnectionDisplayState(
+          mqttAsync,
+          mqttService.currentState,
+        ) ==
+        AppMqttConnectionState.connected;
     final bancadas = ref.watch(bancadasMapProvider).valueOrNull ?? {};
     final deviceList = devices.values.toList()
       ..sort((a, b) {
@@ -747,10 +825,39 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     children: [
                       SettingsCategoryNav(
                         selected: _selectedCategory,
-                        onSelected: (c) => setState(() => _selectedCategory = c),
+                        onSelected: (c) =>
+                            setState(() => _selectedCategory = c),
                       ),
                       const VerticalDivider(width: 1),
-                      Expanded(child: _buildCategoryPanel(
+                      Expanded(
+                        child: _buildCategoryPanel(
+                          syncStatus: syncStatus,
+                          failedItems: failedItems,
+                          authenticated: authenticated,
+                          syncEnabled: syncEnabled,
+                          devices: devices,
+                          activeOpAsync: activeOpAsync,
+                          wifiProvisioned: wifiProvisioned,
+                          mqttConnected: mqttConnected,
+                          bancadas: bancadas,
+                          deviceList: deviceList,
+                          onlineCount: onlineCount,
+                          dateFmt: dateFmt,
+                        ),
+                      ),
+                    ],
+                  );
+                }
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    SettingsCategoryNav(
+                      selected: _selectedCategory,
+                      compact: true,
+                      onSelected: (c) => setState(() => _selectedCategory = c),
+                    ),
+                    Expanded(
+                      child: _buildCategoryPanel(
                         syncStatus: syncStatus,
                         failedItems: failedItems,
                         authenticated: authenticated,
@@ -763,32 +870,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         deviceList: deviceList,
                         onlineCount: onlineCount,
                         dateFmt: dateFmt,
-                      )),
-                    ],
-                  );
-                }
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    SettingsCategoryNav(
-                      selected: _selectedCategory,
-                      compact: true,
-                      onSelected: (c) => setState(() => _selectedCategory = c),
+                      ),
                     ),
-                    Expanded(child: _buildCategoryPanel(
-                      syncStatus: syncStatus,
-                      failedItems: failedItems,
-                      authenticated: authenticated,
-                      syncEnabled: syncEnabled,
-                      devices: devices,
-                      activeOpAsync: activeOpAsync,
-                      wifiProvisioned: wifiProvisioned,
-                      mqttConnected: mqttConnected,
-                      bancadas: bancadas,
-                      deviceList: deviceList,
-                      onlineCount: onlineCount,
-                      dateFmt: dateFmt,
-                    )),
                   ],
                 );
               },
@@ -814,8 +897,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 child: Text(
                   'Alterações em ${_selectedCategory.title} exigem salvar',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: DipontoColors.onSurface.withValues(alpha: 0.7),
-                      ),
+                    color: DipontoColors.onSurface.withValues(alpha: 0.7),
+                  ),
                 ),
               ),
               FilledButton.icon(
@@ -853,33 +936,33 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           constraints: const BoxConstraints(maxWidth: 820),
           child: switch (category) {
             SettingsCategory.posto => _buildPostoSection(
-                activeOpAsync: activeOpAsync,
-                devices: devices,
-                onlineCount: onlineCount,
-              ),
+              activeOpAsync: activeOpAsync,
+              devices: devices,
+              onlineCount: onlineCount,
+            ),
             SettingsCategory.manutencao => _buildManutencaoSection(
-                wifiProvisioned: wifiProvisioned,
-                mqttConnected: mqttConnected,
-                bancadas: bancadas,
-                deviceList: deviceList,
-              ),
+              wifiProvisioned: wifiProvisioned,
+              mqttConnected: mqttConnected,
+              bancadas: bancadas,
+              deviceList: deviceList,
+            ),
             SettingsCategory.rede => _buildRedeSection(),
             SettingsCategory.marcacao => _buildMarcacaoSection(),
             SettingsCategory.nuvem => SettingsNuvemPanel(
-                category: _selectedCategory,
-                stationIdController: _stationId,
-                syncStatus: syncStatus,
-                failedItems: failedItems,
-                authenticated: authenticated,
-                syncEnabled: syncEnabled,
-                dateFmt: dateFmt,
-                onSyncToggle: _onSyncToggle,
-                onLogin: _loginToCloud,
-                onLogout: _logout,
-                onSyncCatalog: _syncCatalog,
-                onPullCatalog: _pullCatalog,
-                onRetryFailed: _retryFailedSync,
-              ),
+              category: _selectedCategory,
+              stationIdController: _stationId,
+              syncStatus: syncStatus,
+              failedItems: failedItems,
+              authenticated: authenticated,
+              syncEnabled: syncEnabled,
+              dateFmt: dateFmt,
+              onSyncToggle: _onSyncToggle,
+              onLogin: _loginToCloud,
+              onLogout: _logout,
+              onSyncCatalog: _syncCatalog,
+              onPullCatalog: _pullCatalog,
+              onRetryFailed: _retryFailedSync,
+            ),
             SettingsCategory.produtividade => _buildProdutividadeSection(),
           },
         ),
@@ -913,9 +996,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   leading: CircleAvatar(
-                    backgroundColor: DipontoColors.primary.withValues(alpha: 0.2),
+                    backgroundColor: DipontoColors.primary.withValues(
+                      alpha: 0.2,
+                    ),
                     child: Text(
-                      (op?.nome.isNotEmpty == true ? op!.nome[0] : '?').toUpperCase(),
+                      (op?.nome.isNotEmpty == true ? op!.nome[0] : '?')
+                          .toUpperCase(),
                       style: const TextStyle(
                         color: DipontoColors.primary,
                         fontWeight: FontWeight.bold,
@@ -924,7 +1010,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ),
                   title: Text(op?.nome ?? '—'),
                   subtitle: op != null
-                      ? Text(op.isGestor ? 'Gestor do posto' : 'Operador do turno')
+                      ? Text(
+                          op.isGestor ? 'Gestor do posto' : 'Operador do turno',
+                        )
                       : null,
                 ),
                 Align(
@@ -958,7 +1046,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () {
                   Navigator.of(context).push(
-                    MaterialPageRoute<void>(builder: (_) => const DevicesScreen()),
+                    MaterialPageRoute<void>(
+                      builder: (_) => const DevicesScreen(),
+                    ),
                   );
                 },
               ),
@@ -971,7 +1061,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () {
                   Navigator.of(context).push(
-                    MaterialPageRoute<void>(builder: (_) => const FirmwareUpdateScreen()),
+                    MaterialPageRoute<void>(
+                      builder: (_) => const FirmwareUpdateScreen(),
+                    ),
                   );
                 },
               ),
@@ -984,7 +1076,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () {
                   Navigator.of(context).push(
-                    MaterialPageRoute<void>(builder: (_) => const AdminScreen()),
+                    MaterialPageRoute<void>(
+                      builder: (_) => const AdminScreen(),
+                    ),
                   );
                 },
               ),
@@ -1026,12 +1120,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     _bancadaDeviceId,
                     deviceList.map((d) => d.deviceId),
                   ),
-                  decoration: const InputDecoration(labelText: 'Bancada vinculada'),
+                  decoration: const InputDecoration(
+                    labelText: 'Bancada vinculada',
+                  ),
                   items: [
                     for (final d in deviceList)
                       DropdownMenuItem(
                         value: d.deviceId,
-                        child: Text(formatBancadaLabelFromMap(d.deviceId, bancadas)),
+                        child: Text(
+                          formatBancadaLabelFromMap(d.deviceId, bancadas),
+                        ),
                       ),
                   ],
                   onChanged: (v) => setState(() => _bancadaDeviceId = v),
@@ -1052,9 +1150,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             final twoCol = constraints.maxWidth >= 520;
             final wifiCard = ActionSectionCard(
               icon: Icons.wifi,
-              title: wifiProvisioned ? 'Wi-Fi provisionado' : 'Provisionar Wi-Fi',
+              title: wifiProvisioned
+                  ? 'Wi-Fi provisionado'
+                  : 'Provisionar Wi-Fi',
               subtitle: 'Conectar bancadas à rede da fábrica',
-              accentColor: wifiProvisioned ? DipontoColors.success : DipontoColors.primary,
+              accentColor: wifiProvisioned
+                  ? DipontoColors.success
+                  : DipontoColors.primary,
               trailing: Icon(
                 Icons.chevron_right,
                 color: DipontoColors.onSurface.withValues(alpha: 0.5),
@@ -1071,8 +1173,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   const SizedBox(height: 12),
                   FilledButton.icon(
                     onPressed: _openProvisioning,
-                    icon: Icon(wifiProvisioned ? Icons.settings_ethernet : Icons.wifi_find),
-                    label: Text(wifiProvisioned ? 'Reabrir assistente' : 'Iniciar provisionamento'),
+                    icon: Icon(
+                      wifiProvisioned
+                          ? Icons.settings_ethernet
+                          : Icons.wifi_find,
+                    ),
+                    label: Text(
+                      wifiProvisioned
+                          ? 'Reabrir assistente'
+                          : 'Iniciar provisionamento',
+                    ),
                   ),
                 ],
               ),
@@ -1144,7 +1254,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           child: ListTile(
             contentPadding: EdgeInsets.zero,
             title: const Text('Configurar ensaio'),
-            subtitle: const Text('Ex.: 1 min ligado, 1 min desligado, por 120 min'),
+            subtitle: const Text(
+              'Ex.: 1 min ligado, 1 min desligado, por 120 min',
+            ),
             trailing: const Icon(Icons.chevron_right),
             onTap: () {
               Navigator.of(context).push(
@@ -1257,11 +1369,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 decoration: InputDecoration(
                   labelText: 'Senha',
                   suffixIcon: IconButton(
-                    tooltip: _mqttPasswordVisible ? 'Ocultar senha' : 'Mostrar senha',
+                    tooltip: _mqttPasswordVisible
+                        ? 'Ocultar senha'
+                        : 'Mostrar senha',
                     icon: Icon(
-                      _mqttPasswordVisible ? Icons.visibility_off : Icons.visibility,
+                      _mqttPasswordVisible
+                          ? Icons.visibility_off
+                          : Icons.visibility,
                     ),
-                    onPressed: () => setState(() => _mqttPasswordVisible = !_mqttPasswordVisible),
+                    onPressed: () => setState(
+                      () => _mqttPasswordVisible = !_mqttPasswordVisible,
+                    ),
                   ),
                 ),
               ),
@@ -1269,14 +1387,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 title: const Text('WebSocket'),
-                subtitle: const Text('Broker na nuvem usa WebSocket (porta 443)'),
+                subtitle: const Text(
+                  'Broker na nuvem usa WebSocket (porta 443)',
+                ),
                 value: _mqttUseWebSocket,
                 onChanged: (value) => setState(() => _mqttUseWebSocket = value),
               ),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 title: const Text('TLS (WSS)'),
-                subtitle: const Text('Conexão segura — recomendado na porta 443'),
+                subtitle: const Text(
+                  'Conexão segura — recomendado na porta 443',
+                ),
                 value: _mqttUseTls,
                 onChanged: _mqttUseWebSocket
                     ? (value) => setState(() => _mqttUseTls = value)
@@ -1320,7 +1442,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ActionSectionCard(
           icon: Icons.precision_manufacturing_outlined,
           title: 'Gravação laser DiatuCAD',
-          subtitle: 'Servidor TCP no app — F2 grava serial e modelo do produto',
+          subtitle:
+              'Servidor TCP no app — F2 grava serial, modelo e manual do produto',
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -1328,7 +1451,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 controller: _laserTcpPort,
                 decoration: const InputDecoration(
                   labelText: 'Porta TCP (servidor no app)',
-                  helperText: 'DiatuCAD conecta neste PC (127.0.0.1 se mesma máquina)',
+                  helperText:
+                      'DiatuCAD conecta neste PC (127.0.0.1 se mesma máquina)',
                 ),
                 keyboardType: TextInputType.number,
               ),
@@ -1348,6 +1472,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   labelText: 'Comando TCP do modelo (texto)',
                   helperText:
                       'Objeto de texto no DiatuCAD — padrão: ${AppConfig.defaultLaserModelCommand}',
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _laserManualCommand,
+                decoration: InputDecoration(
+                  labelText: 'Comando TCP do manual (texto)',
+                  helperText:
+                      'Objeto de texto do manual no DiatuCAD — padrão: ${AppConfig.defaultLaserManualCommand}',
                 ),
               ),
               const SizedBox(height: 8),
@@ -1384,7 +1517,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text('Meta de rendimento: ${_yieldTargetPct.toStringAsFixed(0)}%'),
+              Text(
+                'Meta de rendimento: ${_yieldTargetPct.toStringAsFixed(0)}%',
+              ),
               Slider(
                 value: _yieldTargetPct,
                 min: 50,
@@ -1395,7 +1530,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ),
               DropdownButtonFormField<int>(
                 value: _shiftStartHour,
-                decoration: const InputDecoration(labelText: 'Início do turno (hora)'),
+                decoration: const InputDecoration(
+                  labelText: 'Início do turno (hora)',
+                ),
                 items: List.generate(
                   24,
                   (h) => DropdownMenuItem(value: h, child: Text('$h:00')),

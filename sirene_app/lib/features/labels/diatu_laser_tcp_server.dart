@@ -8,21 +8,19 @@ import 'laser_tcp_diagnostics.dart';
 import 'serial_marking_backend.dart';
 
 /// Rota de um comando TCP recebido do DiatuCAD.
-enum DiatuTcpRoute {
-  serial,
-  model,
-  bad,
-}
+enum DiatuTcpRoute { serial, model, manual, bad }
 
 /// Servidor TCP para DiatuCAD/EzCad (texto variável).
-/// O laser conecta, envia o comando configurado e recebe serial ou modelo.
+/// O laser conecta e recebe serial, modelo ou manual do produto.
 class DiatuLaserTcpServer implements SerialMarkingBackend {
   DiatuLaserTcpServer({
     required this.port,
     required this.commandPrefix,
     required this.modelCommandPrefix,
+    required this.manualCommandPrefix,
     required this.onRequestSerial,
     required this.onRequestModel,
+    required this.onRequestManual,
     this.eventLog,
     this.connectionTimeout = const Duration(seconds: 10),
   });
@@ -30,8 +28,10 @@ class DiatuLaserTcpServer implements SerialMarkingBackend {
   final int port;
   final String commandPrefix;
   final String modelCommandPrefix;
+  final String manualCommandPrefix;
   final Future<String?> Function() onRequestSerial;
   final Future<String?> Function() onRequestModel;
+  final Future<String?> Function() onRequestManual;
   final LaserTcpEventLog? eventLog;
   final Duration connectionTimeout;
 
@@ -106,6 +106,7 @@ class DiatuLaserTcpServer implements SerialMarkingBackend {
         requestText,
         serialCommandPrefix: commandPrefix,
         modelCommandPrefix: modelCommandPrefix,
+        manualCommandPrefix: manualCommandPrefix,
       );
       if (route == DiatuTcpRoute.bad) {
         response = 'ERROR:BADCMD';
@@ -114,9 +115,11 @@ class DiatuLaserTcpServer implements SerialMarkingBackend {
         return;
       }
 
-      final payload = route == DiatuTcpRoute.model
-          ? await onRequestModel()
-          : await onRequestSerial();
+      final payload = switch (route) {
+        DiatuTcpRoute.model => await onRequestModel(),
+        DiatuTcpRoute.manual => await onRequestManual(),
+        _ => await onRequestSerial(),
+      };
       response = payload ?? kMarkQueueEmptyResponse;
       client.write(response);
       await client.flush();
@@ -128,13 +131,15 @@ class DiatuLaserTcpServer implements SerialMarkingBackend {
         await client.flush();
       } catch (_) {}
     } finally {
-      eventLog?.record(LaserTcpEvent(
-        at: DateTime.now(),
-        remote: remote,
-        request: requestText,
-        response: response,
-        error: error,
-      ));
+      eventLog?.record(
+        LaserTcpEvent(
+          at: DateTime.now(),
+          remote: remote,
+          request: requestText,
+          response: response,
+          error: error,
+        ),
+      );
       _clients.remove(client);
       try {
         client.destroy();
@@ -152,18 +157,23 @@ bool matchesDiatuTcpCommand(String request, String commandPrefix) {
   return normalized.contains(prefix);
 }
 
-/// Decide se o comando TCP pede serial, modelo ou é inválido.
+/// Decide se o comando TCP pede serial, modelo, manual ou é inválido.
 DiatuTcpRoute routeDiatuTcpCommand(
   String request, {
   required String serialCommandPrefix,
   required String modelCommandPrefix,
+  required String manualCommandPrefix,
 }) {
   final normalized = normalizeTcpPayload(request);
   if (normalized.isEmpty) return DiatuTcpRoute.bad;
 
   final modelPrefix = normalizeTcpPayload(modelCommandPrefix);
+  final manualPrefix = normalizeTcpPayload(manualCommandPrefix);
   final serialPrefix = normalizeTcpPayload(serialCommandPrefix);
 
+  if (manualPrefix.isNotEmpty && normalized.contains(manualPrefix)) {
+    return DiatuTcpRoute.manual;
+  }
   if (modelPrefix.isNotEmpty && normalized.contains(modelPrefix)) {
     return DiatuTcpRoute.model;
   }

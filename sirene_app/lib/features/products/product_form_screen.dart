@@ -29,6 +29,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _idProduto;
   late final TextEditingController _nome;
+  late final TextEditingController _manual;
   late final TextEditingController _tolerancia;
   late final TextEditingController _tempoTeste;
   late final TextEditingController _potenciaRef;
@@ -61,8 +62,13 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
     final e = widget.existing;
     _idProduto = TextEditingController(text: e?.idProduto ?? '');
     _nome = TextEditingController(text: e?.nome ?? '');
-    _tolerancia = TextEditingController(text: (e?.toleranciaPct ?? 10).toStringAsFixed(0));
-    _tempoTeste = TextEditingController(text: (e?.tempoTesteSec ?? 5).toString());
+    _manual = TextEditingController(text: e?.manual ?? '');
+    _tolerancia = TextEditingController(
+      text: (e?.toleranciaPct ?? 10).toStringAsFixed(0),
+    );
+    _tempoTeste = TextEditingController(
+      text: (e?.tempoTesteSec ?? 5).toString(),
+    );
     _potenciaRef = TextEditingController(
       text: e != null ? e.potenciaRef.toStringAsFixed(2) : '',
     );
@@ -81,6 +87,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
   void dispose() {
     _idProduto.dispose();
     _nome.dispose();
+    _manual.dispose();
     _tolerancia.dispose();
     _tempoTeste.dispose();
     _potenciaRef.dispose();
@@ -128,7 +135,9 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
       deviceOnline: device.isOnline,
       estado: device.estado.mqttEstado,
     )) {
-      _showSnack(DeviceCalibration.estadoHint(device.estado.mqttEstado, device.isOnline));
+      _showSnack(
+        DeviceCalibration.estadoHint(device.estado.mqttEstado, device.isOnline),
+      );
       return;
     }
 
@@ -141,10 +150,9 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
       _peakSample = null;
     });
 
-    await ref.read(devicesProvider.notifier).sendStartCalibration(
-          deviceId,
-          tempoTesteSec: tempoTeste,
-        );
+    await ref
+        .read(devicesProvider.notifier)
+        .sendStartCalibration(deviceId, tempoTesteSec: tempoTeste);
   }
 
   Future<void> _delete() async {
@@ -178,7 +186,9 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
     try {
       final db = ref.read(databaseProvider);
       await db.deleteProduct(existing.idProduto);
-      await ref.read(firestoreSyncServiceProvider).enqueueProductDelete(existing.idProduto);
+      await ref
+          .read(firestoreSyncServiceProvider)
+          .enqueueProductDelete(existing.idProduto);
       if (!mounted) return;
       Navigator.of(context).pop();
     } catch (e) {
@@ -215,7 +225,9 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
     int? sequencialInicial;
     if (seqRaw.isNotEmpty) {
       sequencialInicial = int.tryParse(seqRaw);
-      if (sequencialInicial == null || sequencialInicial < 1 || sequencialInicial > 9999) {
+      if (sequencialInicial == null ||
+          sequencialInicial < 1 ||
+          sequencialInicial > 9999) {
         _showSnack('Sequencial inicial deve ser entre 1 e 9999');
         return;
       }
@@ -226,13 +238,15 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
       await db.upsertProduct(
         idProduto: id,
         nome: _nome.text.trim(),
+        manual: _manual.text.trim(),
         potenciaRef: refVal,
         potenciaMin: min,
         potenciaMax: max,
         toleranciaPct: double.parse(_tolerancia.text),
         tempoTesteSec: int.parse(_tempoTeste.text),
         calibradoEm: _calibratedAt ?? widget.existing?.calibradoEm,
-        calibradoDeviceId: _selectedDeviceId ?? widget.existing?.calibradoDeviceId,
+        calibradoDeviceId:
+            _selectedDeviceId ?? widget.existing?.calibradoDeviceId,
         sequencialInicial: sequencialInicial,
       );
       final saved = await db.getProduct(id);
@@ -248,7 +262,10 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
     }
   }
 
-  Future<void> _pickDevice(List<DeviceInfo> deviceList, Map<String, int> bancadas) async {
+  Future<void> _pickDevice(
+    List<DeviceInfo> deviceList,
+    Map<String, int> bancadas,
+  ) async {
     if (_measuring) return;
     final picked = await showDialog<String>(
       context: context,
@@ -280,7 +297,8 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
     final bancadas = ref.watch(bancadasMapProvider).valueOrNull ?? {};
     final deviceList = devices.values.toList();
     final deviceIds = deviceList.map((d) => d.deviceId).toList();
-    _selectedDeviceId = validDropdownValue(_selectedDeviceId, deviceIds) ??
+    _selectedDeviceId =
+        validDropdownValue(_selectedDeviceId, deviceIds) ??
         (deviceIds.isNotEmpty ? deviceIds.first : null);
 
     ref.listen(calibrationSamplesProvider, (_, next) {
@@ -302,7 +320,9 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
         final idProduto =
             widget.existing?.idProduto ?? normalizeProductId(_idProduto.text);
         if (idProduto.isNotEmpty) {
-          await ref.read(databaseProvider).insertCalibration(
+          await ref
+              .read(databaseProvider)
+              .insertCalibration(
                 idProduto: idProduto,
                 potenciaRef: event.result.potenciaMedia,
                 deviceId: event.deviceId,
@@ -332,7 +352,6 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
       });
     });
 
-
     return Scaffold(
       appBar: AppBar(
         title: Text(_isEditing ? 'Editar produto' : 'Novo produto'),
@@ -343,161 +362,222 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-          Form(
-            key: _formKey,
-            child: Column(
-              children: [
-                TextFormField(
-                  controller: _idProduto,
-                  enabled: !_isEditing,
-                  decoration: const InputDecoration(labelText: 'ID Produto (3 dígitos)'),
-                  validator: (v) => v != null && isValidProductId(v) ? null : 'Informe 3 dígitos',
+                Form(
+                  key: _formKey,
+                  child: Column(
+                    children: [
+                      TextFormField(
+                        controller: _idProduto,
+                        enabled: !_isEditing,
+                        decoration: const InputDecoration(
+                          labelText: 'ID Produto (3 dígitos)',
+                        ),
+                        validator: (v) => v != null && isValidProductId(v)
+                            ? null
+                            : 'Informe 3 dígitos',
+                      ),
+                      TextFormField(
+                        controller: _nome,
+                        decoration: const InputDecoration(
+                          labelText: 'Nome do produto',
+                        ),
+                        validator: (v) => v == null || v.trim().isEmpty
+                            ? 'Obrigatório'
+                            : null,
+                      ),
+                      TextFormField(
+                        controller: _manual,
+                        decoration: const InputDecoration(
+                          labelText: 'Manual do produto',
+                          helperText:
+                              'Opcional. Quando informado, o texto é enviado para a gravação laser.',
+                        ),
+                      ),
+                      TextFormField(
+                        controller: _tolerancia,
+                        decoration: const InputDecoration(
+                          labelText: 'Tolerância (%)',
+                        ),
+                        keyboardType: TextInputType.number,
+                        onChanged: (_) => _recalcFromRefField(),
+                      ),
+                      TextFormField(
+                        controller: _tempoTeste,
+                        decoration: const InputDecoration(
+                          labelText: 'Tempo de teste (s)',
+                        ),
+                        keyboardType: TextInputType.number,
+                      ),
+                      TextFormField(
+                        controller: _sequencialInicial,
+                        decoration: const InputDecoration(
+                          labelText: 'Próximo sequencial de série',
+                          hintText: 'Ex.: 450 (deixe vazio para começar em 1)',
+                          helperText:
+                              '4 dígitos do serial ITF. Use quando a numeração não reinicia em 0001.',
+                        ),
+                        keyboardType: TextInputType.number,
+                      ),
+                    ],
+                  ),
                 ),
-                TextFormField(
-                  controller: _nome,
-                  decoration: const InputDecoration(labelText: 'Nome do produto'),
-                  validator: (v) => v == null || v.trim().isEmpty ? 'Obrigatório' : null,
+                const SizedBox(height: 16),
+                if (deviceList.isEmpty)
+                  const Text(
+                    'Nenhum dispositivo online — conecte uma bancada primeiro.',
+                  )
+                else
+                  ProductCalibrationSection(
+                    selectedDeviceName: _selectedDeviceId != null
+                        ? formatBancadaLabelFromMap(
+                            _selectedDeviceId!,
+                            bancadas,
+                          )
+                        : null,
+                    selectedDeviceId: _selectedDeviceId,
+                    deviceOnline: devices[_selectedDeviceId]?.isOnline ?? false,
+                    deviceEstado: devices[_selectedDeviceId]?.estado.mqttEstado,
+                    calibrating: _measuring,
+                    onRecalibrate: _startMeasurement,
+                    onDevicePicker: () => _pickDevice(deviceList, bancadas),
+                    buttonLabel: _isEditing
+                        ? 'Recalibrar peça padrão'
+                        : 'Medir peça padrão',
+                  ),
+                if (_measuring || _samples.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  Card(
+                    color: DipontoColors.primary.withValues(alpha: 0.1),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _measuring ? 'Medindo...' : 'Última medição',
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          if (_peakSample != null)
+                            Text(
+                              'Pico no ciclo: ${_peakSample!.toStringAsFixed(2)} W',
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(
+                                    color: DipontoColors.onSurface.withValues(
+                                      alpha: 0.7,
+                                    ),
+                                  ),
+                            ),
+                          const SizedBox(height: 8),
+                          LinearProgressIndicator(
+                            value:
+                                (_elapsedMs /
+                                        ((int.tryParse(_tempoTeste.text) ?? 5) *
+                                            1000))
+                                    .clamp(0.0, 1.0),
+                            color: DipontoColors.primary,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            _sampleAverage != null
+                                ? 'Média: ${_sampleAverage!.toStringAsFixed(2)} W'
+                                : 'Aguardando leituras...',
+                            style: const TextStyle(
+                              fontSize: 24,
+                              color: DipontoColors.primaryLight,
+                            ),
+                          ),
+                          if (_samples.length >= 2) ...[
+                            const SizedBox(height: 12),
+                            SizedBox(
+                              height: 60,
+                              child: CustomPaint(
+                                size: const Size(double.infinity, 60),
+                                painter: _SparklinePainter(_samples),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 16),
+                const Text(
+                  'Limites de potência',
+                  style: TextStyle(fontWeight: FontWeight.bold),
                 ),
+                const SizedBox(height: 8),
                 TextFormField(
-                  controller: _tolerancia,
-                  decoration: const InputDecoration(labelText: 'Tolerância (%)'),
-                  keyboardType: TextInputType.number,
+                  controller: _potenciaRef,
+                  decoration: const InputDecoration(
+                    labelText: 'Potência referência (W)',
+                  ),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
                   onChanged: (_) => _recalcFromRefField(),
                 ),
                 TextFormField(
-                  controller: _tempoTeste,
-                  decoration: const InputDecoration(labelText: 'Tempo de teste (s)'),
-                  keyboardType: TextInputType.number,
+                  controller: _potenciaMin,
+                  decoration: const InputDecoration(
+                    labelText: 'Potência mín (W)',
+                  ),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
                 ),
                 TextFormField(
-                  controller: _sequencialInicial,
+                  controller: _potenciaMax,
                   decoration: const InputDecoration(
-                    labelText: 'Próximo sequencial de série',
-                    hintText: 'Ex.: 450 (deixe vazio para começar em 1)',
-                    helperText:
-                        '4 dígitos do serial ITF. Use quando a numeração não reinicia em 0001.',
+                    labelText: 'Potência máx (W)',
                   ),
-                  keyboardType: TextInputType.number,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
                 ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-          if (deviceList.isEmpty)
-            const Text('Nenhum dispositivo online — conecte uma bancada primeiro.')
-          else
-            ProductCalibrationSection(
-              selectedDeviceName: _selectedDeviceId != null
-                  ? formatBancadaLabelFromMap(_selectedDeviceId!, bancadas)
-                  : null,
-              selectedDeviceId: _selectedDeviceId,
-              deviceOnline: devices[_selectedDeviceId]?.isOnline ?? false,
-              deviceEstado: devices[_selectedDeviceId]?.estado.mqttEstado,
-              calibrating: _measuring,
-              onRecalibrate: _startMeasurement,
-              onDevicePicker: () => _pickDevice(deviceList, bancadas),
-              buttonLabel: _isEditing ? 'Recalibrar peça padrão' : 'Medir peça padrão',
-            ),
-          if (_measuring || _samples.isNotEmpty) ...[
-            const SizedBox(height: 16),
-            Card(
-              color: DipontoColors.primary.withValues(alpha: 0.1),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      _measuring ? 'Medindo...' : 'Última medição',
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    if (_peakSample != null)
-                      Text(
-                        'Pico no ciclo: ${_peakSample!.toStringAsFixed(2)} W',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: DipontoColors.onSurface.withValues(alpha: 0.7),
-                            ),
-                      ),
-                    const SizedBox(height: 8),
-                    LinearProgressIndicator(
-                      value: (_elapsedMs /
-                              ((int.tryParse(_tempoTeste.text) ?? 5) * 1000))
-                          .clamp(0.0, 1.0),
-                      color: DipontoColors.primary,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      _sampleAverage != null
-                          ? 'Média: ${_sampleAverage!.toStringAsFixed(2)} W'
-                          : 'Aguardando leituras...',
-                      style: const TextStyle(fontSize: 24, color: DipontoColors.primaryLight),
-                    ),
-                    if (_samples.length >= 2) ...[
-                      const SizedBox(height: 12),
-                      SizedBox(
-                        height: 60,
-                        child: CustomPaint(
-                          size: const Size(double.infinity, 60),
-                          painter: _SparklinePainter(_samples),
-                        ),
-                      ),
-                    ],
-                  ],
+                if (_isEditing) ...[
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Histórico de calibração',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  _CalibrationHistoryList(
+                    idProduto: widget.existing!.idProduto,
+                  ),
+                ],
+                const SizedBox(height: 24),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: ElevatedButton(
+                    onPressed: _saving ? null : _save,
+                    child: _saving
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : Text(
+                            _isEditing
+                                ? 'Salvar alterações'
+                                : 'Cadastrar produto',
+                          ),
+                  ),
                 ),
-              ),
-            ),
-          ],
-          const SizedBox(height: 16),
-          const Text('Limites de potência', style: TextStyle(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          TextFormField(
-            controller: _potenciaRef,
-            decoration: const InputDecoration(labelText: 'Potência referência (W)'),
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            onChanged: (_) => _recalcFromRefField(),
-          ),
-          TextFormField(
-            controller: _potenciaMin,
-            decoration: const InputDecoration(labelText: 'Potência mín (W)'),
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          ),
-          TextFormField(
-            controller: _potenciaMax,
-            decoration: const InputDecoration(labelText: 'Potência máx (W)'),
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          ),
-          if (_isEditing) ...[
-            const SizedBox(height: 16),
-            const Text('Histórico de calibração', style: TextStyle(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            _CalibrationHistoryList(idProduto: widget.existing!.idProduto),
-          ],
-          const SizedBox(height: 24),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: ElevatedButton(
-              onPressed: _saving ? null : _save,
-              child: _saving
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : Text(_isEditing ? 'Salvar alterações' : 'Cadastrar produto'),
-            ),
-          ),
-          if (_isEditing) ...[
-            const SizedBox(height: 16),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton.icon(
-                onPressed: _saving ? null : _delete,
-                icon: const Icon(Icons.delete_outline),
-                style: TextButton.styleFrom(foregroundColor: DipontoColors.error),
-                label: const Text('Excluir produto'),
-              ),
-            ),
-          ],
+                if (_isEditing) ...[
+                  const SizedBox(height: 16),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      onPressed: _saving ? null : _delete,
+                      icon: const Icon(Icons.delete_outline),
+                      style: TextButton.styleFrom(
+                        foregroundColor: DipontoColors.error,
+                      ),
+                      label: const Text('Excluir produto'),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -529,7 +609,9 @@ class _CalibrationHistoryList extends ConsumerWidget {
         if (history.isEmpty) {
           return Text(
             'Sem calibrações registradas.',
-            style: TextStyle(color: DipontoColors.onSurface.withValues(alpha: 0.6)),
+            style: TextStyle(
+              color: DipontoColors.onSurface.withValues(alpha: 0.6),
+            ),
           );
         }
         return Column(
@@ -538,7 +620,10 @@ class _CalibrationHistoryList extends ConsumerWidget {
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 dense: true,
-                leading: const Icon(Icons.sensors, color: DipontoColors.primary),
+                leading: const Icon(
+                  Icons.sensors,
+                  color: DipontoColors.primary,
+                ),
                 title: Text('${c.potenciaRef.toStringAsFixed(2)} W'),
                 subtitle: Text(
                   '${c.createdAt.toLocal()}'

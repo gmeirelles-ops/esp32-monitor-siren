@@ -16,9 +16,9 @@ class MarkQueueProcessor {
     this.healthCheckInterval = const Duration(seconds: 10),
     this.inProgressTimeout = const Duration(minutes: 5),
     LaserTcpEventLog? eventLog,
-  })  : _db = db,
-        _readConfig = readConfig,
-        eventLog = eventLog ?? LaserTcpEventLog();
+  }) : _db = db,
+       _readConfig = readConfig,
+       eventLog = eventLog ?? LaserTcpEventLog();
 
   final AppDatabase _db;
   final AppConfig Function() _readConfig;
@@ -31,6 +31,7 @@ class MarkQueueProcessor {
   int? _runningPort;
   String? _runningCommand;
   String? _runningModelCommand;
+  String? _runningManualCommand;
   String? _lastDeliveredSerial;
   int? _activeMarkId;
   DateTime? _activeMarkStartedAt;
@@ -54,14 +55,18 @@ class MarkQueueProcessor {
         if (requeued > 0) {
           _activeMarkId = null;
           _activeMarkStartedAt = null;
-          await AppLog.write('Laser: recuperou $requeued marcação(ões) interrompida(s)');
+          await AppLog.write(
+            'Laser: recuperou $requeued marcação(ões) interrompida(s)',
+          );
         }
       }
       if (_activeMarkId != null && _activeMarkStartedAt != null) {
         final elapsed = DateTime.now().difference(_activeMarkStartedAt!);
         if (elapsed > inProgressTimeout) {
           await _db.markQueueRequeue(_activeMarkId!);
-          await AppLog.write('Laser: marcação expirou sem confirmação do modelo');
+          await AppLog.write(
+            'Laser: marcação expirou sem confirmação do modelo',
+          );
           _activeMarkId = null;
           _activeMarkStartedAt = null;
         }
@@ -81,6 +86,7 @@ class MarkQueueProcessor {
     _runningPort = null;
     _runningCommand = null;
     _runningModelCommand = null;
+    _runningManualCommand = null;
     if (backend != null) {
       unawaited(backend.stop().catchError((_) {}));
     }
@@ -103,6 +109,7 @@ class MarkQueueProcessor {
         _runningPort == config.laserTcpPort &&
         _runningCommand == config.laserTcpCommand &&
         _runningModelCommand == config.laserModelCommand &&
+        _runningManualCommand == config.laserManualCommand &&
         _backend!.isRunning) {
       return;
     }
@@ -112,8 +119,10 @@ class MarkQueueProcessor {
       port: config.laserTcpPort,
       commandPrefix: config.laserTcpCommand,
       modelCommandPrefix: config.laserModelCommand,
+      manualCommandPrefix: config.laserManualCommand,
       onRequestSerial: _serveNextSerial,
       onRequestModel: _serveModel,
+      onRequestManual: _serveManual,
       eventLog: eventLog,
     );
     try {
@@ -121,6 +130,7 @@ class MarkQueueProcessor {
       _runningPort = config.laserTcpPort;
       _runningCommand = config.laserTcpCommand;
       _runningModelCommand = config.laserModelCommand;
+      _runningManualCommand = config.laserManualCommand;
       lastError = null;
     } catch (e) {
       lastError = formatMarkingError(e);
@@ -128,6 +138,7 @@ class MarkQueueProcessor {
       _runningPort = null;
       _runningCommand = null;
       _runningModelCommand = null;
+      _runningManualCommand = null;
     }
   }
 
@@ -161,29 +172,38 @@ class MarkQueueProcessor {
     final nome = product?.nome.trim();
     if (nome == null || nome.isEmpty) return null;
 
-    // Modelo pedido após serial = ciclo DiatuCAD concluído; confirma gravação.
-    if (inProgress != null) {
+    // Sem manual cadastrado, o modelo é a última variável do ciclo.
+    if (inProgress != null && product!.manual.trim().isEmpty) {
       await _confirmActiveMark();
     }
+
     return nome;
+  }
+
+  Future<String?> _serveManual() async {
+    final inProgress = await _db.peekInProgressMark();
+    final serial = inProgress?.serial ?? _lastDeliveredSerial;
+    if (serial == null || serial.isEmpty) return null;
+    final idProduto = extractIdProdutoFromSerial(serial);
+    if (idProduto == null) return null;
+    final manual = (await _db.getProduct(idProduto))?.manual.trim();
+    if (manual == null || manual.isEmpty) {
+      if (inProgress != null) await _confirmActiveMark();
+      return null;
+    }
+    // Manual é a última variável do ciclo; confirma a gravação completa.
+    if (inProgress != null) await _confirmActiveMark();
+    return manual;
   }
 
   /// Enfileira serial de teste na frente da fila (Configurações).
   Future<void> enqueueTestSerial(String serial) async {
-    await _db.addToMarkQueue(
-      serial: serial,
-      numeroOp: 'TEST',
-      pinned: true,
-    );
+    await _db.addToMarkQueue(serial: serial, numeroOp: 'TEST', pinned: true);
   }
 
   /// Regravação manual: serial vai para a frente da fila.
   Future<void> enqueueRemark(String serial, String numeroOp) async {
-    await _db.addToMarkQueue(
-      serial: serial,
-      numeroOp: numeroOp,
-      pinned: true,
-    );
+    await _db.addToMarkQueue(serial: serial, numeroOp: numeroOp, pinned: true);
   }
 
   /// Simula cliente DiatuCAD contra o servidor local (comando serial).
@@ -203,6 +223,15 @@ class MarkQueueProcessor {
     return simulateDiatuTcpClient(
       port: config.laserTcpPort,
       command: config.laserModelCommand,
+    );
+  }
+
+  Future<String> simulateDiatuManualClient() async {
+    final config = _readConfig();
+    await ensureRunning();
+    return simulateDiatuTcpClient(
+      port: config.laserTcpPort,
+      command: config.laserManualCommand,
     );
   }
 }

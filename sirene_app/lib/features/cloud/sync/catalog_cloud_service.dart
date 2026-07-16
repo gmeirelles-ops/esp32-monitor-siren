@@ -19,9 +19,9 @@ class CatalogCloudService {
     required AppDatabase db,
     required CatalogReader productReader,
     required CatalogReader operatorReader,
-  })  : _db = db,
-        _productReader = productReader,
-        _operatorReader = operatorReader;
+  }) : _db = db,
+       _productReader = productReader,
+       _operatorReader = operatorReader;
 
   final AppDatabase _db;
   final CatalogReader _productReader;
@@ -36,6 +36,7 @@ class CatalogCloudService {
       await _db.upsertProduct(
         idProduto: parsed.idProduto,
         nome: parsed.nome,
+        manual: parsed.manual,
         potenciaRef: parsed.potenciaRef,
         potenciaMin: parsed.potenciaMin,
         potenciaMax: parsed.potenciaMax,

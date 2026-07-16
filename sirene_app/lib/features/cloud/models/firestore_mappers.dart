@@ -291,6 +291,7 @@ Map<String, dynamic> mapBatch({
 typedef ParsedProduct = ({
   String idProduto,
   String nome,
+  String manual,
   double potenciaRef,
   double potenciaMin,
   double potenciaMax,
@@ -326,6 +327,7 @@ ParsedProduct? productFromFirestore(Map<String, dynamic> data) {
   return (
     idProduto: idProduto,
     nome: (data['nome'] as String?) ?? '',
+    manual: (data['manual'] as String?) ?? '',
     potenciaRef: _asDouble(data['potencia_ref']),
     potenciaMin: _asDouble(data['potencia_min']),
     potenciaMax: _asDouble(data['potencia_max']),
@@ -346,6 +348,7 @@ Map<String, dynamic> mapProduct({
   return {
     'id_produto': product.idProduto,
     'nome': product.nome,
+    'manual': product.manual,
     'potencia_ref': product.potenciaRef,
     'potencia_min': product.potenciaMin,
     'potencia_max': product.potenciaMax,

@@ -10,7 +10,10 @@ import 'package:sirene_app/features/labels/serial_marking_backend.dart';
 void main() {
   group('normalizeTcpPayload', () {
     test('remove CRLF e trim', () {
-      expect(normalizeTcpPayload('TCP: Give me string\r\n'), 'TCP: Give me string');
+      expect(
+        normalizeTcpPayload('TCP: Give me string\r\n'),
+        'TCP: Give me string',
+      );
       expect(normalizeTcpPayload('  cmd  '), 'cmd');
     });
   });
@@ -22,7 +25,10 @@ void main() {
         isTrue,
       );
       expect(
-        matchesDiatuTcpCommand('TCP: Give me string\r\n', 'TCP: Give me string'),
+        matchesDiatuTcpCommand(
+          'TCP: Give me string\r\n',
+          'TCP: Give me string',
+        ),
         isTrue,
       );
       expect(matchesDiatuTcpCommand('wrong', 'TCP: Give me string'), isFalse);
@@ -31,7 +37,10 @@ void main() {
 
     test('prefixo parcial no payload maior', () {
       expect(
-        matchesDiatuTcpCommand('prefix TCP: Give me string suffix', 'TCP: Give me string'),
+        matchesDiatuTcpCommand(
+          'prefix TCP: Give me string suffix',
+          'TCP: Give me string',
+        ),
         isTrue,
       );
     });
@@ -40,18 +49,43 @@ void main() {
   group('routeDiatuTcpCommand', () {
     const serialCmd = 'TCP: Give me string';
     const modelCmd = 'TCP: model';
+    const manualCmd = 'TCP: manual';
 
-    test('roteia serial e modelo', () {
+    test('roteia serial, modelo e manual', () {
       expect(
-        routeDiatuTcpCommand(serialCmd, serialCommandPrefix: serialCmd, modelCommandPrefix: modelCmd),
+        routeDiatuTcpCommand(
+          serialCmd,
+          serialCommandPrefix: serialCmd,
+          modelCommandPrefix: modelCmd,
+          manualCommandPrefix: manualCmd,
+        ),
         DiatuTcpRoute.serial,
       );
       expect(
-        routeDiatuTcpCommand(modelCmd, serialCommandPrefix: serialCmd, modelCommandPrefix: modelCmd),
+        routeDiatuTcpCommand(
+          modelCmd,
+          serialCommandPrefix: serialCmd,
+          modelCommandPrefix: modelCmd,
+          manualCommandPrefix: manualCmd,
+        ),
         DiatuTcpRoute.model,
       );
       expect(
-        routeDiatuTcpCommand('wrong', serialCommandPrefix: serialCmd, modelCommandPrefix: modelCmd),
+        routeDiatuTcpCommand(
+          manualCmd,
+          serialCommandPrefix: serialCmd,
+          modelCommandPrefix: modelCmd,
+          manualCommandPrefix: manualCmd,
+        ),
+        DiatuTcpRoute.manual,
+      );
+      expect(
+        routeDiatuTcpCommand(
+          'wrong',
+          serialCommandPrefix: serialCmd,
+          modelCommandPrefix: modelCmd,
+          manualCommandPrefix: manualCmd,
+        ),
         DiatuTcpRoute.bad,
       );
     });
@@ -62,6 +96,7 @@ void main() {
           'TCP: model extra',
           serialCommandPrefix: 'TCP:',
           modelCommandPrefix: modelCmd,
+          manualCommandPrefix: manualCmd,
         ),
         DiatuTcpRoute.model,
       );
@@ -84,6 +119,7 @@ void main() {
         port: 0,
         commandPrefix: command,
         modelCommandPrefix: modelCommand,
+        manualCommandPrefix: 'TCP: manual',
         eventLog: log,
         onRequestSerial: () async {
           serialCalls++;
@@ -93,6 +129,7 @@ void main() {
           modelCalls++;
           return 'Sirene Modelo X';
         },
+        onRequestManual: () async => 'Manual 123',
       );
       await server.start();
     });
@@ -119,7 +156,9 @@ void main() {
       client.write(payload);
       await client.flush();
       try {
-        return await responseCompleter.future.timeout(const Duration(seconds: 3));
+        return await responseCompleter.future.timeout(
+          const Duration(seconds: 3),
+        );
       } finally {
         await client.close();
       }
@@ -156,9 +195,11 @@ void main() {
         port: 0,
         commandPrefix: command,
         modelCommandPrefix: modelCommand,
+        manualCommandPrefix: 'TCP: manual',
         eventLog: log,
         onRequestSerial: () async => null,
         onRequestModel: () async => null,
+        onRequestManual: () async => null,
       );
       await server.start();
       final response = await clientRoundTrip(command);
