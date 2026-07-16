@@ -9,6 +9,10 @@ set(BINARY_NAME "sirene_app")
 # Explicitly opt in to modern CMake behaviors to avoid warnings with recent
 # versions of CMake.
 cmake_policy(VERSION 3.14...3.25)
+# Firebase C++ SDK 12.7.0 ainda declara compatibilidade com CMake antigo.
+# CMake 4 removeu essa compatibilidade por padrão, então fixa o piso de
+# políticas aceito também nos subprojetos dos plugins.
+set(CMAKE_POLICY_VERSION_MINIMUM 3.5 CACHE STRING "Minimum CMake policy version")
 
 # Define build configuration option.
 get_property(IS_MULTICONFIG GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)

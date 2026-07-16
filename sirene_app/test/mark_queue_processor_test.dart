@@ -33,6 +33,7 @@ void main() {
       await AppConfig.migrateBancadaSetupIfNeeded(prefs);
       db = createMemoryDb();
       await prefs.setString('marking_mode', 'laser');
+      await prefs.setInt('laser_tcp_port', 19201);
       await db
           .into(db.products)
           .insert(

@@ -31,11 +31,13 @@ LabelPrinterTransport createLabelPrinterTransportFromValues({
 }) {
   switch (mode) {
     case PrinterMode.usb:
+      if (windowsName.trim().isEmpty) {
+        throw StateError(
+          'Selecione uma impressora Windows em Configurações (modo USB)',
+        );
+      }
       if (!Platform.isWindows) {
         throw UnsupportedError('Impressão USB só está disponível no Windows');
-      }
-      if (windowsName.trim().isEmpty) {
-        throw StateError('Selecione uma impressora Windows em Configurações (modo USB)');
       }
       return WindowsRawLabelPrinter(printerName: windowsName.trim());
     case PrinterMode.network:

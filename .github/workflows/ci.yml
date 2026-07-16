@@ -65,6 +65,7 @@ jobs:
         with:
           esp_idf_version: v5.4.1
           target: esp32
+          path: sirene-validator
 
       - name: Build firmware
         run: |

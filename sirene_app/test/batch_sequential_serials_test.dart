@@ -38,14 +38,12 @@ void main() {
   );
 
   Future<ProviderContainer> createContainer(AppDatabase db) async {
-    final prefs = await createTestPrefs();
+    final prefs = await createTestPrefs(extra: {'laser_tcp_port': 19202});
     final container = ProviderContainer(
       overrides: devicesTestOverrides(
         db: db,
         prefs: prefs,
-        devices: {
-          'dev1': DeviceInfo(deviceId: 'dev1')..bancadaNum = 1,
-        },
+        devices: {'dev1': DeviceInfo(deviceId: 'dev1')..bancadaNum = 1},
       ),
     );
     addTearDown(container.dispose);
@@ -82,59 +80,77 @@ void main() {
     expect(nextBatchSequencial(batch.copyWith(proximoSequencial: 5)), 5);
   });
 
-  test('4 aprovações simuladas geram 4 seriais distintos no buffer (seq 1..4)', () async {
-    final db = AppDatabase.forTesting(NativeDatabase.memory());
-    addTearDown(db.close);
-    final container = await createContainer(db);
-    final notifier = container.read(devicesProvider.notifier);
+  test(
+    '4 aprovações simuladas geram 4 seriais distintos no buffer (seq 1..4)',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      final container = await createContainer(db);
+      final notifier = container.read(devicesProvider.notifier);
 
-    notifier.setActiveBatch('dev1', batch);
+      notifier.setActiveBatch('dev1', batch);
 
-    for (var i = 0; i < 4; i++) {
-      await notifier.simulateTestResult('dev1', forceApproved: true);
-    }
+      for (var i = 0; i < 4; i++) {
+        await notifier.simulateTestResult('dev1', forceApproved: true);
+      }
 
-    final queue = await db.getPendingMarkQueue();
-    expect(queue, hasLength(4));
+      final queue = await db.getPendingMarkQueue();
+      expect(queue, hasLength(4));
 
-    final seriais = queue.map((e) => e.serial).toList();
-    expect(seriais.toSet(), hasLength(4));
+      final seriais = queue.map((e) => e.serial).toList();
+      expect(seriais.toSet(), hasLength(4));
 
-    final sequenciais = seriais
-        .map((s) => int.parse(s.substring(s.length - 5, s.length - 1)))
-        .toList()
-      ..sort();
-    expect(sequenciais, [1, 2, 3, 4]);
+      final sequenciais =
+          seriais
+              .map((s) => int.parse(s.substring(s.length - 5, s.length - 1)))
+              .toList()
+            ..sort();
+      expect(sequenciais, [1, 2, 3, 4]);
 
-    for (var i = 0; i < 4; i++) {
-      expect(
-        seriais[i],
-        generateFullSerial(idProduto: '123', ano: '26', sequencial: i + 1),
+      for (var i = 0; i < 4; i++) {
+        expect(
+          seriais[i],
+          generateFullSerial(idProduto: '123', ano: '26', sequencial: i + 1),
+        );
+      }
+    },
+  );
+
+  test(
+    'reprovação entre aprovações não pula sequencial de aprovação',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      final container = await createContainer(db);
+      final notifier = container.read(devicesProvider.notifier);
+
+      notifier.setActiveBatch('dev1', batch);
+
+      await notifier.processTestResult(
+        'dev1',
+        approvedTest(1, aprovadosNoLote: 1),
       );
-    }
-  });
+      await notifier.processTestResult('dev1', rejectedTest(2));
+      await notifier.processTestResult(
+        'dev1',
+        approvedTest(2, aprovadosNoLote: 2),
+      );
 
-  test('reprovação entre aprovações não pula sequencial de aprovação', () async {
-    final db = AppDatabase.forTesting(NativeDatabase.memory());
-    addTearDown(db.close);
-    final container = await createContainer(db);
-    final notifier = container.read(devicesProvider.notifier);
+      final queue = await db.getPendingMarkQueue();
+      expect(queue, hasLength(2));
 
-    notifier.setActiveBatch('dev1', batch);
-
-    await notifier.processTestResult('dev1', approvedTest(1, aprovadosNoLote: 1));
-    await notifier.processTestResult('dev1', rejectedTest(2));
-    await notifier.processTestResult('dev1', approvedTest(2, aprovadosNoLote: 2));
-
-    final queue = await db.getPendingMarkQueue();
-    expect(queue, hasLength(2));
-
-    final sequenciais = queue
-        .map((e) => int.parse(e.serial.substring(e.serial.length - 5, e.serial.length - 1)))
-        .toList()
-      ..sort();
-    expect(sequenciais, [1, 2]);
-  });
+      final sequenciais =
+          queue
+              .map(
+                (e) => int.parse(
+                  e.serial.substring(e.serial.length - 5, e.serial.length - 1),
+                ),
+              )
+              .toList()
+            ..sort();
+      expect(sequenciais, [1, 2]);
+    },
+  );
 
   test('activeBatch.proximoSequencial avança após cada emissão', () async {
     final db = AppDatabase.forTesting(NativeDatabase.memory());
@@ -145,10 +161,19 @@ void main() {
     notifier.setActiveBatch('dev1', batch);
 
     await notifier.processTestResult('dev1', approvedTest(1));
-    expect(container.read(devicesProvider)['dev1']!.activeBatch!.proximoSequencial, 2);
+    expect(
+      container.read(devicesProvider)['dev1']!.activeBatch!.proximoSequencial,
+      2,
+    );
 
-    await notifier.processTestResult('dev1', approvedTest(2, aprovadosNoLote: 2));
-    expect(container.read(devicesProvider)['dev1']!.activeBatch!.proximoSequencial, 3);
+    await notifier.processTestResult(
+      'dev1',
+      approvedTest(2, aprovadosNoLote: 2),
+    );
+    expect(
+      container.read(devicesProvider)['dev1']!.activeBatch!.proximoSequencial,
+      3,
+    );
   });
 
   test('fila laser lista todas as entradas da OP', () async {

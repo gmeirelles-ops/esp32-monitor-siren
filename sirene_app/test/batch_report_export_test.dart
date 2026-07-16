@@ -22,6 +22,7 @@ void main() {
       '123': const Product(
         idProduto: '123',
         nome: 'Sirene X',
+        manual: '',
         potenciaRef: 20,
         potenciaMin: 18,
         potenciaMax: 22,
@@ -31,21 +32,26 @@ void main() {
         calibradoDeviceId: null,
       ),
     };
-    final csv = formatBatchDetailCsv('OP-1', [
-      TestResult(
-        id: 1,
-        deviceId: 'dev1',
-        numeroOp: 'OP-1',
-        veredito: 'APROVADO',
-        potenciaMedia: 20.5,
-        sequencial: 3,
-        aprovadosNoLote: 1,
-        serial: '12326000001',
-        operador: '01 — Ana',
-        isRetest: false,
-        createdAt: DateTime(2026, 3, 1, 10, 30),
-      ),
-    ], productsById: catalog, bancadaNumeros: {'dev1': 5});
+    final csv = formatBatchDetailCsv(
+      'OP-1',
+      [
+        TestResult(
+          id: 1,
+          deviceId: 'dev1',
+          numeroOp: 'OP-1',
+          veredito: 'APROVADO',
+          potenciaMedia: 20.5,
+          sequencial: 3,
+          aprovadosNoLote: 1,
+          serial: '12326000001',
+          operador: '01 — Ana',
+          isRetest: false,
+          createdAt: DateTime(2026, 3, 1, 10, 30),
+        ),
+      ],
+      productsById: catalog,
+      bancadaNumeros: {'dev1': 5},
+    );
     expect(csv, contains('Produto'));
     expect(csv, contains('Bancada'));
     expect(csv, contains('123 — Sirene X'));
