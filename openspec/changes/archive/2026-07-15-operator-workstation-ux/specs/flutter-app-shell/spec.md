@@ -15,6 +15,8 @@ O app SHALL oferecer navegação principal com **Lote** como destino inicial pad
 - **WHEN** o supervisor precisa de campanha OTA
 - **THEN** o app oferece acesso via Configurações, fora da navegação principal do operador
 
+## ADDED Requirements
+
 ### Requirement: Shell visual unificada
 O app SHALL usar AppBar consistente em desktop e mobile, exibindo status MQTT e operador ativo do turno em todas as telas principais.
 

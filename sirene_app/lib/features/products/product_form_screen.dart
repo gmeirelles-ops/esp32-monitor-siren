@@ -147,6 +147,47 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
         );
   }
 
+  Future<void> _delete() async {
+    final existing = widget.existing;
+    if (existing == null) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Excluir produto'),
+        content: Text(
+          'Excluir produto ${existing.idProduto} — ${existing.nome}?\n\n'
+          'Esta ação remove do posto e da nuvem.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: DipontoColors.error),
+            child: const Text('Excluir'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _saving = true);
+    try {
+      final db = ref.read(databaseProvider);
+      await db.deleteProduct(existing.idProduto);
+      await ref.read(firestoreSyncServiceProvider).enqueueProductDelete(existing.idProduto);
+      if (!mounted) return;
+      Navigator.of(context).pop();
+    } catch (e) {
+      _showSnack('Erro ao excluir: $e');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -445,6 +486,18 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                   : Text(_isEditing ? 'Salvar alterações' : 'Cadastrar produto'),
             ),
           ),
+          if (_isEditing) ...[
+            const SizedBox(height: 16),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: _saving ? null : _delete,
+                icon: const Icon(Icons.delete_outline),
+                style: TextButton.styleFrom(foregroundColor: DipontoColors.error),
+                label: const Text('Excluir produto'),
+              ),
+            ),
+          ],
               ],
             ),
           ),

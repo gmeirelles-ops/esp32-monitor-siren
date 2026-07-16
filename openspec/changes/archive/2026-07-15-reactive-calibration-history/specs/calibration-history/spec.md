@@ -1,18 +1,4 @@
-# calibration-history Specification
-
-## Purpose
-Histórico de calibrações por produto no app Flutter: registro local de ciclos de calibração com potência média, dispositivo e timestamp.
-## Requirements
-### Requirement: Registro histórico de calibrações
-O app SHALL registrar um evento de calibração por produto sempre que uma nova autocalibração for concluída e salva, contendo `id_produto`, `potencia_ref`, dispositivo e instante.
-
-#### Scenario: Nova calibração registrada
-- **WHEN** o operador conclui uma autocalibração e salva o produto
-- **THEN** o app grava um registro de calibração com a potência de referência medida, o dispositivo e o timestamp
-
-#### Scenario: Edição sem recalibrar não gera registro
-- **WHEN** o operador edita apenas metadados do produto sem nova calibração
-- **THEN** o app não cria novo registro de calibração
+## MODIFIED Requirements
 
 ### Requirement: Visualização do histórico de calibração
 O app SHALL exibir o histórico de calibrações de um produto ao editá-lo, em ordem cronológica decrescente, atualizando automaticamente a lista no formulário quando uma nova calibração é registrada.
@@ -28,4 +14,3 @@ O app SHALL exibir o histórico de calibrações de um produto ao editá-lo, em 
 #### Scenario: Histórico ordenado
 - **WHEN** o operador visualiza o histórico de calibração de um produto
 - **THEN** as entradas são exibidas da mais recente para a mais antiga
-

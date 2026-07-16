@@ -144,6 +144,33 @@ void main() {
     expect(await db.markQueueContainsSerial(issues[2].serial), isTrue);
   });
 
+  test('issueManualSerialBatchCore aceita quantidade acima de 50', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+
+    await db.upsertProduct(
+      idProduto: '037',
+      nome: 'DP300',
+      potenciaRef: 35,
+      potenciaMin: 30,
+      potenciaMax: 40,
+      toleranciaPct: 5,
+      tempoTesteSec: 5,
+      sequencialInicial: 1,
+    );
+    final product = (await db.watchProducts().first).first;
+
+    final issues = await issueManualSerialBatchCore(
+      db: db,
+      product: product,
+      quantity: 75,
+    );
+
+    expect(issues, hasLength(75));
+    expect(issues.first.sequencial, 1);
+    expect(issues.last.sequencial, 75);
+  });
+
   test('issueManualSerialCore rejeita serial com dígito inválido', () async {
     final db = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(db.close);

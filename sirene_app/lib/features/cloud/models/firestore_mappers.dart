@@ -14,6 +14,26 @@ String lotePath(String numeroOp) => 'test_results/$numeroOp';
 String serialPath(String numeroOp, String serial) =>
     'test_results/$numeroOp/$firestoreSubcollectionSeriais/$serial';
 
+/// Catálogo temporal: `seriais/{produto}/anos/{YYYY}/meses/{MM}/itens/{serial}`.
+String catalogSerialPath({
+  required String idProduto,
+  required String yyyy,
+  required String mm,
+  required String serial,
+}) {
+  final produto = idProduto.padLeft(3, '0');
+  return 'seriais/$produto/anos/$yyyy/meses/$mm/itens/$serial';
+}
+
+/// Ano civil `YYYY` e mês `MM` do timestamp no fuso America/Sao_Paulo (UTC-3 fixo).
+({String yyyy, String mm}) catalogYearMonthFromTimestamp(DateTime timestamp) {
+  final spt = timestamp.toUtc().subtract(const Duration(hours: 3));
+  return (
+    yyyy: spt.year.toString().padLeft(4, '0'),
+    mm: spt.month.toString().padLeft(2, '0'),
+  );
+}
+
 String reprovadaPath(String numeroOp, int sequencial, {int? tsMs}) =>
     'test_results/$numeroOp/$firestoreSubcollectionReprovadas/'
     '${tsMs ?? sequencial}';

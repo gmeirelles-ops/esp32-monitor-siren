@@ -59,7 +59,12 @@ service cloud.firestore {
 
     match /products/{productId} {
       allow read: if isAuthenticated();
-      allow create, update: if isAuthenticated();
+      allow create, update, delete: if isAuthenticated();
+    }
+
+    match /seriais/{productId}/anos/{year}/meses/{month}/itens/{serial} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated() && hasStationId();
       allow delete: if isManager();
     }
 

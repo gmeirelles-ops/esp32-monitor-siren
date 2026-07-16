@@ -58,6 +58,17 @@ O app SHALL exibir lista de produtos cadastrados com nome, id, limites e data da
 - **WHEN** o operador altera apenas o nome ou a tolerância de um produto já calibrado
 - **THEN** o app recalcula min/max a partir da `potencia_ref` existente e salva as alterações
 
+### Requirement: Exclusão de produto
+O app SHALL permitir excluir um produto existente a partir do formulário de edição, após confirmação explícita do operador. A exclusão remove o registro do SQLite local; histórico de calibração, lotes e seriais SHALL NOT ser apagados.
+
+#### Scenario: Exclusão confirmada
+- **WHEN** o operador confirma a exclusão de um produto no formulário de edição
+- **THEN** o app remove o produto do catálogo local e retorna à listagem
+
+#### Scenario: Exclusão sincronizada
+- **WHEN** o operador exclui um produto com sync habilitado
+- **THEN** o sync service enfileira operação `delete` em `products/{id_produto}`
+
 ### Requirement: Upload do catálogo para Firestore
 Quando a sincronização estiver habilitada, o app SHALL enfileirar upsert em `products/{id_produto}` após cada criação, edição ou recalibração de produto no SQLite local.
 
@@ -79,4 +90,19 @@ O app SHALL NOT exigir leitura do Firestore para operar o catálogo — SQLite p
 #### Scenario: Semear catálogo a partir da nuvem
 - **WHEN** o operador habilita o sync ou aciona o pull manual com Firebase disponível
 - **THEN** o app baixa o catálogo da nuvem e faz upsert no SQLite, sem passar a depender da nuvem para a operação subsequente
+
+### Requirement: Tela de cadastros unificada
+O app SHALL oferecer a área **Cadastros** na navegação principal com abas **Produtos** e **Operadores**, agrupando o CRUD de SKUs e o cadastro de operadores do turno.
+
+#### Scenario: Acesso a cadastros
+- **WHEN** o usuário seleciona Cadastros na navegação
+- **THEN** o app exibe abas Produtos e Operadores com listas e ações de criar/editar
+
+#### Scenario: Produto cadastrado a partir de Cadastros
+- **WHEN** o usuário cria ou edita um produto na aba Produtos
+- **THEN** o comportamento de catálogo existente (limites, calibração) é preservado
+
+#### Scenario: Operador cadastrado na mesma área
+- **WHEN** o usuário cria um operador na aba Operadores
+- **THEN** o operador fica disponível no seletor de turno da tela Lote
 

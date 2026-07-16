@@ -4,22 +4,26 @@
 Monitoramento operacional de dispositivos ESP32 na linha de produção: presença, saúde, alertas de hardware e detecção de dispositivos stale.
 ## Requirements
 ### Requirement: Lista de dispositivos descobertos
-O app SHALL manter uma lista de dispositivos descobertos automaticamente via mensagens `presenca` e `heartbeat`.
+O app SHALL manter descoberta automática de dispositivos via MQTT e SHALL expor a lista completa com detalhe técnico em área secundária (Configurações → Dispositivos), enquanto a seleção de bancada para lote permanece na tela Lote.
 
 #### Scenario: Novo dispositivo detectado
 - **WHEN** o app recebe a primeira mensagem de `sirene/<device_id>/heartbeat`
-- **THEN** o dispositivo é adicionado à lista com seu device_id e timestamp da última atividade
+- **THEN** o dispositivo é adicionado ao estado interno e fica disponível no dropdown da tela Lote e na lista em Configurações → Dispositivos
 
 #### Scenario: Dispositivo offline
 - **WHEN** o app recebe `offline` em `sirene/<device_id>/presenca` (LWT)
-- **THEN** o dispositivo é marcado como offline na lista
+- **THEN** o dispositivo é marcado como offline na lista secundária e no indicador do dropdown de Lote
+
+#### Scenario: Detalhe técnico do dispositivo
+- **WHEN** o supervisor abre Configurações → Dispositivos e seleciona um item
+- **THEN** o app exibe estado FSM, RSSI, uptime, fila offline e versão de firmware como hoje na tela de detalhe
 
 ### Requirement: Dashboard de saúde do dispositivo
-O app SHALL exibir para cada dispositivo: estado FSM, RSSI, uptime, profundidade da fila offline, versão de firmware e status de presença.
+O app SHALL exibir para cada bancada: estado FSM, RSSI, uptime, profundidade da fila offline, versão de firmware e status de presença, com título `Bancada N` e identificador técnico (MAC) em campo secundário.
 
-#### Scenario: Detalhe do dispositivo
-- **WHEN** o operador seleciona um dispositivo na lista
-- **THEN** o app exibe o estado atual (IDLE, BATCH_READY, TESTING, etc.), RSSI, uptime, fila offline e firmware_version do último heartbeat
+#### Scenario: Detalhe da bancada
+- **WHEN** o operador seleciona uma bancada na lista
+- **THEN** o app exibe o estado atual, métricas de saúde e identificador técnico MQTT sem usar o MAC como título principal
 
 ### Requirement: Alertas de hardware
 O app SHALL exibir alertas quando receber mensagens em `sirene/<device_id>/alerta`.

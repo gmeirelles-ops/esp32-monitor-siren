@@ -15,22 +15,18 @@ O app SHALL navegar para a tela de acompanhamento ao vivo do lote imediatamente 
 - **THEN** o app permanece na tela de configuração e exibe o motivo da rejeição, sem abrir o dashboard
 
 ### Requirement: Cabeçalho e contexto do lote
-A tela Batch Live Dashboard SHALL exibir OP, produto (`id_produto` e nome), dispositivo, estado FSM atual, limites de potência, meta (`quantidade_total`) e operador (e-mail autenticado ou indicação de operação local).
+A tela Batch Live Dashboard SHALL exibir OP, produto (`id_produto` e nome), bancada numerada (`Bancada N`), estado FSM em português, limites de potência, meta (`quantidade_total`) e operador.
 
 #### Scenario: Informações do lote visíveis
 - **WHEN** o dashboard é aberto para um lote ativo
-- **THEN** o app exibe OP, produto, dispositivo, estado FSM, potência mín/máx, meta e operador
+- **THEN** o app exibe OP, produto, `Bancada N`, estado FSM, potência mín/máx, meta e operador com nomenclatura em português
 
 ### Requirement: Métricas de progresso do lote
-O app SHALL calcular e exibir aprovados, reprovados, total testado, yield (%) e peças pendentes até a meta, com base nos testes gravados para a OP corrente no SQLite.
+O app SHALL calcular e exibir aprovadas, reprovadas, total testadas, rendimento (%) e peças pendentes até a meta, com rótulos em português.
 
 #### Scenario: Contadores atualizados após novo teste
 - **WHEN** um novo resultado de teste é gravado para a OP exibida
-- **THEN** os contadores e o yield são recalculados e atualizados na tela sem recarga manual
-
-#### Scenario: Barra de progresso da meta
-- **WHEN** `quantidade_total` é maior que zero
-- **THEN** o app exibe barra de progresso com `aprovados / quantidade_total`
+- **THEN** os contadores e o rendimento são recalculados e exibidos com rótulos em português
 
 ### Requirement: Gráfico de potência por teste
 O app SHALL exibir gráfico dos últimos testes da OP com potência média no eixo de valor e sequencial ou ordem cronológica no eixo horizontal, colorindo barras ou pontos por veredito (aprovado/reprovado) e indicando visualmente os limites `potencia_min` e `potencia_max`.

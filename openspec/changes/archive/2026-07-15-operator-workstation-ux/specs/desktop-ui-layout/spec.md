@@ -1,4 +1,4 @@
-## MODIFIED Requirements
+## ADDED Requirements
 
 ### Requirement: Layout desktop do posto de trabalho
 O app SHALL apresentar layout desktop com hierarquia visual clara na tela Lote (operador → bancada → produto → OP), cards de seção consistentes (`FormSectionCard`), largura máxima controlada e indicadores de estado (MQTT, operador, dispositivo online) sempre acessíveis na shell.

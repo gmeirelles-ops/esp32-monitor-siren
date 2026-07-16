@@ -1,4 +1,4 @@
-## MODIFIED Requirements
+## ADDED Requirements
 
 ### Requirement: Tela de cadastros unificada
 O app SHALL oferecer a área **Cadastros** na navegação principal com abas **Produtos** e **Operadores**, agrupando o CRUD de SKUs e o cadastro de operadores do turno.

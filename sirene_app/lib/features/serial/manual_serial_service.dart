@@ -25,8 +25,6 @@ class ManualSerialIssue {
   final String modelo;
 }
 
-const int manualSerialMaxQuantity = 50;
-
 /// Próximo sequencial e serial completo (preview, sem gravar contador).
 Future<({int sequencial, String serial})> previewManualSerial(
   AppDatabase db, {
@@ -107,8 +105,8 @@ Future<List<ManualSerialIssue>> issueManualSerialBatchCore({
   String? firstSerialOverride,
   Future<void> Function()? onLaserEnqueued,
 }) async {
-  if (quantity < 1 || quantity > manualSerialMaxQuantity) {
-    throw ArgumentError('Quantidade deve ser entre 1 e $manualSerialMaxQuantity');
+  if (quantity < 1) {
+    throw ArgumentError('Quantidade deve ser pelo menos 1');
   }
 
   late final int startSeq;

@@ -30,6 +30,10 @@ Future<void> writeToFirestore(
   final doc = documentPath != null && documentPath.isNotEmpty
       ? firestore.doc(documentPath)
       : firestore.collection(collection).doc(documentId);
+  if (operation == 'delete') {
+    await doc.delete();
+    return;
+  }
   final converted = _convertTimestamps(data);
   if (operation == 'merge') {
     await doc.set(converted, SetOptions(merge: true));

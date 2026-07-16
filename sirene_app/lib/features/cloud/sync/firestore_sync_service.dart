@@ -35,9 +35,10 @@ class FirestoreSyncService {
     required Map<String, dynamic> payload,
     required String operation,
   }) async {
+    final segments = documentPath.split('/');
     await _db.enqueueSync(
-      collection: 'test_results',
-      documentId: documentPath.split('/').last,
+      collection: segments.first,
+      documentId: segments.last,
       documentPath: documentPath,
       payload: jsonEncode(payload),
       operation: operation,
@@ -75,21 +76,33 @@ class FirestoreSyncService {
     }
 
     if (isTesteAprovado(test) && serial != null && serial.isNotEmpty) {
+      final serialPayload = mapSerialDocument(
+        deviceId: deviceId,
+        test: test,
+        serial: serial,
+        operador: operador,
+        operatorCodigo: operatorCodigo,
+        stationId: stationId,
+        timestamp: timestamp,
+        tempoTesteSec: tempoTesteSec,
+        potenciaMin: potenciaMin,
+        potenciaMax: potenciaMax,
+        isRetest: isRetest,
+      );
       await _enqueuePath(
         documentPath: serialPath(numeroOp, serial),
-        payload: mapSerialDocument(
-          deviceId: deviceId,
-          test: test,
+        payload: serialPayload,
+        operation: 'set',
+      );
+      final ym = catalogYearMonthFromTimestamp(timestamp);
+      await _enqueuePath(
+        documentPath: catalogSerialPath(
+          idProduto: test.idProduto,
+          yyyy: ym.yyyy,
+          mm: ym.mm,
           serial: serial,
-          operador: operador,
-          operatorCodigo: operatorCodigo,
-          stationId: stationId,
-          timestamp: timestamp,
-          tempoTesteSec: tempoTesteSec,
-          potenciaMin: potenciaMin,
-          potenciaMax: potenciaMax,
-          isRetest: isRetest,
         ),
+        payload: serialPayload,
         operation: 'set',
       );
       return;
@@ -200,6 +213,16 @@ class FirestoreSyncService {
   Future<void> enqueueProduct(Product product) async {
     if (!isActive) return;
     await _enqueueProductToQueue(product);
+  }
+
+  Future<void> enqueueProductDelete(String idProduto) async {
+    if (!isActive) return;
+    await _db.enqueueSync(
+      collection: 'products',
+      documentId: idProduto,
+      payload: '{}',
+      operation: 'delete',
+    );
   }
 
   /// Reenvia todo o catálogo local (ex.: cadastro feito antes de habilitar sync).

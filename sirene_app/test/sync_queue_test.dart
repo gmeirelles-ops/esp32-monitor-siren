@@ -52,13 +52,14 @@ void main() {
         sequencial: 2,
         aprovadosNoLote: 2,
       );
+      final ym = catalogYearMonthFromTimestamp(DateTime.now());
       await sync.enqueueTestResult(
         deviceId: 'abc',
         test: test,
         serial: '12326000028',
       );
 
-      expect(await db.countPending(), 2);
+      expect(await db.countPending(), 3);
 
       final processor = SyncQueueProcessor(
         db: db,
@@ -72,8 +73,62 @@ void main() {
       expect(written, [
         'test_results/2026001/merge',
         'test_results/2026001/seriais/12326000028/set',
+        'seriais/123/anos/${ym.yyyy}/meses/${ym.mm}/itens/12326000028/set',
       ]);
       expect(await db.countPending(), 0);
+    });
+
+    test('reteste aprovado não enfileira serial nem catálogo', () async {
+      final sync = FirestoreSyncService(
+        db: db,
+        isSyncEnabled: () => true,
+        stationId: () => 'posto-test',
+      );
+      const test = TestResultMessage(
+        numeroOp: '2026001',
+        idProduto: '123',
+        ano: '26',
+        veredito: 'APROVADO',
+        potenciaMedia: 20.0,
+        sequencial: 2,
+        aprovadosNoLote: 2,
+      );
+      await sync.enqueueTestResult(
+        deviceId: 'abc',
+        test: test,
+        serial: '12326000028',
+        isRetest: true,
+      );
+      final pending = await db.getPendingItems();
+      expect(pending.length, 1);
+      expect(pending.single.documentPath, 'test_results/2026001');
+      expect(
+        pending.any((p) => p.documentPath?.contains('/itens/') == true),
+        isFalse,
+      );
+    });
+
+    test('reprovado não enfileira catálogo temporal', () async {
+      final sync = FirestoreSyncService(
+        db: db,
+        isSyncEnabled: () => true,
+        stationId: () => 'posto-test',
+      );
+      const test = TestResultMessage(
+        numeroOp: '2026001',
+        idProduto: '123',
+        ano: '26',
+        veredito: 'REPROVADO',
+        potenciaMedia: 5.0,
+        sequencial: 3,
+        aprovadosNoLote: 1,
+      );
+      await sync.enqueueTestResult(deviceId: 'abc', test: test);
+      final pending = await db.getPendingItems();
+      expect(
+        pending.any((p) => p.documentPath?.startsWith('seriais/') == true),
+        isFalse,
+      );
     });
 
     test('enfileira reprovado em reprovadas', () async {
@@ -105,6 +160,43 @@ void main() {
 
       expect(written, contains('test_results/2026001'));
       expect(written, contains('test_results/2026001/reprovadas/3'));
+    });
+
+    test('enfileira delete de produto e drena com operation delete', () async {
+      final written = <String>[];
+      final sync = FirestoreSyncService(
+        db: db,
+        isSyncEnabled: () => true,
+        stationId: () => 'posto-test',
+      );
+      await db.upsertProduct(
+        idProduto: '071',
+        nome: 'Sirene A',
+        potenciaRef: 20.0,
+        potenciaMin: 18.0,
+        potenciaMax: 22.0,
+        toleranciaPct: 10,
+        tempoTesteSec: 5,
+      );
+      await sync.enqueueProductDelete('071');
+
+      expect(await db.countPending(), 1);
+      final pending = await db.getPendingItems();
+      expect(pending.single.operation, 'delete');
+      expect(pending.single.collection, 'products');
+      expect(pending.single.documentId, '071');
+
+      final processor = SyncQueueProcessor(
+        db: db,
+        syncService: sync,
+        writer: (collection, docId, data, operation, {documentPath}) async {
+          written.add('${documentPath ?? '$collection/$docId'}/$operation');
+        },
+      );
+      await processor.processQueue();
+
+      expect(written, ['products/071/delete']);
+      expect(await db.countPending(), 0);
     });
 
     test('resetSyncAttempts move item de dead-letter para pending', () async {

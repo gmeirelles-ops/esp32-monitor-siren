@@ -63,7 +63,6 @@ Future<void> showManualSerialDialog(
   int parsedQuantity() {
     final n = int.tryParse(quantityController.text.trim());
     if (n == null || n < 1) return 1;
-    if (n > manualSerialMaxQuantity) return manualSerialMaxQuantity;
     return n;
   }
 
@@ -181,7 +180,7 @@ Future<void> showManualSerialDialog(
                   keyboardType: TextInputType.number,
                   inputFormatters: [
                     FilteringTextInputFormatter.digitsOnly,
-                    LengthLimitingTextInputFormatter(2),
+                    LengthLimitingTextInputFormatter(4),
                   ],
                   decoration: const InputDecoration(
                     labelText: 'Quantidade',

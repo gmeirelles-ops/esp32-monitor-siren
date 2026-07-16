@@ -18,6 +18,24 @@ void main() {
       expect(lotePath('2026001'), 'test_results/2026001');
       expect(serialPath('2026001', '1232600018'),
           'test_results/2026001/seriais/1232600018');
+      expect(
+        catalogSerialPath(
+          idProduto: '123',
+          yyyy: '2026',
+          mm: '07',
+          serial: '1232600018',
+        ),
+        'seriais/123/anos/2026/meses/07/itens/1232600018',
+      );
+      expect(
+        catalogSerialPath(
+          idProduto: '7',
+          yyyy: '2026',
+          mm: '01',
+          serial: '0072600018',
+        ),
+        'seriais/007/anos/2026/meses/01/itens/0072600018',
+      );
       expect(reprovadaPath('2026001', 3), 'test_results/2026001/reprovadas/3');
       expect(
         reprovadaPath('2026001', 3, tsMs: 6886992),
@@ -41,6 +59,18 @@ void main() {
       expect(isReprovadaFirestorePath('test_results/2525/reprovadas/14'), isTrue);
       expect(isReprovadaFirestorePath('test_results/2525/seriais/123'), isFalse);
       expect(isReprovadaFirestorePath(null), isFalse);
+    });
+
+    test('catalogYearMonthFromTimestamp usa America/Sao_Paulo (UTC-3)', () {
+      // 01/07/2026 01:00 UTC = 30/06/2026 22:00 SPT → junho
+      final june = catalogYearMonthFromTimestamp(DateTime.utc(2026, 7, 1, 1, 0));
+      expect(june.yyyy, '2026');
+      expect(june.mm, '06');
+
+      // 01/07/2026 00:30 SPT = 01/07/2026 03:30 UTC → julho
+      final july = catalogYearMonthFromTimestamp(DateTime.utc(2026, 7, 1, 3, 30));
+      expect(july.yyyy, '2026');
+      expect(july.mm, '07');
     });
 
     test('mapeia documento de serial aprovado com parâmetros de teste', () {
