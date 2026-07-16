@@ -24,8 +24,14 @@ $Python = Resolve-PythonForEsptool
 Write-Host "Python: $Python"
 
 & $Python -m pip install --upgrade pyinstaller -q
-$bundleEsptool = & $Python -m pip show esptool 2>$null
-if ($bundleEsptool) {
+$esptoolInstalled = $false
+try {
+    & $Python -c "import esptool" 2>$null
+    $esptoolInstalled = $LASTEXITCODE -eq 0
+} catch {
+    $esptoolInstalled = $false
+}
+if ($esptoolInstalled) {
     Write-Host "Usando esptool ja instalado no ambiente IDF"
 } else {
     & $Python -m pip install "esptool~=4.12.dev2" -q

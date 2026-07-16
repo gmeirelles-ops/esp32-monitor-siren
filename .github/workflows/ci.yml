@@ -67,11 +67,6 @@ jobs:
           target: esp32
           path: sirene-validator
 
-      - name: Build firmware
-        run: |
-          cd sirene-validator
-          idf.py -B build build
-
   windows-release:
     name: Windows release (ZIP + installer)
     runs-on: windows-latest
