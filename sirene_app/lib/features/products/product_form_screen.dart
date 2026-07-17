@@ -29,7 +29,6 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _idProduto;
   late final TextEditingController _nome;
-  late final TextEditingController _manual;
   late final TextEditingController _tolerancia;
   late final TextEditingController _tempoTeste;
   late final TextEditingController _potenciaRef;
@@ -62,7 +61,6 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
     final e = widget.existing;
     _idProduto = TextEditingController(text: e?.idProduto ?? '');
     _nome = TextEditingController(text: e?.nome ?? '');
-    _manual = TextEditingController(text: e?.manual ?? '');
     _tolerancia = TextEditingController(
       text: (e?.toleranciaPct ?? 10).toStringAsFixed(0),
     );
@@ -87,7 +85,6 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
   void dispose() {
     _idProduto.dispose();
     _nome.dispose();
-    _manual.dispose();
     _tolerancia.dispose();
     _tempoTeste.dispose();
     _potenciaRef.dispose();
@@ -238,7 +235,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
       await db.upsertProduct(
         idProduto: id,
         nome: _nome.text.trim(),
-        manual: _manual.text.trim(),
+        manual: '',
         potenciaRef: refVal,
         potenciaMin: min,
         potenciaMax: max,
@@ -384,14 +381,6 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                         validator: (v) => v == null || v.trim().isEmpty
                             ? 'Obrigatório'
                             : null,
-                      ),
-                      TextFormField(
-                        controller: _manual,
-                        decoration: const InputDecoration(
-                          labelText: 'Manual do produto',
-                          helperText:
-                              'Opcional. Quando informado, o texto é enviado para a gravação laser.',
-                        ),
                       ),
                       TextFormField(
                         controller: _tolerancia,

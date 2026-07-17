@@ -70,7 +70,10 @@ DiatuCAD ──"TCP: Give me string"──► App ──► "1232600018"   (Data
 DiatuCAD ──"TCP: model"────────────► App ──► "Sirene Modelo X" (texto)
 ```
 
-O comando de modelo **não consome** a fila de seriais — apenas lê o próximo pendente (ou o último entregue) para resolver o nome.
+O pedido de **serial** consome a fila (`delivered`) — o serial some da tela Gravação na hora.  
+O pedido de **modelo** só devolve o nome do último serial entregue; **não** altera a fila.
+
+Não use objeto TCP de “manual” no job — o app não atende mais esse comando (`ERROR:BADCMD`).
 
 ## Dois modos TCP no Diaotu (não confundir)
 

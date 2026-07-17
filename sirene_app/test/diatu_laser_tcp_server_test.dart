@@ -49,15 +49,13 @@ void main() {
   group('routeDiatuTcpCommand', () {
     const serialCmd = 'TCP: Give me string';
     const modelCmd = 'TCP: model';
-    const manualCmd = 'TCP: manual';
 
-    test('roteia serial, modelo e manual', () {
+    test('roteia serial e modelo; legado manual é BADCMD', () {
       expect(
         routeDiatuTcpCommand(
           serialCmd,
           serialCommandPrefix: serialCmd,
           modelCommandPrefix: modelCmd,
-          manualCommandPrefix: manualCmd,
         ),
         DiatuTcpRoute.serial,
       );
@@ -66,25 +64,22 @@ void main() {
           modelCmd,
           serialCommandPrefix: serialCmd,
           modelCommandPrefix: modelCmd,
-          manualCommandPrefix: manualCmd,
         ),
         DiatuTcpRoute.model,
       );
       expect(
         routeDiatuTcpCommand(
-          manualCmd,
+          'TCP: manual',
           serialCommandPrefix: serialCmd,
           modelCommandPrefix: modelCmd,
-          manualCommandPrefix: manualCmd,
         ),
-        DiatuTcpRoute.manual,
+        DiatuTcpRoute.bad,
       );
       expect(
         routeDiatuTcpCommand(
           'wrong',
           serialCommandPrefix: serialCmd,
           modelCommandPrefix: modelCmd,
-          manualCommandPrefix: manualCmd,
         ),
         DiatuTcpRoute.bad,
       );
@@ -96,7 +91,6 @@ void main() {
           'TCP: model extra',
           serialCommandPrefix: 'TCP:',
           modelCommandPrefix: modelCmd,
-          manualCommandPrefix: manualCmd,
         ),
         DiatuTcpRoute.model,
       );
@@ -119,7 +113,6 @@ void main() {
         port: 0,
         commandPrefix: command,
         modelCommandPrefix: modelCommand,
-        manualCommandPrefix: 'TCP: manual',
         eventLog: log,
         onRequestSerial: () async {
           serialCalls++;
@@ -129,7 +122,6 @@ void main() {
           modelCalls++;
           return 'Sirene Modelo X';
         },
-        onRequestManual: () async => 'Manual 123',
       );
       await server.start();
     });
@@ -195,11 +187,9 @@ void main() {
         port: 0,
         commandPrefix: command,
         modelCommandPrefix: modelCommand,
-        manualCommandPrefix: 'TCP: manual',
         eventLog: log,
         onRequestSerial: () async => null,
         onRequestModel: () async => null,
-        onRequestManual: () async => null,
       );
       await server.start();
       final response = await clientRoundTrip(command);

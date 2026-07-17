@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -8,19 +7,17 @@ import 'laser_tcp_diagnostics.dart';
 import 'serial_marking_backend.dart';
 
 /// Rota de um comando TCP recebido do DiatuCAD.
-enum DiatuTcpRoute { serial, model, manual, bad }
+enum DiatuTcpRoute { serial, model, bad }
 
 /// Servidor TCP para DiatuCAD/EzCad (texto variável).
-/// O laser conecta e recebe serial, modelo ou manual do produto.
+/// O laser conecta e recebe serial ou modelo do produto.
 class DiatuLaserTcpServer implements SerialMarkingBackend {
   DiatuLaserTcpServer({
     required this.port,
     required this.commandPrefix,
     required this.modelCommandPrefix,
-    required this.manualCommandPrefix,
     required this.onRequestSerial,
     required this.onRequestModel,
-    required this.onRequestManual,
     this.eventLog,
     this.connectionTimeout = const Duration(seconds: 10),
   });
@@ -28,10 +25,8 @@ class DiatuLaserTcpServer implements SerialMarkingBackend {
   final int port;
   final String commandPrefix;
   final String modelCommandPrefix;
-  final String manualCommandPrefix;
   final Future<String?> Function() onRequestSerial;
   final Future<String?> Function() onRequestModel;
-  final Future<String?> Function() onRequestManual;
   final LaserTcpEventLog? eventLog;
   final Duration connectionTimeout;
 
@@ -106,7 +101,6 @@ class DiatuLaserTcpServer implements SerialMarkingBackend {
         requestText,
         serialCommandPrefix: commandPrefix,
         modelCommandPrefix: modelCommandPrefix,
-        manualCommandPrefix: manualCommandPrefix,
       );
       if (route == DiatuTcpRoute.bad) {
         response = 'ERROR:BADCMD';
@@ -117,7 +111,6 @@ class DiatuLaserTcpServer implements SerialMarkingBackend {
 
       final payload = switch (route) {
         DiatuTcpRoute.model => await onRequestModel(),
-        DiatuTcpRoute.manual => await onRequestManual(),
         _ => await onRequestSerial(),
       };
       response = payload ?? kMarkQueueEmptyResponse;
@@ -157,23 +150,18 @@ bool matchesDiatuTcpCommand(String request, String commandPrefix) {
   return normalized.contains(prefix);
 }
 
-/// Decide se o comando TCP pede serial, modelo, manual ou é inválido.
+/// Decide se o comando TCP pede serial, modelo ou é inválido.
 DiatuTcpRoute routeDiatuTcpCommand(
   String request, {
   required String serialCommandPrefix,
   required String modelCommandPrefix,
-  required String manualCommandPrefix,
 }) {
   final normalized = normalizeTcpPayload(request);
   if (normalized.isEmpty) return DiatuTcpRoute.bad;
 
   final modelPrefix = normalizeTcpPayload(modelCommandPrefix);
-  final manualPrefix = normalizeTcpPayload(manualCommandPrefix);
   final serialPrefix = normalizeTcpPayload(serialCommandPrefix);
 
-  if (manualPrefix.isNotEmpty && normalized.contains(manualPrefix)) {
-    return DiatuTcpRoute.manual;
-  }
   if (modelPrefix.isNotEmpty && normalized.contains(modelPrefix)) {
     return DiatuTcpRoute.model;
   }

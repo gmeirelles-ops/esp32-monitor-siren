@@ -2,7 +2,6 @@ import 'dart:ffi';
 import 'dart:io';
 
 import 'package:drift/native.dart';
-import 'package:drift/drift.dart' show Value;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqlite3/open.dart';
@@ -40,7 +39,6 @@ void main() {
             ProductsCompanion.insert(
               idProduto: '123',
               nome: 'Sirene X',
-              manual: const Value('MAN-001'),
               potenciaRef: 20,
               potenciaMin: 18,
               potenciaMax: 22,
@@ -48,26 +46,11 @@ void main() {
           );
     });
 
-    test('retorna manual cadastrado para gravação', () async {
-      final processor = MarkQueueProcessor(
-        db: db,
-        readConfig: () => AppConfig(prefs),
-      );
-      await db.addToMarkQueue(serial: '12326000018', numeroOp: '2026001');
-      try {
-        expect(await processor.simulateDiatuClient(), '12326000018');
-        expect(await processor.simulateDiatuManualClient(), 'MAN-001');
-      } finally {
-        processor.stop();
-        await Future<void>.delayed(const Duration(milliseconds: 50));
-      }
-    });
-
     tearDown(() async {
       await db.close();
     });
 
-    test('serial fica in_progress até pedido de manual confirmar', () async {
+    test('pedido de serial marca delivered e some da fila pendente', () async {
       final processor = MarkQueueProcessor(
         db: db,
         readConfig: () => AppConfig(prefs),
@@ -81,54 +64,33 @@ void main() {
         final serial = await processor.simulateDiatuClient();
         expect(serial, '12326000018');
 
-        final rowAfterSerial = await (db.select(
+        final row = await (db.select(
           db.markQueueEntries,
         )..where((t) => t.id.equals(id))).getSingle();
-        expect(rowAfterSerial.status, 'in_progress');
+        expect(row.status, 'delivered');
 
-        final model = await processor.simulateDiatuModelClient();
-        expect(model, 'Sirene X');
-
-        final rowAfterModel = await (db.select(
-          db.markQueueEntries,
-        )..where((t) => t.id.equals(id))).getSingle();
-        expect(rowAfterModel.status, 'in_progress');
-
-        final manual = await processor.simulateDiatuManualClient();
-        expect(manual, 'MAN-001');
-
-        final rowAfterManual = await (db.select(
-          db.markQueueEntries,
-        )..where((t) => t.id.equals(id))).getSingle();
-        expect(rowAfterManual.status, 'delivered');
+        final pending = await db.watchPendingMarkQueue().first;
+        expect(pending, isEmpty);
       } finally {
         processor.stop();
         await Future<void>.delayed(const Duration(milliseconds: 50));
       }
     });
 
-    test('produto sem manual conclui a gravação após o modelo', () async {
-      await db.upsertProduct(
-        idProduto: '124',
-        nome: 'Sirene sem manual',
-        potenciaRef: 20,
-        potenciaMin: 18,
-        potenciaMax: 22,
-        toleranciaPct: 10,
-        tempoTesteSec: 5,
-      );
+    test('pedido de modelo devolve nome sem alterar fila', () async {
       final processor = MarkQueueProcessor(
         db: db,
         readConfig: () => AppConfig(prefs),
       );
       final id = await db.addToMarkQueue(
-        serial: '12426000018',
+        serial: '12326000018',
         numeroOp: '2026001',
       );
 
       try {
-        expect(await processor.simulateDiatuClient(), '12426000018');
-        expect(await processor.simulateDiatuModelClient(), 'Sirene sem manual');
+        expect(await processor.simulateDiatuClient(), '12326000018');
+        expect(await processor.simulateDiatuModelClient(), 'Sirene X');
+
         final row = await (db.select(
           db.markQueueEntries,
         )..where((t) => t.id.equals(id))).getSingle();

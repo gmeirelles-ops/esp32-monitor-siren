@@ -47,7 +47,6 @@ class AppConfig {
   static const defaultLaserTcpPort = 9101;
   static const defaultLaserTcpCommand = 'TCP: Give me string';
   static const defaultLaserModelCommand = 'TCP: model';
-  static const defaultLaserManualCommand = 'TCP: manual';
   static const laserTestSerial = '0000000000';
   static const staleDeviceTimeout = Duration(seconds: 90);
   static const defaultStationId = 'posto-01';
@@ -87,9 +86,6 @@ class AppConfig {
 
   String get laserModelCommand =>
       _prefs.getString('laser_model_command') ?? defaultLaserModelCommand;
-
-  String get laserManualCommand =>
-      _prefs.getString('laser_manual_command') ?? defaultLaserManualCommand;
 
   String get printerWindowsName =>
       _prefs.getString('printer_windows_name') ?? '';
@@ -164,8 +160,6 @@ class AppConfig {
       _prefs.setString('laser_tcp_command', value.trim());
   Future<void> setLaserModelCommand(String value) =>
       _prefs.setString('laser_model_command', value.trim());
-  Future<void> setLaserManualCommand(String value) =>
-      _prefs.setString('laser_manual_command', value.trim());
   Future<void> setPrinterWindowsName(String value) =>
       _prefs.setString('printer_windows_name', value.trim());
   Future<void> setSelectedDeviceId(String? value) async {

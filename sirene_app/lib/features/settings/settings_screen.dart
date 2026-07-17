@@ -69,7 +69,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   late final TextEditingController _laserTcpPort;
   late final TextEditingController _laserTcpCommand;
   late final TextEditingController _laserModelCommand;
-  late final TextEditingController _laserManualCommand;
   PrinterMode _printerMode = PrinterMode.usb;
   MarkingMode _markingMode = MarkingMode.laser;
   String? _printerWindowsName;
@@ -98,9 +97,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     _laserTcpPort = TextEditingController(text: '${config.laserTcpPort}');
     _laserTcpCommand = TextEditingController(text: config.laserTcpCommand);
     _laserModelCommand = TextEditingController(text: config.laserModelCommand);
-    _laserManualCommand = TextEditingController(
-      text: config.laserManualCommand,
-    );
     _markingMode = config.markingMode;
     _printerMode = Platform.isWindows
         ? config.printerMode
@@ -130,7 +126,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     _laserTcpPort.dispose();
     _laserTcpCommand.dispose();
     _laserModelCommand.dispose();
-    _laserManualCommand.dispose();
     super.dispose();
   }
 
@@ -163,20 +158,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       );
       return;
     }
-    if (_laserManualCommand.text.trim().isEmpty) {
-      _showMessage(
-        'Informe o comando TCP do manual. Padrão recomendado: ${AppConfig.defaultLaserManualCommand}',
-      );
-      return;
-    }
     final laserCommands = {
       _laserTcpCommand.text.trim(),
       _laserModelCommand.text.trim(),
-      _laserManualCommand.text.trim(),
     };
-    if (laserCommands.length != 3) {
+    if (laserCommands.length != 2) {
       _showMessage(
-        'Os comandos TCP do serial, modelo e manual devem ser diferentes.',
+        'Os comandos TCP do serial e do modelo devem ser diferentes.',
       );
       return;
     }
@@ -225,10 +213,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ? AppConfig.defaultLaserModelCommand
         : _laserModelCommand.text.trim();
     await config.setLaserModelCommand(laserModelCommand);
-    final laserManualCommand = _laserManualCommand.text.trim().isEmpty
-        ? AppConfig.defaultLaserManualCommand
-        : _laserManualCommand.text.trim();
-    await config.setLaserManualCommand(laserManualCommand);
     await config.setYieldTargetPct(_yieldTargetPct);
     await config.setShiftStartHour(_shiftStartHour);
 
@@ -262,12 +246,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
     if (mounted) {
       if (laserCommand != AppConfig.defaultLaserTcpCommand ||
-          laserModelCommand != AppConfig.defaultLaserModelCommand ||
-          laserManualCommand != AppConfig.defaultLaserManualCommand) {
+          laserModelCommand != AppConfig.defaultLaserModelCommand) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Comandos salvos. Confirme no DiatuCAD: serial="$laserCommand", modelo="$laserModelCommand", manual="$laserManualCommand"',
+              'Comandos salvos. Confirme no DiatuCAD: serial="$laserCommand", modelo="$laserModelCommand"',
             ),
             duration: const Duration(seconds: 6),
           ),
@@ -1443,7 +1426,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           icon: Icons.precision_manufacturing_outlined,
           title: 'Gravação laser DiatuCAD',
           subtitle:
-              'Servidor TCP no app — F2 grava serial, modelo e manual do produto',
+              'Servidor TCP no app — F2 grava serial e nome do modelo',
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -1472,15 +1455,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   labelText: 'Comando TCP do modelo (texto)',
                   helperText:
                       'Objeto de texto no DiatuCAD — padrão: ${AppConfig.defaultLaserModelCommand}',
-                ),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: _laserManualCommand,
-                decoration: InputDecoration(
-                  labelText: 'Comando TCP do manual (texto)',
-                  helperText:
-                      'Objeto de texto do manual no DiatuCAD — padrão: ${AppConfig.defaultLaserManualCommand}',
                 ),
               ),
               const SizedBox(height: 8),
