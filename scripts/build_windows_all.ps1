@@ -14,9 +14,14 @@ Write-Host ""
 . (Join-Path $PSScriptRoot "windows_build_common.ps1")
 
 $version = Get-SireneAppVersion
-$setupPath = Compile-SireneWindowsInstaller -Version $version
+$setupName = "DipontoSireneValidator-$version-setup.exe"
+$setupPath = Join-Path (Join-Path (Get-RepoRoot) "dist") $setupName
+$null = Compile-SireneWindowsInstaller -Version $version
+if (-not (Test-Path $setupPath)) {
+    throw "Instalador nao encontrado apos build: $setupPath"
+}
 
 Write-Host ""
 Write-Host "Artefatos em dist/:"
 Write-Host "  ZIP:        DipontoSireneValidator-$version-win64.zip"
-Write-Host "  Instalador: $(Split-Path $setupPath -Leaf)"
+Write-Host "  Instalador: $setupName"

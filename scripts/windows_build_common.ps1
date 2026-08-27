@@ -355,9 +355,12 @@ function Ensure-SireneEsptoolBundled {
         throw "esptool.exe nao encontrado e bundle script ausente: $bundleScript"
     }
     # Evita que stderr do pip (WARNING) aborte o job com $ErrorActionPreference=Stop.
+    # Redireciona stdout/stderr para o host para nao contaminar o pipeline de funcoes
+    # que retornam caminho (ex.: Compile-SireneWindowsInstaller).
     $prevEap = $ErrorActionPreference
     $ErrorActionPreference = "Continue"
-    & powershell -NoProfile -ExecutionPolicy Bypass -File $bundleScript
+    & powershell -NoProfile -ExecutionPolicy Bypass -File $bundleScript *>&1 |
+        ForEach-Object { Write-Host $_ }
     $bundleExit = $LASTEXITCODE
     $ErrorActionPreference = $prevEap
     if ($bundleExit -ne 0 -or -not (Test-Path $esptool)) {
@@ -387,8 +390,9 @@ function Compile-SireneWindowsInstaller {
 
     New-Item -ItemType Directory -Path $distRoot -Force | Out-Null
 
-    Ensure-SireneEsptoolBundled
-    Copy-SireneBundledTools -AppDestDir $releaseDir
+    # $null = evita vazamento de pipeline (stdout de subprocessos) no retorno.
+    $null = Ensure-SireneEsptoolBundled
+    $null = Copy-SireneBundledTools -AppDestDir $releaseDir
 
     $readmeContent = Get-Content $readmeTemplate -Raw -Encoding UTF8
     $readmeContent.Replace("{{VERSION}}", $Version) | Set-Content $readmeInstall -Encoding UTF8
@@ -415,7 +419,8 @@ function Compile-SireneWindowsInstaller {
         throw "Instalador nao gerado: $setupPath"
     }
 
-    return $setupPath
+    # Virgula obriga retorno escalar mesmo se algo vazou no pipeline antes.
+    return ,$setupPath
 }
 
 function Get-InnoSetupCompiler {
