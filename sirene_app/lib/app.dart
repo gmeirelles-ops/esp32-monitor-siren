@@ -221,7 +221,6 @@ class _SireneAppShellState extends ConsumerState<SireneAppShell> {
       return [
         (screen: const BatchScreen(), icon: Icons.playlist_add_check, label: 'Lote'),
         labelsEntry,
-        (screen: const LookupScreen(), icon: Icons.search, label: 'Consulta'),
       ];
     }
 

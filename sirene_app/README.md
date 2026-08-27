@@ -85,16 +85,17 @@ flutter test
 flutter run -d linux
 ```
 
-O target Linux usa o mesmo layout desktop (`NavigationRail`) e o mesmo fluxo de provisionamento (portal no navegador), então serve bem para testar MQTT, lote, seriais e etiquetas/gravação laser durante o desenvolvimento.
+O target Linux usa o mesmo layout desktop (`NavigationRail`) e o mesmo fluxo de provisionamento (portal no navegador), então serve bem para testar MQTT, lote, seriais e gravação laser durante o desenvolvimento.
 
-### Marcação de serial (Etiquetas vs Laser)
+### Marcação de serial (laser DiatuCAD)
 
-| Modo | Hardware | Configuração |
-|------|----------|--------------|
-| **Etiquetas (Zebra)** | ZT230 USB ou rede | Buffer ZPL múltiplos de 3 |
-| **Gravação laser (Diatu)** | Diaotu B3 + DiatuCAD1 | Servidor TCP no app; laser pede serial via F2 |
+Único modo: **gravação laser**. O app expõe servidor TCP (porta padrão 9101); o DiatuCAD solicita o serial da fila (`MarkQueue`) via F2.
 
-Documentação laser: [`docs/laser-reference/`](../docs/laser-reference/README.md)
+| Hardware | Configuração |
+|----------|--------------|
+| Diaotu B3 + DiatuCAD | Configurações → Gravação → porta TCP + comandos |
+
+Documentação: [`docs/laser-reference/`](../docs/laser-reference/README.md)
 
 ### O que NÃO funciona no Linux
 
@@ -157,7 +158,7 @@ Saída em `build/windows/x64/runner/Release/` — copie a pasta inteira (não s�
 ## Configuração no posto (Windows)
 
 1. PC na mesma rede do broker MQTT (padrão `192.168.51.87:1883`)
-2. **Configurações** → host/porta do broker e IP da impressora Zebra (`9100`)
+2. **Configurações** → host/porta do broker MQTT e porta TCP do laser (padrão `9101`)
 3. **Atualizar firmware** → OTA (rede) ou USB (cabo COM) — ver `docs/GUIA_COMPLETO.md` §11
 4. Provisionamento ESP32: Wi-Fi `SireneValidator` → portal `http://192.168.4.1` no navegador
 5. **Produtos** → cadastre cada SKU com autocalibração (peça padrão na bancada, tolerância 10%)

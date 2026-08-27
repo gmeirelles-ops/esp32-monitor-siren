@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -7,8 +8,9 @@ import 'package:intl/intl.dart';
 import '../../core/config/app_config.dart';
 import '../../core/database/database.dart';
 import '../../core/providers/core_providers.dart';
-import '../../core/services/factory_reset_service.dart';
 import '../../core/services/app_log.dart';
+import '../../core/services/backup_service.dart';
+import '../../core/services/factory_reset_service.dart';
 import '../../core/theme/diponto_theme.dart';
 import '../../shared/display_labels.dart';
 import '../../shared/dropdown_value.dart';
@@ -30,7 +32,6 @@ import '../demo/demo_service.dart';
 import '../ensaio/ensaio_screen.dart';
 import '../mqtt/mqtt_providers.dart';
 import '../mqtt/models/mqtt_messages.dart';
-import '../labels/label_printer.dart';
 import '../labels/laser_diagnostics_panel.dart';
 import '../labels/marking_providers.dart';
 import '../labels/serial_marking_backend.dart';
@@ -63,18 +64,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   bool _mqttUseWebSocket = AppConfig.defaultMqttUseWebSocket;
   bool _mqttUseTls = AppConfig.defaultMqttUseTls;
   bool _mqttPasswordVisible = false;
-  late final TextEditingController _printerHost;
-  late final TextEditingController _printerPort;
   late final TextEditingController _stationId;
   late final TextEditingController _laserTcpPort;
   late final TextEditingController _laserTcpCommand;
   late final TextEditingController _laserModelCommand;
-  PrinterMode _printerMode = PrinterMode.usb;
-  MarkingMode _markingMode = MarkingMode.laser;
-  String? _printerWindowsName;
   String? _bancadaDeviceId;
-  List<String> _windowsPrinters = [];
-  bool _loadingPrinters = false;
   late double _yieldTargetPct;
   late int _shiftStartHour;
   SettingsCategory _selectedCategory = SettingsCategory.posto;
@@ -91,21 +85,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     _mqttPassword = TextEditingController(text: config.mqttPassword);
     _mqttUseWebSocket = config.mqttUseWebSocket;
     _mqttUseTls = config.mqttUseTls;
-    _printerHost = TextEditingController(text: config.printerHost);
-    _printerPort = TextEditingController(text: '${config.printerPort}');
     _stationId = TextEditingController(text: config.stationId);
     _laserTcpPort = TextEditingController(text: '${config.laserTcpPort}');
     _laserTcpCommand = TextEditingController(text: config.laserTcpCommand);
     _laserModelCommand = TextEditingController(text: config.laserModelCommand);
-    _markingMode = config.markingMode;
-    _printerMode = Platform.isWindows ? config.printerMode : PrinterMode.network;
-    _printerWindowsName = config.printerWindowsName.isEmpty ? null : config.printerWindowsName;
     _bancadaDeviceId = config.selectedDeviceId;
     _yieldTargetPct = config.yieldTargetPct;
     _shiftStartHour = config.shiftStartHour;
-    if (Platform.isWindows) {
-      _refreshWindowsPrinters();
-    }
   }
 
   @override
@@ -116,29 +102,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     _mqttWsPath.dispose();
     _mqttUsername.dispose();
     _mqttPassword.dispose();
-    _printerHost.dispose();
-    _printerPort.dispose();
     _stationId.dispose();
     _laserTcpPort.dispose();
     _laserTcpCommand.dispose();
     _laserModelCommand.dispose();
     super.dispose();
-  }
-
-  Future<void> _refreshWindowsPrinters() async {
-    if (!Platform.isWindows) return;
-    setState(() => _loadingPrinters = true);
-    final names = listWindowsPrinters();
-    if (!mounted) return;
-    setState(() {
-      _windowsPrinters = names;
-      _loadingPrinters = false;
-      if (_printerWindowsName != null && !names.contains(_printerWindowsName)) {
-        _printerWindowsName = names.isEmpty ? null : names.first;
-      } else if (_printerWindowsName == null && names.isNotEmpty) {
-        _printerWindowsName = names.first;
-      }
-    });
   }
 
   Future<void> _save() async {
@@ -178,14 +146,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     await config.setMqttUseTls(_mqttUseTls);
     await config.setMqttUsername(_mqttUsername.text.trim());
     await config.setMqttPassword(_mqttPassword.text);
-    await config.setPrinterMode(Platform.isWindows ? _printerMode : PrinterMode.network);
-    await config.setPrinterHost(_printerHost.text.trim());
-    await config.setPrinterPort(int.tryParse(_printerPort.text) ?? 9100);
-    if (_printerWindowsName != null) {
-      await config.setPrinterWindowsName(_printerWindowsName!);
-    }
     await config.setStationId(stationId);
-    await config.setMarkingMode(MarkingMode.laser);
     await config.setLaserTcpPort(int.tryParse(_laserTcpPort.text) ?? AppConfig.defaultLaserTcpPort);
     final laserCommand = _laserTcpCommand.text.trim().isEmpty
         ? AppConfig.defaultLaserTcpCommand
@@ -515,6 +476,108 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
   }
 
+  Future<void> _exportBackup() async {
+    final location = await getSaveLocation(
+      suggestedName: defaultBackupFileName(),
+      acceptedTypeGroups: [
+        const XTypeGroup(label: 'Backup ZIP', extensions: ['zip']),
+      ],
+    );
+    if (location == null || !mounted) return;
+
+    try {
+      final manifest = await ref.read(backupServiceProvider).exportToFile(File(location.path));
+      if (!mounted) return;
+      _showMessage(
+        'Backup salvo (${manifest.stationId}, schema ${manifest.schemaVersion}).',
+      );
+    } catch (e) {
+      if (mounted) _showMessage('Erro no backup: $e');
+    }
+  }
+
+  Future<void> _restoreBackup() async {
+    final file = await openFile(
+      acceptedTypeGroups: [
+        const XTypeGroup(label: 'Backup ZIP', extensions: ['zip']),
+      ],
+    );
+    if (file == null || !mounted) return;
+
+    final pending = await ref.read(backupServiceProvider).countPendingSync();
+    if (!mounted) return;
+
+    final confirmController = TextEditingController();
+    final proceed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Restaurar backup'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'O banco local será substituído pelo arquivo:\n${file.name}\n\n'
+              'Digite RESTAURAR para confirmar.',
+            ),
+            if (pending > 0) ...[
+              const SizedBox(height: 12),
+              Text(
+                'Atenção: existem $pending pendência(s) na fila de sync que serão perdidas.',
+                style: TextStyle(color: DipontoColors.error, fontWeight: FontWeight.w600),
+              ),
+            ],
+            const SizedBox(height: 12),
+            TextField(
+              controller: confirmController,
+              decoration: const InputDecoration(labelText: 'Confirmação'),
+              autofocus: true,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.orange.shade800),
+            onPressed: () {
+              if (confirmController.text.trim() != 'RESTAURAR') {
+                ScaffoldMessenger.of(ctx).showSnackBar(
+                  const SnackBar(content: Text('Digite RESTAURAR para confirmar')),
+                );
+                return;
+              }
+              Navigator.pop(ctx, true);
+            },
+            child: const Text('Restaurar'),
+          ),
+        ],
+      ),
+    );
+    confirmController.dispose();
+    if (proceed != true || !mounted) return;
+
+    try {
+      final manifest = await ref.read(backupServiceProvider).restoreFromFile(File(file.path));
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Restore concluído'),
+          content: Text(
+            'Backup de ${manifest.stationId} (schema ${manifest.schemaVersion}) aplicado.\n'
+            'Recomenda-se fechar e reabrir o aplicativo.',
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK')),
+          ],
+        ),
+      );
+    } catch (e) {
+      if (mounted) _showMessage('Erro no restore: $e');
+    }
+  }
+
   Future<void> _factoryReset() async {
     final confirmController = TextEditingController();
     var logoutFirebase = false;
@@ -621,31 +684,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       if (mounted) {
         _showMessage(
           'Serial ${AppConfig.laserTestSerial} enfileirado. '
-          'Acione F2 no DiatuCAD para gravar.',
+          'Acione o pedal para gravar.',
         );
       }
     } catch (e) {
       if (mounted) {
         _showMessage(formatMarkingError(e));
-      }
-    }
-  }
-
-  Future<void> _testPrint() async {
-    try {
-      final printer = createLabelPrinterTransportFromValues(
-        mode: _printerMode,
-        host: _printerHost.text.trim(),
-        port: int.tryParse(_printerPort.text) ?? 9100,
-        windowsName: _printerWindowsName ?? '',
-      );
-      await printer.sendZpl(kTestPrintZpl);
-      if (mounted) {
-        _showMessage('Etiqueta de teste enviada (${printer.modeDescription})');
-      }
-    } catch (e) {
-      if (mounted) {
-        _showMessage(formatPrinterError(e, _printerMode));
       }
     }
   }
@@ -1137,6 +1181,38 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           child: const SerialReconciliationPanel(),
         ),
         ActionSectionCard(
+          icon: Icons.backup_outlined,
+          title: 'Backup e restore',
+          subtitle: 'Exportar ou restaurar o SQLite deste posto',
+          accentColor: DipontoColors.primary,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                'Gera um ZIP com o banco local e preferências (MQTT, laser, station). '
+                'Use ao trocar de PC ou antes de um reset geral.',
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 12,
+                runSpacing: 8,
+                children: [
+                  FilledButton.tonalIcon(
+                    onPressed: _exportBackup,
+                    icon: const Icon(Icons.save_alt),
+                    label: const Text('Fazer backup'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: _restoreBackup,
+                    icon: const Icon(Icons.restore),
+                    label: const Text('Restaurar backup'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        ActionSectionCard(
           icon: Icons.science_outlined,
           title: 'Modo ensaio',
           subtitle: 'Ciclos ligado/desligado para teste de resistência',
@@ -1320,7 +1396,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ActionSectionCard(
           icon: Icons.precision_manufacturing_outlined,
           title: 'Gravação laser DiatuCAD',
-          subtitle: 'Servidor TCP no app — F2 grava serial e modelo do produto',
+          subtitle: 'Servidor TCP no app — no posto, acione o pedal para gravar',
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [

@@ -1,31 +1,4 @@
-import 'dart:io';
-
 import 'package:shared_preferences/shared_preferences.dart';
-
-enum PrinterMode {
-  usb,
-  network;
-
-  static PrinterMode fromStorage(String? value) {
-    if (value == 'network') return PrinterMode.network;
-    return PrinterMode.usb;
-  }
-
-  String get storageValue => this == PrinterMode.network ? 'network' : 'usb';
-}
-
-/// Marcação física do serial: etiqueta Zebra ou gravação laser DiatuCAD.
-enum MarkingMode {
-  labels,
-  laser;
-
-  static MarkingMode fromStorage(String? value) {
-    if (value == 'laser') return MarkingMode.laser;
-    return MarkingMode.labels;
-  }
-
-  String get storageValue => this == MarkingMode.laser ? 'laser' : 'labels';
-}
 
 class AppConfig {
   AppConfig(this._prefs);
@@ -40,10 +13,6 @@ class AppConfig {
   static const defaultMqttUseTls = true;
   static const defaultMqttUsername = 'devices';
   static const defaultMqttPassword = '';
-  static const defaultPrinterHost = '192.168.1.50';
-  static const defaultPrinterPort = 9100;
-  static const defaultPrinterMode = PrinterMode.usb;
-  static const defaultMarkingMode = MarkingMode.laser;
   static const defaultLaserTcpPort = 9101;
   static const defaultLaserTcpCommand = 'TCP: Give me string';
   static const defaultLaserModelCommand = 'TCP: model';
@@ -66,16 +35,6 @@ class AppConfig {
       _prefs.getString('mqtt_username') ?? defaultMqttUsername;
   String get mqttPassword =>
       _prefs.getString('mqtt_password') ?? defaultMqttPassword;
-  String get printerHost => _prefs.getString('printer_host') ?? defaultPrinterHost;
-  int get printerPort => _prefs.getInt('printer_port') ?? defaultPrinterPort;
-  PrinterMode get printerMode {
-    final stored = _prefs.getString('printer_mode');
-    if (stored != null) return PrinterMode.fromStorage(stored);
-    return Platform.isWindows ? PrinterMode.usb : PrinterMode.network;
-  }
-
-  /// Marcação física: somente gravação laser DiatuCAD.
-  MarkingMode get markingMode => MarkingMode.laser;
 
   int get laserTcpPort => _prefs.getInt('laser_tcp_port') ?? defaultLaserTcpPort;
 
@@ -85,7 +44,6 @@ class AppConfig {
   String get laserModelCommand =>
       _prefs.getString('laser_model_command') ?? defaultLaserModelCommand;
 
-  String get printerWindowsName => _prefs.getString('printer_windows_name') ?? '';
   String? get selectedDeviceId => _prefs.getString('selected_device_id');
   bool get bancadaSetupComplete => _prefs.getBool('bancada_setup_complete') ?? false;
   bool get wifiProvisioned => _prefs.getBool('wifi_provisioned') ?? false;
@@ -134,19 +92,11 @@ class AppConfig {
       _prefs.setString('mqtt_username', value.trim());
   Future<void> setMqttPassword(String value) =>
       _prefs.setString('mqtt_password', value);
-  Future<void> setPrinterHost(String value) => _prefs.setString('printer_host', value);
-  Future<void> setPrinterPort(int value) => _prefs.setInt('printer_port', value);
-  Future<void> setPrinterMode(PrinterMode value) =>
-      _prefs.setString('printer_mode', value.storageValue);
-  Future<void> setMarkingMode(MarkingMode value) =>
-      _prefs.setString('marking_mode', value.storageValue);
   Future<void> setLaserTcpPort(int value) => _prefs.setInt('laser_tcp_port', value);
   Future<void> setLaserTcpCommand(String value) =>
       _prefs.setString('laser_tcp_command', value.trim());
   Future<void> setLaserModelCommand(String value) =>
       _prefs.setString('laser_model_command', value.trim());
-  Future<void> setPrinterWindowsName(String value) =>
-      _prefs.setString('printer_windows_name', value.trim());
   Future<void> setSelectedDeviceId(String? value) async {
     if (value == null) {
       await _prefs.remove('selected_device_id');

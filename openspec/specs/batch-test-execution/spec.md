@@ -173,7 +173,7 @@ O app Flutter SHALL calcular `ano` e `proximo_sequencial` automaticamente antes 
 - **THEN** o payload MQTT continua incluindo `ano` e `proximo_sequencial` conforme contrato do firmware
 
 ### Requirement: Resiliência do fluxo de teste (003)
-O firmware SHALL publicar heartbeat imediato ao entrar em `TESTING` e após publicar `tipo:teste`. O app SHALL deduplicar resultados por `(numero_op, ts_ms)` quando presente, gravar SQLite antes de etiqueta/sync, e exibir estados Testando/Aguardando MQTT no painel operador.
+O firmware SHALL publicar heartbeat imediato ao entrar em `TESTING` e após publicar `tipo:teste`. O app SHALL deduplicar resultados por `(numero_op, ts_ms)` quando presente, gravar SQLite antes de enfileirar laser / sync, e exibir estados Testando/Aguardando MQTT no painel operador.
 
 #### Scenario: Múltiplas reprovações no mesmo sequencial
 - **WHEN** o firmware publica 3 `tipo:teste` REPROVADO com o mesmo `sequencial` e `ts_ms` distintos
@@ -188,11 +188,11 @@ O firmware SHALL publicar heartbeat imediato ao entrar em `TESTING` e após publ
 - **THEN** o firmware publica heartbeat com `estado: TESTING` em menos de 2 segundos após o início do ciclo
 
 ### Requirement: App confia no veredito MQTT (004)
-O app Flutter SHALL tratar o campo `veredito` de `tipo:teste` como fonte da verdade para aprovação/reprovação, serial e etiqueta. O app SHALL NOT recalcular veredito a partir de `potencia_media` e limites locais do lote.
+O app Flutter SHALL tratar o campo `veredito` de `tipo:teste` como fonte da verdade para aprovação/reprovação, serial e marcação física. O app SHALL NOT recalcular veredito a partir de `potencia_media` e limites locais do lote.
 
 #### Scenario: Reprovado MQTT com potência na faixa local
 - **WHEN** o app recebe `tipo:teste` com `veredito: REPROVADO` e `potencia_media` dentro dos limites do lote ativo
-- **THEN** o app grava REPROVADO e não gera serial nem etiqueta
+- **THEN** o app grava REPROVADO e não gera serial nem enfileira laser
 
 #### Scenario: SET_BATCH durante teste
 - **WHEN** o dispositivo está em `TESTING` e recebe `SET_BATCH`

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
-import '../../core/config/app_config.dart';
 import '../../core/database/database.dart';
 import '../../core/database/veredito.dart';
 import '../../core/theme/diponto_theme.dart';
@@ -146,8 +145,7 @@ class _BatchReportDetailScreenState extends ConsumerState<BatchReportDetailScree
   Widget build(BuildContext context) {
     final dateFmt = DateFormat('dd/MM/yyyy HH:mm');
     final bancadas = ref.watch(bancadasMapProvider).valueOrNull ?? {};
-    final markingMode = ref.watch(appConfigProvider).markingMode;
-    final remarkCopy = remarkUiCopy(markingMode, '');
+    final remarkCopy = remarkUiCopy('');
 
     return Scaffold(
       appBar: AppBar(

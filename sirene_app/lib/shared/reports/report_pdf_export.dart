@@ -67,6 +67,10 @@ Future<String> exportReportFile({
     ReportExportFormat.xml => Future.value(
         saveReportText(basename, buildXml(), 'xml'),
       ),
+    ReportExportFormat.csvSummary || ReportExportFormat.csvTests =>
+      throw UnsupportedError(
+        'CSV deve ser exportado pelo fluxo do Painel (file_selector).',
+      ),
   };
 }
 

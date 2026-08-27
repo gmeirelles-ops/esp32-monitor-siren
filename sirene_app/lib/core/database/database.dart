@@ -33,13 +33,6 @@ class TestResults extends Table {
   DateTimeColumn get createdAt => dateTime()();
 }
 
-class LabelBufferEntries extends Table {
-  IntColumn get id => integer().autoIncrement()();
-  TextColumn get serial => text()();
-  TextColumn get numeroOp => text()();
-  DateTimeColumn get createdAt => dateTime()();
-}
-
 class MarkQueueEntries extends Table {
   IntColumn get id => integer().autoIncrement()();
   TextColumn get serial => text()();
@@ -172,7 +165,6 @@ class EnsaioRecords extends Table {
 @DriftDatabase(
   tables: [
     TestResults,
-    LabelBufferEntries,
     MarkQueueEntries,
     Products,
     SyncQueue,
@@ -198,7 +190,7 @@ class AppDatabase extends _$AppDatabase {
   }
 
   @override
-  int get schemaVersion => 19;
+  int get schemaVersion => 20;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -281,6 +273,11 @@ class AppDatabase extends _$AppDatabase {
               'CREATE INDEX IF NOT EXISTS idx_test_results_op_ts_ms '
               'ON test_results(numero_op, firmware_ts_ms) '
               'WHERE firmware_ts_ms IS NOT NULL',
+            );
+          }
+          if (from < 20) {
+            await m.database.customStatement(
+              'DROP TABLE IF EXISTS label_buffer_entries',
             );
           }
         },
@@ -541,15 +538,17 @@ class AppDatabase extends _$AppDatabase {
       product = await getProduct(trimmed.substring(0, 3));
     }
 
-    final pendingLabel = await (select(labelBufferEntries)
-          ..where((t) => t.serial.equals(trimmed)))
+    final pendingMark = await (select(markQueueEntries)
+          ..where((t) =>
+              t.serial.equals(trimmed) &
+              (t.status.equals('pending') | t.status.equals('in_progress'))))
         .getSingleOrNull();
 
     return SirenTraceability(
       serial: trimmed,
       attempts: attempts,
       product: product,
-      pendingLabel: pendingLabel,
+      pendingMark: pendingMark,
     );
   }
 
@@ -658,59 +657,6 @@ class AppDatabase extends _$AppDatabase {
     final row = await (select(markQueueEntries)..where((t) => t.serial.equals(serial)))
         .getSingleOrNull();
     return row != null;
-  }
-
-  Future<bool> labelBufferContainsSerial(String serial) async {
-    final row = await (select(labelBufferEntries)..where((t) => t.serial.equals(serial)))
-        .getSingleOrNull();
-    return row != null;
-  }
-
-  Future<int> addLabelToBuffer({
-    required String serial,
-    required String numeroOp,
-  }) {
-    return into(labelBufferEntries).insert(
-      LabelBufferEntriesCompanion.insert(
-        serial: serial,
-        numeroOp: numeroOp,
-        createdAt: DateTime.now(),
-      ),
-    );
-  }
-
-  Future<List<LabelBufferEntry>> getLabelBuffer() {
-    return (select(labelBufferEntries)
-          ..orderBy([(t) => OrderingTerm.asc(t.createdAt)]))
-        .get();
-  }
-
-  Stream<List<LabelBufferEntry>> watchLabelBuffer() {
-    return (select(labelBufferEntries)
-          ..orderBy([(t) => OrderingTerm.asc(t.createdAt)]))
-        .watch();
-  }
-
-  Stream<int> watchLabelBufferCount() {
-    final count = countAll();
-    final query = selectOnly(labelBufferEntries)..addColumns([count]);
-    return query.watch().map((rows) => rows.first.read(count) ?? 0);
-  }
-
-  Future<void> removeLabelsFromBuffer(List<int> ids) async {
-    if (ids.isEmpty) return;
-    await (delete(labelBufferEntries)..where((t) => t.id.isIn(ids))).go();
-  }
-
-  Future<int> removeLabelsForOp(String numeroOp) async {
-    return (delete(labelBufferEntries)..where((t) => t.numeroOp.equals(numeroOp))).go();
-  }
-
-  Future<int> labelBufferCount() async {
-    final count = countAll();
-    final query = selectOnly(labelBufferEntries)..addColumns([count]);
-    final row = await query.getSingle();
-    return row.read(count) ?? 0;
   }
 
   Future<int> addToMarkQueue({
@@ -1513,9 +1459,6 @@ class AppDatabase extends _$AppDatabase {
     final row = await (select(testResults)..where((t) => t.serial.equals(serial)))
         .getSingleOrNull();
     if (row != null) return true;
-    final buffered = await (select(labelBufferEntries)..where((t) => t.serial.equals(serial)))
-        .getSingleOrNull();
-    if (buffered != null) return true;
     return markQueueContainsSerial(serial);
   }
 

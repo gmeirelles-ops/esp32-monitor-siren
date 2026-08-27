@@ -115,3 +115,10 @@ O painel de produção SHALL rotular o percentual de aprovação como "Rendiment
 - **WHEN** o gráfico de série temporal é exibido
 - **THEN** o eixo ou legenda usa "Rendimento (%)" em português
 
+
+### Requirement: Opção CSV no export do Painel
+A tela Painel SHALL oferecer CSV (resumo e lista de testes) além de PDF/XML no fluxo de exportação, respeitando os filtros ativos.
+
+#### Scenario: Diálogo de export
+- **WHEN** o gestor aciona Exportar no Painel
+- **THEN** pode escolher CSV resumo ou CSV testes além dos formatos já existentes

@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
-import '../../core/config/app_config.dart';
 import '../../core/database/database.dart';
+import '../../core/constants/layout.dart';
 import '../../core/theme/diponto_theme.dart';
 import '../../shared/widgets/action_section_card.dart';
 import '../../shared/widgets/empty_state_view.dart';
@@ -11,6 +11,7 @@ import '../../shared/widgets/screen_app_bar.dart';
 import '../../shared/widgets/section_intro.dart';
 import '../../shared/widgets/status_chip_header.dart';
 import 'laser_mark_callout.dart';
+import 'laser_operator_copy.dart';
 import 'manual_serial_dialog.dart';
 import 'mark_queue_ui.dart';
 import 'marking_providers.dart';
@@ -42,7 +43,7 @@ Future<bool> _confirmDelete(
 
 Future<void> showSerialSearchDialog(BuildContext context, WidgetRef ref) async {
   final db = ref.read(databaseProvider);
-  final copy = remarkUiCopy(MarkingMode.laser, '');
+  final copy = remarkUiCopy('');
   final controller = TextEditingController();
   var results = <TestResult>[];
 
@@ -191,12 +192,12 @@ class _LaserMarkQueueScreen extends ConsumerWidget {
           }
           final entries = snapshot.data!;
           if (entries.isEmpty) {
-            return const EmptyStateView(
+            return EmptyStateView(
               icon: Icons.precision_manufacturing_outlined,
               title: 'Fila de gravação vazia',
               subtitle:
-                  'Use + no topo para gerar serial manualmente, ou aguarde aprovações do lote. '
-                  'Acione F2 no DiatuCAD para gravar.',
+                  'Use + no topo para gerar serial, ou aguarde aprovações do lote. '
+                  '${LaserOperatorCopy.queueHelp}',
             );
           }
 
@@ -228,14 +229,13 @@ class _LaserMarkQueueScreen extends ConsumerWidget {
                   child: Align(
                     alignment: Alignment.topLeft,
                     child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 900),
+                      constraints: const BoxConstraints(maxWidth: kPageContentMaxWidth),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           const SectionIntro(
-                            title: 'Fila de gravação laser',
-                            subtitle:
-                                'F2 no DiatuCAD grava serial (DataMatrix) e modelo (texto) de cada peça.',
+                            title: 'Fila de gravação',
+                            subtitle: LaserOperatorCopy.queueHelp,
                             icon: Icons.precision_manufacturing_outlined,
                           ),
                           if (markFailure != null)

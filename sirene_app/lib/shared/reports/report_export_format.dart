@@ -4,24 +4,38 @@ import '../../features/dashboard/dashboard_filters.dart';
 
 enum ReportExportFormat {
   pdf,
-  xml;
+  xml,
+  csvSummary,
+  csvTests;
 
-  String get extension => name;
+  String get extension => switch (this) {
+        ReportExportFormat.pdf => 'pdf',
+        ReportExportFormat.xml => 'xml',
+        ReportExportFormat.csvSummary || ReportExportFormat.csvTests => 'csv',
+      };
 
   String get label => switch (this) {
         ReportExportFormat.pdf => 'PDF',
         ReportExportFormat.xml => 'XML',
+        ReportExportFormat.csvSummary => 'CSV resumo',
+        ReportExportFormat.csvTests => 'CSV testes',
       };
 
   IconData get icon => switch (this) {
         ReportExportFormat.pdf => Icons.picture_as_pdf_outlined,
         ReportExportFormat.xml => Icons.code_outlined,
+        ReportExportFormat.csvSummary || ReportExportFormat.csvTests =>
+          Icons.table_chart_outlined,
       };
+
+  bool get isCsv =>
+      this == ReportExportFormat.csvSummary || this == ReportExportFormat.csvTests;
 }
 
 Future<({ReportExportFormat format, bool openPrint})?> pickReportExportOptions(
-  BuildContext context,
-) async {
+  BuildContext context, {
+  bool includeCsv = false,
+}) async {
   return showDialog<({ReportExportFormat format, bool openPrint})>(
     context: context,
     builder: (ctx) => AlertDialog(
@@ -47,6 +61,20 @@ Future<({ReportExportFormat format, bool openPrint})?> pickReportExportOptions(
           icon: const Icon(Icons.code_outlined, size: 18),
           label: const Text('XML'),
         ),
+        if (includeCsv) ...[
+          FilledButton.icon(
+            onPressed: () =>
+                Navigator.pop(ctx, (format: ReportExportFormat.csvSummary, openPrint: false)),
+            icon: const Icon(Icons.table_chart_outlined, size: 18),
+            label: const Text('CSV resumo'),
+          ),
+          FilledButton.icon(
+            onPressed: () =>
+                Navigator.pop(ctx, (format: ReportExportFormat.csvTests, openPrint: false)),
+            icon: const Icon(Icons.list_alt_outlined, size: 18),
+            label: const Text('CSV testes'),
+          ),
+        ],
       ],
     ),
   );

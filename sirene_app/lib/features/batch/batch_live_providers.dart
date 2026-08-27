@@ -38,11 +38,6 @@ final batchLiveMetricsProvider = FutureProvider.family<BatchMetrics, String>((re
   return ref.watch(databaseProvider).getBatchMetrics(numeroOp);
 });
 
-final labelBufferCountProvider = StreamProvider<int>((ref) {
-  ref.watch(localDataRevisionProvider);
-  return ref.watch(databaseProvider).watchLabelBufferCount();
-});
-
 /// Fila de gravação laser filtrada pela OP do lote ativo.
 final batchLiveMarkQueueProvider = StreamProvider.family<List<MarkQueueEntry>, String>(
   (ref, numeroOp) {

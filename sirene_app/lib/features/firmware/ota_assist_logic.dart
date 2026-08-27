@@ -80,6 +80,36 @@ Future<String?> detectLanIPv4({String? mqttBrokerHost}) async {
 
 bool isFirmwareBinSizeValid(int byteLength) => byteLength >= kMinFirmwareBinBytes;
 
+/// Checklist operacional exibido na UI antes/durante OTA assistido.
+List<String> otaOperatorChecklist({required int httpPort}) => [
+      'Bancada online e sem teste em andamento',
+      'PC e ESP32 na mesma rede Wi‑Fi/LAN do broker MQTT',
+      'Firewall Windows: permitir sirene_app na rede privada (porta $httpPort)',
+      'Arquivo .bin válido (≥ ${kMinFirmwareBinBytes ~/ 1024} KB)',
+    ];
+
+/// Erro quando a porta HTTP não sobe (Dart nem Python).
+String otaPortUnavailableMessage(int port, {Object? detail}) {
+  final extra = detail == null ? '' : ' Detalhe: $detail';
+  return 'Porta $port indisponível.$extra '
+      'Feche outro servidor HTTP nessa porta ou escolha outra porta. '
+      'No Firewall do Windows (rede privada), permita o sirene_app.exe.';
+}
+
+/// Servidor OK em localhost mas não no IP LAN (quase sempre firewall).
+String otaLanUnreachableMessage(String lanIp, int port, {required String processHint}) {
+  return 'Servidor OK em localhost, mas $lanIp:$port não responde na rede. '
+      'No Firewall do Windows, libere a porta $port para $processHint '
+      '(perfil rede privada). Confirme que o IP é o da Wi‑Fi/LAN do posto.';
+}
+
+/// Extrai host e porta de uma URL OTA já montada (para exibir na UI).
+({String host, int port})? parseOtaFirmwareUrl(String url) {
+  final uri = Uri.tryParse(url);
+  if (uri == null || uri.host.isEmpty || uri.port <= 0) return null;
+  return (host: uri.host, port: uri.port);
+}
+
 /// Retorna mensagem de erro ou null se OTA pode iniciar.
 String? otaPrecheckError(DeviceInfo device) {
   if (!device.isOnline) {

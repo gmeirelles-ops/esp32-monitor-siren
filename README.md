@@ -16,16 +16,14 @@ Monorepo do sistema de validação de sirenes em linha de produção: firmware E
          │ Wi-Fi / portal 192.168.4.1                 │ SQLite local
          ▼                                            ▼
   ┌──────────────┐                          ┌─────────────────┐
-  │ PZEM + relé  │                          │ Etiquetas /     │
-  │ botão físico │                          │ Lote (INICIAR)  │
+  │ PZEM + relé  │                          │ Lote + serial   │
+  │ botão físico │                          │ Laser DiatuCAD  │
   └──────────────┘                          └────────┬────────┘
                                                      │
                               sync opcional          ▼
                                           ┌─────────────────┐
                                           │ Firestore       │
-                                          └────────┬────────┘
-                                                   │
-                                          (sync opcional)
+                                          └─────────────────┘
 ```
 
 ## Gestor vs operador (um único app)
@@ -57,7 +55,7 @@ O projeto `sirene_manager_app/` (app separado com Firestore) ficou **experimenta
 - **Firmware:** ESP-IDF v5.x, Python 3
 - **App:** Flutter stable (SDK em `sirene_app/pubspec.yaml`)
 - **Nuvem (opcional):** Node.js + Firebase CLI para deploy de regras
-- **Produção:** PC Windows no posto, broker Mosquitto na LAN, impressora Zebra
+- **Produção:** PC Windows no posto, broker Mosquitto na LAN, laser Diatu/DiatuCAD
 
 ## Testes rápidos
 
@@ -121,7 +119,7 @@ Specs de capabilities: `openspec/specs/<capability>/spec.md`
 | Capability (OpenSpec) | Componente principal |
 |----------------------|----------------------|
 | `mqtt-messaging`, `batch-test-execution`, `offline-resilience`, `system-robustness`, `wifi-provisioning`, `device-telemetry`, `ota-update`, `calibration-mode`, `hardware-monitoring` | `sirene-validator/` |
-| `mqtt-client`, `flutter-app-shell`, `batch-operator-ui`, `device-monitoring`, `label-printing`, `production-dashboard`, `serial-counter`, `firestore-sync`, `firebase-auth`, `product-catalog`, `catalog-cloud-pull`, `operator-traceability`, `ota-campaign`, `op-lock`, `calibration-history`, `desktop-ui-layout`, `wifi-provisioning-wizard`, `serial-and-labels`, `serial-traceability`, `calibration-and-ota` | `sirene_app/` |
+| `mqtt-client`, `flutter-app-shell`, `batch-operator-ui`, `device-monitoring`, `diatu-laser-marking`, `production-dashboard`, `serial-counter`, `firestore-sync`, `firebase-auth`, `product-catalog`, `catalog-cloud-pull`, `operator-traceability`, `ota-campaign`, `op-lock`, `calibration-history`, `desktop-ui-layout`, `wifi-provisioning-wizard`, `serial-and-labels`, `serial-traceability`, `calibration-and-ota` | `sirene_app/` |
 | `firebase-setup` | `firebase/`, `scripts/setup_firebase.sh` |
 
 ## CI e branch protection

@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/constants/layout.dart';
 import '../../core/database/database.dart';
 import '../../core/providers/core_providers.dart';
 import '../../core/theme/diponto_theme.dart';
 import '../../shared/display_labels.dart';
 import '../../shared/widgets/action_section_card.dart';
+import '../../shared/widgets/responsive_field_row.dart';
 import '../../shared/widgets/screen_app_bar.dart';
 import '../../shared/widgets/empty_state_view.dart';
 import '../../shared/widgets/screen_page_layout.dart';
@@ -74,9 +76,9 @@ class _BatchScreenState extends ConsumerState<BatchScreen> {
   }
 
   void _openSettings() {
-    // Shell index 5 = Configurações — navegação interna não disponível aqui;
-    // operador usa menu lateral. SnackBar orienta.
-    _showSnack('Abra Configurações → Manutenção do posto para alterar a bancada');
+    _showSnack(
+      'Peça ao gestor: Configurações → Manutenção do posto para alterar a bancada',
+    );
   }
 
   Future<void> _sendSetBatch(Product product) async {
@@ -149,8 +151,8 @@ class _BatchScreenState extends ConsumerState<BatchScreen> {
       return ScreenBottomBar(
         child: FilledButton.icon(
           onPressed: () => _openLiveDashboard(deviceId, activeBatch.numeroOp),
-          icon: const Icon(Icons.dashboard_outlined),
-          label: Text('Painel ao vivo · OP ${activeBatch.numeroOp}'),
+          icon: const Icon(Icons.play_circle_outline),
+          label: Text('Continuar teste · OP ${activeBatch.numeroOp}'),
         ),
       );
     }
@@ -196,7 +198,7 @@ class _BatchScreenState extends ConsumerState<BatchScreen> {
               icon: Icons.inventory_2_outlined,
               title: 'Nenhum produto cadastrado',
               subtitle:
-                  'Vá em Cadastros → Produtos e cadastre um SKU com autocalibração antes de configurar o lote.',
+                  'Peça ao gestor para cadastrar um produto antes de iniciar o lote.',
             );
           }
 
@@ -210,6 +212,7 @@ class _BatchScreenState extends ConsumerState<BatchScreen> {
             children: [
               Expanded(
                 child: ScreenPageLayout(
+                  maxWidth: kFormMaxWidth,
                   header: StatusChipHeader(
                     chips: [
                       StatusChipData(
@@ -225,8 +228,9 @@ class _BatchScreenState extends ConsumerState<BatchScreen> {
                           label: demoMode && deviceId == kDemoDeviceId
                               ? 'Bancada demo'
                               : formatBancadaLabelFromMap(deviceId, bancadas),
-                          color:
-                              device?.isOnline == true ? DipontoColors.success : DipontoColors.error,
+                          color: device?.isOnline == true
+                              ? DipontoColors.success
+                              : DipontoColors.error,
                         ),
                       if (demoMode)
                         const StatusChipData(
@@ -243,22 +247,22 @@ class _BatchScreenState extends ConsumerState<BatchScreen> {
                     ],
                   ),
                   intro: const SectionIntro(
-                    title: 'Configurar lote',
-                    subtitle: 'Selecione o produto, informe a OP e inicie na bancada.',
+                    title: 'Iniciar lote',
+                    subtitle: 'Escolha o produto, digite a OP e aperte Iniciar lote.',
                     icon: Icons.playlist_add_check,
                   ),
                   children: [
                     if (!bancadaReady || deviceId == null)
                       ActionSectionCard(
                         icon: Icons.link_off,
-                        title: 'Bancada não vinculada',
-                        subtitle: 'Configure o posto antes de iniciar',
+                        title: 'Bancada não pronta',
+                        subtitle: 'É preciso configurar o posto',
                         accentColor: Colors.orangeAccent,
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
                             const Text(
-                              'Nenhuma bancada vinculada a este posto.',
+                              'Nenhuma bancada vinculada. Peça ajuda ao gestor ou configure agora.',
                               style: TextStyle(color: Colors.orangeAccent),
                             ),
                             const SizedBox(height: 12),
@@ -271,101 +275,105 @@ class _BatchScreenState extends ConsumerState<BatchScreen> {
                       )
                     else
                       ActionSectionCard(
-                        icon: Icons.precision_manufacturing_outlined,
-                        title: 'Bancada',
-                        subtitle: device?.isOnline == true ? 'Conectada' : 'Offline',
-                        accentColor:
-                            device?.isOnline == true ? DipontoColors.success : DipontoColors.error,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            ListTile(
-                              contentPadding: EdgeInsets.zero,
-                              title: Text(formatBancadaLabelFromMap(deviceId, bancadas)),
-                              subtitle: Text(device?.estado.label ?? '—'),
-                              trailing: TextButton(
-                                onPressed: _openSettings,
-                                child: const Text('Alterar'),
-                              ),
-                            ),
-                            if (activeBatch != null) ...[
-                              const Divider(),
-                              ListTile(
-                                contentPadding: EdgeInsets.zero,
-                                leading: const Icon(
-                                  Icons.dashboard_outlined,
-                                  color: DipontoColors.primary,
+                        icon: Icons.play_circle_outline,
+                        title: 'Lote',
+                        subtitle: device?.isOnline == true
+                            ? '${formatBancadaLabelFromMap(deviceId, bancadas)} · conectada'
+                            : '${formatBancadaLabelFromMap(deviceId, bancadas)} · offline',
+                        accentColor: device?.isOnline == true
+                            ? DipontoColors.success
+                            : DipontoColors.error,
+                        child: Form(
+                          key: _formKey,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              if (activeBatch != null) ...[
+                                ListTile(
+                                  contentPadding: EdgeInsets.zero,
+                                  leading: const Icon(
+                                    Icons.play_circle_outline,
+                                    color: DipontoColors.primary,
+                                  ),
+                                  title: const Text('Lote em andamento'),
+                                  subtitle: Text(
+                                    'OP ${activeBatch.numeroOp} — toque para continuar',
+                                  ),
+                                  trailing: const Icon(Icons.chevron_right),
+                                  onTap: () => _openLiveDashboard(
+                                    deviceId,
+                                    activeBatch.numeroOp,
+                                  ),
                                 ),
-                                title: const Text('Lote em andamento'),
-                                subtitle: Text('OP ${activeBatch.numeroOp}'),
-                                trailing: const Icon(Icons.chevron_right),
-                                onTap: () => _openLiveDashboard(deviceId, activeBatch.numeroOp),
+                                const Divider(),
+                              ],
+                              DropdownButtonFormField<String>(
+                                value: _selectedProductId,
+                                decoration: const InputDecoration(labelText: 'Produto'),
+                                items: products
+                                    .map(
+                                      (p) => DropdownMenuItem(
+                                        value: p.idProduto,
+                                        child: Text('${p.idProduto} — ${p.nome}'),
+                                      ),
+                                    )
+                                    .toList(),
+                                onChanged: (v) => setState(() => _selectedProductId = v),
+                              ),
+                              if (product != null) ...[
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Teste ${product.tempoTesteSec} s · '
+                                  '${product.potenciaMin.toStringAsFixed(1)}–'
+                                  '${product.potenciaMax.toStringAsFixed(1)} W',
+                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                        color: DipontoColors.primaryLight,
+                                      ),
+                                ),
+                              ],
+                              const SizedBox(height: 12),
+                              ResponsiveFieldRow(
+                                flexes: const [2, 1],
+                                children: [
+                                  TextFormField(
+                                    controller: _numeroOp,
+                                    decoration:
+                                        const InputDecoration(labelText: 'Número OP'),
+                                    validator: (v) =>
+                                        v == null || v.isEmpty ? 'Obrigatório' : null,
+                                  ),
+                                  TextFormField(
+                                    controller: _quantidadeTotal,
+                                    decoration:
+                                        const InputDecoration(labelText: 'Quantidade'),
+                                    keyboardType: TextInputType.number,
+                                    validator: (v) {
+                                      if (v == null || v.trim().isEmpty) {
+                                        return 'Informe a quantidade';
+                                      }
+                                      final n = int.tryParse(v.trim());
+                                      if (n == null || n < 1) {
+                                        return 'Mínimo 1';
+                                      }
+                                      if (n > 100000) {
+                                        return 'Valor muito alto';
+                                      }
+                                      return null;
+                                    },
+                                  ),
+                                ],
+                              ),
+                              Align(
+                                alignment: Alignment.centerLeft,
+                                child: TextButton(
+                                  onPressed: _openSettings,
+                                  child: const Text('Alterar bancada…'),
+                                ),
                               ),
                             ],
-                          ],
+                          ),
                         ),
                       ),
-                    ActionSectionCard(
-                      icon: Icons.inventory_2_outlined,
-                      title: 'Produto e OP',
-                      subtitle: product != null ? product.nome : 'Selecione um produto',
-                      child: Form(
-                        key: _formKey,
-                        child: Column(
-                          children: [
-                            DropdownButtonFormField<String>(
-                              value: _selectedProductId,
-                              decoration: const InputDecoration(labelText: 'Produto'),
-                              items: products
-                                  .map(
-                                    (p) => DropdownMenuItem(
-                                      value: p.idProduto,
-                                      child: Text('${p.idProduto} — ${p.nome}'),
-                                    ),
-                                  )
-                                  .toList(),
-                              onChanged: (v) => setState(() => _selectedProductId = v),
-                            ),
-                            if (product != null) ...[
-                              const SizedBox(height: 8),
-                              _ReadOnlyTile('Tempo teste', '${product.tempoTesteSec} s'),
-                              _ReadOnlyTile(
-                                'Potência mín',
-                                '${product.potenciaMin.toStringAsFixed(2)} W',
-                              ),
-                              _ReadOnlyTile(
-                                'Potência máx',
-                                '${product.potenciaMax.toStringAsFixed(2)} W',
-                              ),
-                            ],
-                            TextFormField(
-                              controller: _numeroOp,
-                              decoration: const InputDecoration(labelText: 'Número OP'),
-                              validator: (v) => v == null || v.isEmpty ? 'Obrigatório' : null,
-                            ),
-                            const SizedBox(height: 8),
-                            TextFormField(
-                              controller: _quantidadeTotal,
-                              decoration: const InputDecoration(labelText: 'Quantidade total'),
-                              keyboardType: TextInputType.number,
-                              validator: (v) {
-                                if (v == null || v.trim().isEmpty) {
-                                  return 'Informe a quantidade';
-                                }
-                                final n = int.tryParse(v.trim());
-                                if (n == null || n < 1) {
-                                  return 'Quantidade inválida (mínimo 1)';
-                                }
-                                if (n > 100000) {
-                                  return 'Quantidade muito alta';
-                                }
-                                return null;
-                              },
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
                   ],
                 ),
               ),
@@ -378,26 +386,6 @@ class _BatchScreenState extends ConsumerState<BatchScreen> {
             ],
           );
         },
-      ),
-    );
-  }
-}
-
-class _ReadOnlyTile extends StatelessWidget {
-  const _ReadOnlyTile(this.label, this.value);
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        children: [
-          SizedBox(width: 120, child: Text(label, style: const TextStyle(color: Colors.grey))),
-          Text(value, style: const TextStyle(color: DipontoColors.primaryLight)),
-        ],
       ),
     );
   }

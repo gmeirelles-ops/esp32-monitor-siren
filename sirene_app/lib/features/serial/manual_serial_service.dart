@@ -6,7 +6,7 @@ import '../batch/batch_serial_logic.dart';
 import '../labels/marking_providers.dart';
 import '../serial/itf_check_digit.dart';
 
-/// Resultado da emissão manual de um serial para gravação/etiqueta.
+/// Resultado da emissão manual de um serial para gravação laser.
 class ManualSerialIssue {
   const ManualSerialIssue({
     required this.serial,

@@ -1,6 +1,6 @@
 # Guia Completo — Sirene Validator (Firmware ESP32)
 
-Documentação detalhada do firmware `sirene-validator` v**1.7.0**, sua integração com MQTT, o app Flutter companion e a arquitetura prevista com Firebase.
+Documentação detalhada do firmware `sirene-validator` v**1.8.10**, sua integração com MQTT, o app Flutter companion e a arquitetura prevista com Firebase.
 
 > Deploy industrial: [DEPLOY_PRODUCTION.md](DEPLOY_PRODUCTION.md)
 
@@ -24,7 +24,7 @@ Documentação detalhada do firmware `sirene-validator` v**1.7.0**, sua integra�
 14. [Compilação e gravação](#14-compilação-e-gravação)
 15. [App Flutter companion](#15-app-flutter-companion)
 16. [Firebase (integração prevista)](#16-firebase-integração-prevista)
-17. [Rastreabilidade e etiquetas](#17-rastreabilidade-e-etiquetas)
+17. [Rastreabilidade e gravação laser](#17-rastreabilidade-e-gravação-laser)
 18. [Segurança e limitações](#18-segurança-e-limitações)
 19. [Testes e validação](#19-testes-e-validação)
 20. [Referência rápida](#20-referência-rápida)
@@ -40,12 +40,12 @@ Responsabilidades do firmware:
 | Faz | Não faz |
 |-----|---------|
 | Medir potência e dar veredito APROVADO/REPROVADO | Calcular dígito verificador ITF 2 de 5 |
-| Gerenciar sequencial do lote (só em aprovação) | Imprimir etiquetas Zebra |
+| Gerenciar sequencial do lote (só em aprovação) | Gravar serial no laser DiatuCAD |
 | Persistir lote e fila offline | Conectar ao Firebase diretamente |
-| Publicar resultados via MQTT | Imprimir etiquetas Zebra |
+| Publicar resultados via MQTT | Gravar serial no laser DiatuCAD |
 | Provisionar Wi-Fi e broker MQTT via captive portal | Disparar teste remotamente (só botão físico) |
 
-Versão atual: **1.7.0** (definida em `board_config.h`).
+Versão atual: **1.8.10** (definida em `board_config.h`).
 
 ---
 
@@ -62,7 +62,7 @@ Versão atual: **1.7.0** (definida em `board_config.h`).
 │  │          │                                  └─────┬─────┘  │
 │  │ PZEM     │                                        │         │
 │  │ Relé     │                                  ┌─────▼─────┐  │
-│  │ Botão    │                                  │ Zebra     │  │
+│  │ Botão    │                                  │ Laser     │  │
 │  └──────────┘                                  │ ZT230     │  │
 │                                                └───────────┘  │
 └─────────────────────────────────────────────────────────────────┘
@@ -75,7 +75,7 @@ Versão atual: **1.7.0** (definida em `board_config.h`).
                     └─────────────────┘
 ```
 
-O ESP32 é um **appliance de bancada**: o operador pressiona o botão físico para cada teste. O app Flutter configura lotes, monitora resultados, gera seriais e imprime etiquetas. O Firebase entra como camada de persistência em nuvem (fase 2).
+O ESP32 é um **appliance de bancada**: o operador pressiona o botão físico para cada teste. O app Flutter configura lotes, monitora resultados, gera seriais e enfileira gravação laser (DiatuCAD). O Firebase entra como camada de persistência em nuvem (fase 2).
 
 ---
 
@@ -267,7 +267,7 @@ Padrão: `producao/bancada-{NN}/{suffix}` (NN = 01–99). O `device_id` (MAC) ap
 | `producao/bancada-NN/ensaio` | ESP32 pub | 1 | — | Progresso do modo ensaio |
 | `producao/bancada-NN/alerta` | ESP32 pub | 1 | — | Falhas de hardware |
 | `producao/bancada-NN/presenca` | ESP32 pub + LWT | 1 | **sim** | `online` / `offline` |
-| `producao/bancada-NN/heartbeat` | ESP32 pub | 1 | — | Saúde a cada 30 s |
+| `producao/bancada-NN/heartbeat` | ESP32 pub | 1 | — | Saúde a cada 10 s |
 
 **Broker cloud:** `mqtt.diponto.com:443` — ESP usa MQTT TLS nativo; app Flutter usa WebSocket TLS (`wss://mqtt.diponto.com/ws`).
 
@@ -421,6 +421,10 @@ Com opção de apagar broker MQTT salvo:
 
 ##### Passo a passo OTA (produção)
 
+**Caminho padrão (posto):** use o app Windows — **Admin → Atualizar firmware → Pela rede (OTA)**. O app serve o `.bin` (HttpServer Dart) e publica `OTA_UPDATE`. Não é necessário `python -m http.server` no dia a dia.
+
+**Fallback manual (lab / sem app):**
+
 1. **Compilar** o firmware no PC: `idf.py build` → gera `build/sirene-validator.bin`
 2. **Servir o binário** na mesma LAN do ESP32:
    ```bash
@@ -433,7 +437,7 @@ Com opção de apagar broker MQTT salvo:
    { "cmd": "OTA_UPDATE", "url": "http://192.168.51.10:8080/sirene-validator.bin" }
    ```
 5. **Monitorar** `sirene/<device_id>/status` — eventos `tipo:ota` (`inicio`, `sucesso`, `falha`)
-6. **Confirmar** após reboot: `firmware_version` no heartbeat (ex.: `"1.4.1"`)
+6. **Confirmar** após reboot: `firmware_version` no heartbeat (ex.: `"1.8.10"`)
 
 Script auxiliar (build + serve + MQTT):
 
@@ -504,7 +508,7 @@ Códigos de `motivo`:
 }
 ```
 
-#### Heartbeat (`heartbeat`) — a cada 30 s
+#### Heartbeat (`heartbeat`) — a cada 10 s
 
 ```json
 {
@@ -521,7 +525,7 @@ Códigos de `motivo`:
 
 Sem lote ativo: `numero_op` vazio, `proximo_sequencial` e `aprovados` zerados.
 
-Publicado **imediatamente** ao reconectar MQTT (além do intervalo de 30 s).
+Publicado **imediatamente** ao reconectar MQTT (além do intervalo de 10 s).
 
 #### Presença (`presenca`)
 
@@ -755,7 +759,7 @@ BROKER=192.168.1.100 DEVICE_ID=aabbccddeeff \
 | Recurso | Implementação |
 |---------|---------------|
 | LWT presença | `offline` retained em queda abrupta |
-| Heartbeat | 30 s + imediato ao reconectar |
+| Heartbeat | 10 s + imediato ao reconectar |
 | TWDT | Worker task e telemetry alimentam watchdog (timeout 30 s) |
 | Reconexão Wi-Fi | Backoff exponencial 1 s → 30 s + jitter |
 | Reconexão MQTT | Backoff exponencial 1 s → 30 s + jitter |
@@ -825,7 +829,7 @@ Local: `sirene_app/` (Windows desktop em produção)
 |-----------|--------|-----------------|
 | Broker MQTT host | `192.168.1.100` | App → Configurações |
 | Broker MQTT porta | `1883` | App → Configurações |
-| Impressora Zebra IP | `192.168.1.50` | App → Configurações |
+| Laser DiatuCAD (TCP) | porta `9101` no app | App → Configurações → Gravação |
 | Impressora porta | `9100` | App → Configurações |
 
 ### Fluxo do operador (tela inicial: Lote)
@@ -833,7 +837,7 @@ Local: `sirene_app/` (Windows desktop em produção)
 1. **Selecionar operador** — obrigatório no início do turno (chip no cabeçalho; persistido na sessão).
 2. **Configurar lote** — na tela **Lote** (hub principal): OP, produto, limites, `SET_BATCH`.
 3. **Acompanhar testes** — dashboard ao vivo na mesma tela (estado FSM, aprovados/reprovados).
-4. **Imprimir etiquetas** — buffer ZPL a partir dos aprovados.
+4. **Gravar seriais** — fila laser (MarkQueue) + F2 no DiatuCAD.
 5. **Cadastros** (admin) — produtos e operadores na mesma tela, abas **Produtos** / **Operadores**.
 6. **Dispositivo** — em **Configurações → Dispositivo** (não é mais a tela inicial); descoberta MQTT em background.
 
@@ -847,7 +851,7 @@ Local: `sirene_app/` (Windows desktop em produção)
 - Configuração de lote (`SET_BATCH` / `END_BATCH`) com vínculo `operador_id` / `operador_nome`
 - Monitoramento em tempo real (estado FSM, resultados)
 - Geração de serial ITF 2 de 5 em aprovações
-- Buffer de etiquetas ZPL (múltiplos de 3)
+- Fila de gravação laser (MarkQueue)
 - Calibração e **Atualizar firmware** (OTA + USB em Configurações; campanha em Admin)
 - Provisionamento Wi-Fi guiado
 - Indicadores de status MQTT/dispositivo no cabeçalho global
@@ -873,7 +877,7 @@ Saída: `build/windows/x64/runner/Release/`
 
 - ESP32 opera offline na linha — Firebase exigiria internet estável
 - MQTT já cobre comunicação em tempo real na LAN
-- Serial, etiquetas e histórico são responsabilidade do app
+- Serial, gravação laser e histórico são responsabilidade do app
 
 ### Arquitetura recomendada (fase 2)
 
@@ -982,7 +986,7 @@ Subcoleção **reprovadas** — `test_results/{numero_op}/reprovadas/{sequencial
 
 ### Comportamento no app (offline-first)
 
-1. **SQLite permanece primário** — MQTT, lotes, etiquetas e catálogo funcionam sem internet.
+1. **SQLite permanece primário** — MQTT, lotes, gravação laser e catálogo funcionam sem internet.
 2. Com sync habilitado em **Configurações → Nuvem**, o app enfileira gravações em `SyncQueue` (Drift) e envia ao Firestore quando online.
 3. Login Firebase (e-mail/senha) é obrigatório para habilitar sync.
 4. Eventos sincronizados automaticamente:
@@ -1018,11 +1022,11 @@ Subcoleção **reprovadas** — `test_results/{numero_op}/reprovadas/{sequencial
 
 ### Operação sem nuvem
 
-O sync inicia **desabilitado**. Para produção apenas com SQLite local, não habilite o toggle — nenhuma alteração no fluxo MQTT/etiquetas.
+O sync inicia **desabilitado**. Para produção apenas com SQLite local, não habilite o toggle — nenhuma alteração no fluxo MQTT/gravação laser.
 
 ---
 
-## 17. Rastreabilidade e etiquetas
+## 17. Rastreabilidade e gravação laser
 
 Responsabilidade do **app Flutter**, não do firmware.
 
@@ -1037,27 +1041,12 @@ Responsabilidade do **app Flutter**, não do firmware.
 - Sequencial vem do ESP32 (só incrementa em APROVADO)
 - Dígito verificador: módulo 10, pesos 3,1,3,1... da direita (GS1)
 
-### Impressão Zebra ZT230
+### Gravação laser DiatuCAD
 
-- Etiquetas 10×30 mm, 3 colunas por linha
-- Impressão em múltiplos de 3 (ZPL via TCP porta 9100)
-- Botão "Imprimir pendentes" para órfãs (1–2 seriais)
+O app Flutter é o **servidor TCP** (porta padrão 9101). O DiatuCAD solicita o próximo serial da fila (`MarkQueue`) via comando configurável (padrão `TCP: Give me string`). Após aprovação MQTT, o serial ITF é enfileirado; o operador aciona **F2** no DiatuCAD para gravar na carcaça.
 
----
+Documentação de homologação: `docs/laser-reference/`.
 
-## 18. Segurança e limitações
-
-| Item | Status | Risco |
-|------|--------|-------|
-| MQTT TLS | **Opcional** (portal, mqtts://) | Certificado autoassinado: LAN isolada |
-| MQTT auth | **Implementado** (portal + NVS) | ACL Mosquitto obrigatório |
-| Portal Wi-Fi | WPA2, senha **derivada do MAC** | Anotar senha exibida no portal |
-| OTA whitelist | **LAN privada / `*.local` apenas** | URLs públicas rejeitadas |
-| OTA signing | Sem Secure Boot | Imagem não assinada criptograficamente |
-| NVS encryption | Não habilitado | Senha Wi-Fi em texto no flash |
-| OTA apaga NVS | **Desabilitado em produção** | Perfil `sdkconfig.defaults.provisioning` só para fábrica |
-
-Aceito para **rede industrial isolada** de chão de fábrica. Para ambientes expostos: TLS MQTT, HTTPS no portal, Secure Boot.
 
 ### Limitações funcionais
 
@@ -1113,10 +1102,10 @@ Ver [TESTING.md](TESTING.md) para checklist detalhado de bancada.
 | `WIFI_AP_SSID` | SireneValidator | AP provisionamento |
 | `WIFI_AP_PASS` | diponto2026 | Senha AP provisionamento |
 | `WIFI_AP_IP` | 192.168.4.1 | Portal |
-| `HEARTBEAT_INTERVAL_SEC` | 30 | Intervalo heartbeat |
+| `HEARTBEAT_INTERVAL_SEC` | 10 | Intervalo heartbeat |
 | `INRUSH_DISCARD_MS` | 500 | Descarte inrush |
 | `OFFLINE_QUEUE_MAX` | 64 | Máx. fila offline |
-| `FIRMWARE_VERSION` | 1.7.0 | Versão |
+| `FIRMWARE_VERSION` | 1.8.10 | Versão |
 
 ### Comandos úteis
 

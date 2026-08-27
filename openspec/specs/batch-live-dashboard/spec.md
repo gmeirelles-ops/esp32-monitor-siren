@@ -71,16 +71,16 @@ O Batch Live Dashboard SHALL exibir a lista de seriais já emitidos (aprovados c
 - **WHEN** quatro testes aprovados com serial foram gravados para a OP exibida
 - **THEN** o dashboard lista os quatro seriais com seus sequenciais
 
-#### Scenario: Serial pendente de impressão
-- **WHEN** um serial está no buffer de etiquetas da OP
-- **THEN** o dashboard indica que o serial aguarda impressão (ícone ou rótulo "pendente")
+#### Scenario: Serial pendente de gravação
+- **WHEN** um serial aprovado está pendente na `mark_queue` da OP
+- **THEN** o dashboard indica pendência de gravação laser (não “etiqueta pendente”)
 
 ### Requirement: Encerramento automático ao atingir meta
 O Batch Live Dashboard SHALL enviar `END_BATCH` automaticamente quando `aprovados_no_lote >= quantidade_total` com `quantidade_total > 0`, após processar o resultado que completa a meta, sem exigir confirmação manual do operador.
 
 #### Scenario: Meta atingida na última aprovação
 - **WHEN** um teste aprovado eleva `aprovados_no_lote` até `quantidade_total`
-- **THEN** o app imprime etiquetas órfãs se aplicável, publica `END_BATCH`, limpa o lote ativo e informa que o lote foi encerrado automaticamente
+- **THEN** o app publica `END_BATCH`, limpa o lote ativo e informa que o lote foi encerrado automaticamente; gravações laser pendentes permanecem na fila até F2/processamento
 
 #### Scenario: Meta já atingida
 - **WHEN** o lote já atingiu a meta e um novo `END_BATCH` automático seria redundante
@@ -92,4 +92,11 @@ Quando o modo reteste estiver ativo, o dashboard SHALL exibir banner ou badge di
 #### Scenario: Banner de reteste ativo
 - **WHEN** o checkbox Reteste está marcado
 - **THEN** o dashboard exibe indicação "Modo reteste" visível junto ao cabeçalho do lote
+
+### Requirement: Hierarquia visual do painel ao vivo para operador
+Para operador (não gestor), o Batch Live SHALL priorizar veredito grande, progresso e orientação **“Acione o pedal”** quando houver serial pendente. A UI do operador SHALL NOT pedir tecla F2.
+
+#### Scenario: Após aprovação com fila
+- **WHEN** chega teste APROVADO e há serial na fila
+- **THEN** o operador vê instrução clara para acionar o pedal
 

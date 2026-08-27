@@ -70,4 +70,48 @@ void main() {
       expect(isFirmwareBinSizeValid(900000), isTrue);
     });
   });
+
+  group('otaOperatorChecklist', () {
+    test('inclui porta e firewall', () {
+      final items = otaOperatorChecklist(httpPort: 8080);
+      expect(items, isNotEmpty);
+      expect(items.any((e) => e.contains('8080')), isTrue);
+      expect(items.any((e) => e.toLowerCase().contains('firewall')), isTrue);
+    });
+  });
+
+  group('otaPortUnavailableMessage', () {
+    test('menciona porta e firewall', () {
+      final msg = otaPortUnavailableMessage(9090, detail: 'address in use');
+      expect(msg, contains('9090'));
+      expect(msg.toLowerCase(), contains('firewall'));
+      expect(msg, contains('address in use'));
+    });
+  });
+
+  group('otaLanUnreachableMessage', () {
+    test('menciona IP e processo', () {
+      final msg = otaLanUnreachableMessage(
+        '192.168.51.70',
+        8080,
+        processHint: 'sirene_app.exe',
+      );
+      expect(msg, contains('192.168.51.70'));
+      expect(msg, contains('sirene_app.exe'));
+    });
+  });
+
+  group('parseOtaFirmwareUrl', () {
+    test('extrai host e porta', () {
+      final parts = parseOtaFirmwareUrl(
+        'http://192.168.51.70:8080/sirene-validator.bin',
+      );
+      expect(parts?.host, '192.168.51.70');
+      expect(parts?.port, 8080);
+    });
+
+    test('rejeita URL inválida', () {
+      expect(parseOtaFirmwareUrl('not-a-url'), isNull);
+    });
+  });
 }

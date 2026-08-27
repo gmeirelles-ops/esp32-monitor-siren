@@ -1,12 +1,12 @@
 # Checklist de Produção — Diponto Sirene Validator
 
-Guia para colocar firmware v1.7.5 + app Flutter em operação no posto.
+Guia para colocar firmware **v1.8.10** + app Flutter **1.0.1** em operação no posto.
 
 ## 1. Infraestrutura de rede
 
 - [ ] Broker Mosquitto na LAN (ex.: `192.168.51.87:1883` — IP do servidor de fábrica)
 - [ ] Wi-Fi industrial estável na área da linha
-- [ ] PC Windows no posto com acesso à rede MQTT e à impressora Zebra **ou** laser Diatu (DiatuCAD)
+- [ ] PC Windows no posto com acesso à rede MQTT e ao laser **Diatu / DiatuCAD**
 
 ## 2. Firmware (ESP32)
 
@@ -23,7 +23,7 @@ Guia para colocar firmware v1.7.5 + app Flutter em operação no posto.
 4. Provisione via portal `http://192.168.4.1` (AP `SireneValidator`):
    - Wi-Fi: SSID + senha
    - **Broker MQTT (opcional):** host + porta — se vazio, usa fallback de `board_config.h`
-5. Confirme nos logs: `device_id=... firmware=1.7.5` e `broker mqtt://... (NVS|fallback)`
+5. Confirme nos logs: `device_id=... firmware=1.8.10` e `broker mqtt://...` ou `wss://... (NVS|fallback)`
 
 ### Smoke test MQTT
 
@@ -74,7 +74,7 @@ Pré-requisito adicional: [Inno Setup 6](https://jrsoftware.org/isdl.php) (`choc
 
 > **Reset geral:** em **Configurações → Manutenção do posto → Reset geral do posto**, digite `ZERAR` para apagar SQLite (`Documentos\sirene_app.sqlite`), preferências locais, vínculo de bancada e flag de Wi-Fi. Reabra o app e reconfigure login + bancada.
 
-> **Reimprimir / regravar:** em modo **Etiquetas**, a busca por serial reimprime ZPL; em modo **Gravação laser**, enfileira regravação (F2 no DiatuCAD).
+> **Regravar:** a busca por serial enfileira regravação laser (F2 no DiatuCAD).
 
 > **Catálogo na nuvem:** com sync habilitado, **Baixar catálogo** traz produtos e operadores da coleção Firestore `operators/{PIN}`.
 
@@ -181,30 +181,16 @@ Copie `build/windows/x64/runner/Release/` inteira para o posto.
 
 Configure em **Configurações**:
 - Broker MQTT (host + porta) — deve coincidir com o broker provisionado nos ESP32
-- **Marcação de serial:** Etiquetas (Zebra) **ou** Gravação laser (Diatu) — ver [`docs/laser-reference/`](../laser-reference/README.md)
-- Impressora Zebra (modo Etiquetas):
-  - **USB (recomendado):** ZT230 conectada ao PC do posto; instale o driver Zebra ZPL; selecione o nome da impressora no app
-  - **Rede (opcional):** IP + porta 9100 (cartão de rede ou print server)
+- **Gravação laser (DiatuCAD)** — ver [`docs/laser-reference/`](laser-reference/README.md)
 
-### Impressora ZT230 USB (sem cabo de rede)
+### Laser Diatu / DiatuCAD (marcação de serial)
 
-1. Conecte a ZT230 ao PC do posto via cabo USB
-2. Instale o driver **ZDesigner ZT230 ZPL** (Zebra Setup Utilities)
-3. No app: **Configurações** → Impressora → **USB (local)** → selecione a impressora → **Testar impressão**
-4. Rolo: 3 etiquetas por linha, 10×30 mm cada — layout calibrado contra [`docs/label-reference/`](../label-reference/README.md)
-5. Checklist na instalação do posto:
-   - [ ] Etiqueta de teste imprime legível
-   - [ ] Linha de 3 seriais aprovados imprime alinhada
-   - [ ] Reimpressão avulsa avisa que consome linha inteira (3 posições)
-   - [ ] Órfãs (1–2 no buffer): impressão manual pelo operador
+Único modo de marcação física no produto: gravação laser. O app é servidor TCP; o DiatuCAD puxa o serial da fila.
 
-### Laser Diatu B3 (modo Gravação)
-
-1. Instale **DiatuCAD1** e conecte a placa USB do laser (sair do modo demonstração)
-2. Crie template com **Texto variável → TCP/IP** — ver [`docs/laser-reference/diatu-tcp.md`](../laser-reference/diatu-tcp.md)
-3. No app: **Configurações** → **Gravação laser (Diatu)** → porta TCP (padrão 9101) → **Salvar**
-4. Checklist laser (8 passos):
-   - [ ] Modo **Gravação laser** salvo (não Etiquetas)
+1. Instale **DiatuCAD** e conecte a placa USB do laser (sair do modo demonstração)
+2. Crie template com **Texto variável → TCP/IP** — ver [`docs/laser-reference/diatu-tcp.md`](laser-reference/diatu-tcp.md)
+3. No app: **Configurações** → **Gravação** → porta TCP (padrão 9101) → **Salvar**
+4. Checklist laser:
    - [ ] Comando TCP idêntico no app e no DiatuCAD (`TCP: Give me string`)
    - [ ] **Marca de controlo TCP** desativada no Diaotu (evita conflito de porta)
    - [ ] **Testar gravação** enfileira `0000000000`
@@ -213,6 +199,8 @@ Configure em **Configurações**:
    - [ ] F2 no DiatuCAD grava serial na carcaça
    - [ ] Aprovação real na bancada → serial ITF gravado via F2
 5. Em falha: capturar log do painel **Diagnóstico laser** e anexar ao relatório
+
+> Referência histórica de etiquetas Zebra (obsoleta): [`docs/label-reference/`](label-reference/README.md).
 
 ### Firebase / Firestore (opcional — nuvem)
 
@@ -255,20 +243,37 @@ Para cada modelo de sirene:
 2. **Lote** → selecione dispositivo + produto cadastrado
 3. Informe OP, ano, quantidade e sequencial → **SET_BATCH**
 4. Operador pressiona **botão físico** para cada teste
-5. Aprovações geram serial (etiqueta ou fila laser conforme modo em Configurações)
+5. Aprovações geram serial ITF e enfileiram gravação laser (F2 no DiatuCAD)
 6. **Encerrar lote** ao atingir a meta
+
+**Gestor — Painel:** use **Exportar** para PDF/XML ou **CSV resumo** / **CSV testes** (Excel PT-BR, UTF-8). O CSV respeita os filtros de período/OP/produto/bancada da tela.
 
 ## 6. Atualizações
 
-- **OTA:** seção Admin → URL do `.bin` servido em HTTP na LAN
-- **Recalibração:** Produtos → editar SKU → Recalibrar peça padrão
+### OTA pela rede (recomendado)
+
+1. No app: **Admin → Abrir Atualizar firmware** (ou campanha OTA para várias bancadas)
+2. Aba **Pela rede (OTA)** → escolha bancada + arquivo `sirene-validator.bin`
+3. Confira o checklist (mesma LAN, firewall, bancada online) → **Iniciar atualização OTA**
+4. O app sobe HTTP local (Dart; Python só se necessário), envia `OTA_UPDATE` e aguarda status
+
+Fallback manual (sem app): `cd build && python3 -m http.server 8080` + MQTT Explorer — ver guia do firmware.
+
+### Flash USB (primeira gravação / recovery)
+
+1. No app Windows: **Atualizar firmware → Por USB (cabo)**
+2. Ou no PC de build: `idf.py -B /tmp/sv_build -p COMx flash`
+
+### Recalibração
+
+- Produtos → editar SKU → Recalibrar peça padrão
 
 ## 7. Validação ponta a ponta (bancada)
 
 - [ ] Cadastro de produto com autocalibração
 - [ ] SET_BATCH a partir do produto
 - [ ] Teste aprovado → serial ITF 2 de 5
-- [ ] Impressão Zebra (3 etiquetas)
+- [ ] Fila laser → F2 grava serial na carcaça
 - [ ] Teste reprovado → sequencial não consumido
 - [ ] Reboot com lote ativo → retomada correta
 - [ ] Offline → fila MQTT do ESP32 sincroniza ao reconectar
@@ -276,10 +281,31 @@ Para cada modelo de sirene:
 
 ### Smoke app (reatividade e sync)
 
-- [ ] Badge MQTT visível em Etiquetas/Painel (não só Dispositivos)
+- [ ] Badge MQTT visível em Gravação/Painel (não só Dispositivos)
 - [ ] Painel atualiza métricas após novo teste sem trocar de aba
-- [ ] Buffer de etiquetas atualiza ao aprovar sirene
+- [ ] Painel → Exportar → **CSV resumo** / **CSV testes** abre no Excel com acentos
+- [ ] Fila de gravação atualiza ao aprovar sirene
 - [ ] Configurações → falha permanente na fila → **Tentar novamente** após corrigir rede/login
+
+## 8. Backup e troca de PC
+
+O histórico do posto (SQLite) deve ser respaldado com frequência — a nuvem é opcional e a SyncQueue pode estar vazia ou atrasada.
+
+### Backup semanal (recomendado)
+
+1. No app: **Configurações → Manutenção → Fazer backup**
+2. Salve o ZIP (`sirene_backup_YYYYMMDD_HHMMSS.zip`) em pasta de rede ou pendrive do posto
+3. O ZIP contém: `sirene_app.sqlite`, `manifest.json` (schema/station/app) e `prefs.json` (MQTT, laser, station)
+
+### Restore / máquina nova
+
+1. Instale o app Windows (mesma versão ou **mais nova** que a do backup)
+2. **Configurações → Manutenção → Restaurar backup** → escolha o ZIP
+3. Se houver sync pendente, o app avisa; digite `RESTAURAR` para confirmar
+4. Feche e reabra o aplicativo; confira lotes/seriais e Configurações (MQTT/laser)
+5. Backup com schema **maior** que o app é rejeitado — atualize o `.exe` antes
+
+> Faça backup **antes** de um reset geral do posto.
 
 ## Referências
 

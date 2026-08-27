@@ -1,14 +1,16 @@
 # serial-traceability Specification
 
 ## Purpose
-Rastreabilidade de seriais de produção: geração ITF, associação a testes aprovados e persistência local para consulta e etiquetas.
-## Requirements
-### Requirement: Consulta de histórico completo por serial
-O app SHALL expor consulta ao histórico local de testes e etiquetas associadas a um número de série, agregando todas as tentativas e metadados para exibição no relatório de rastreabilidade.
+Rastreabilidade de seriais de produção: geração ITF, associação a testes aprovados e persistência local para consulta e gravação laser.
 
-#### Scenario: Histórico agregado
-- **WHEN** o relatório solicita dados para um serial existente
-- **THEN** o app retorna todos os registros de `test_results` desse serial ordenados por data, mais entrada de etiqueta se houver
+## Requirements
+
+### Requirement: Consulta de histórico por serial
+O app SHALL expor consulta ao histórico local de testes associados a um número de série (e por OP), agregando tentativas e metadados. O app SHALL NOT depender de buffer de etiquetas ZPL para rastreabilidade.
+
+#### Scenario: Busca por serial
+- **WHEN** o gestor busca um serial conhecido
+- **THEN** o app retorna registros de `test_results` desse serial ordenados por data
 
 #### Scenario: Serial inexistente
 - **WHEN** o relatório solicita dados para serial ausente no histórico
@@ -41,20 +43,19 @@ O sequencial SHALL ser consumido e incrementado localmente no dispositivo apenas
 
 #### Scenario: Sirene reprovada não consome o sequencial
 - **WHEN** o resultado do teste é REPROVADO
-- **THEN** o dispositivo mantém o contador de sequencial idêntico, não emite etiqueta e disponibiliza o mesmo sequencial para a próxima tentativa
+- **THEN** o dispositivo mantém o contador de sequencial idêntico, não enfileira gravação laser e disponibiliza o mesmo sequencial para a próxima tentativa
 
-### Requirement: Cálculo do dígito verificador e serial pelo App Web
-O cálculo do dígito verificador ITF 2 de 5 e a montagem do serial completo SHALL ser realizados pelo App Flutter a partir do sequencial aprovado, verificando a unicidade do serial antes de emitir a etiqueta.
+### Requirement: Serial ITF sem buffer ZPL
+O cálculo do dígito verificador ITF 2 de 5 e a montagem do serial completo SHALL ser realizados pelo App Flutter a partir do sequencial aprovado, verificando a unicidade do serial antes de enfileirar gravação laser. O app SHALL NOT adicionar o serial a buffer de etiquetas.
 
 #### Scenario: Geração do serial após aprovação
 - **WHEN** o App Flutter recebe a confirmação de aprovação com o sequencial consumido
 - **THEN** o App Flutter calcula o dígito verificador e gera o número de série completo de 10 dígitos
 
-#### Scenario: Serial inédito é emitido
-- **WHEN** o serial gerado não existe no histórico local
-- **THEN** o app registra o resultado e adiciona o serial ao buffer de etiquetas
+#### Scenario: Aprovado único
+- **WHEN** aprovação gera serial inédito
+- **THEN** o app registra o teste e enfileira na `mark_queue`
 
-#### Scenario: Serial duplicado é bloqueado
-- **WHEN** o serial gerado já existe no histórico local
-- **THEN** o app não adiciona o serial ao buffer de etiquetas e sinaliza o conflito ao operador
-
+#### Scenario: Duplicado
+- **WHEN** o serial já existe localmente
+- **THEN** o app não enfileira gravação e sinaliza conflito

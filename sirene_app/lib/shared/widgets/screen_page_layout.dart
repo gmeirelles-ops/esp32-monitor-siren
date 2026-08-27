@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../core/constants/layout.dart';
+
 /// Layout padrão de tela: header opcional, intro, conteúdo com largura máxima.
 class ScreenPageLayout extends StatelessWidget {
   const ScreenPageLayout({
@@ -7,7 +9,7 @@ class ScreenPageLayout extends StatelessWidget {
     this.header,
     this.intro,
     required this.children,
-    this.maxWidth = 900,
+    this.maxWidth = kPageContentMaxWidth,
     this.padding = const EdgeInsets.fromLTRB(24, 24, 24, 32),
   });
 

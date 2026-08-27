@@ -7,13 +7,13 @@ class SirenTraceability {
     required this.serial,
     required this.attempts,
     this.product,
-    this.pendingLabel,
+    this.pendingMark,
   });
 
   final String serial;
   final List<TestResult> attempts;
   final Product? product;
-  final LabelBufferEntry? pendingLabel;
+  final MarkQueueEntry? pendingMark;
 
   TestResult? get latestAttempt =>
       attempts.isNotEmpty ? attempts.last : null;
@@ -27,16 +27,19 @@ class SirenTraceability {
 
   bool get canReprint => latestApproved != null;
 
+  /// Alias laser de [canReprint].
+  bool get canRemark => canReprint;
+
   String get finalVeredito => latestAttempt?.veredito ?? '—';
 
-  String get labelStatus {
-    if (pendingLabel != null) return 'Na fila de impressão';
-    if (latestApproved != null) return 'Etiqueta gerada';
-    return 'Sem etiqueta';
+  String get markingStatus {
+    if (pendingMark != null) return 'Na fila de gravação';
+    if (latestApproved != null) return 'Serial gerado';
+    return 'Sem serial';
   }
 
-  DateTime? get labelGeneratedAt {
-    if (pendingLabel != null) return pendingLabel!.createdAt;
+  DateTime? get markGeneratedAt {
+    if (pendingMark != null) return pendingMark!.createdAt;
     return latestApproved?.createdAt;
   }
 }

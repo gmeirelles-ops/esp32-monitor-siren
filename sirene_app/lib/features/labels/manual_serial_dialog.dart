@@ -146,7 +146,7 @@ Future<void> showManualSerialDialog(
               children: [
                 Text(
                   'Edite os 9 primeiros dígitos; o verificador ITF (último) é calculado automaticamente. '
-                  'No DiatuCAD, F2 grava o serial e o modelo do produto.',
+                  'Depois acione o pedal para gravar o serial e o modelo.',
                   style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
                         color: DipontoColors.onSurface.withValues(alpha: 0.7),
                       ),

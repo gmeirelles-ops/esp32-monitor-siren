@@ -4,9 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/database/database.dart';
 import '../../core/theme/diponto_theme.dart';
 import '../mqtt/mqtt_providers.dart';
+import 'laser_operator_copy.dart';
 import 'mark_queue_ui.dart';
 
-/// Banner destacado: próximo serial na fila + instrução F2 para o operador.
+/// Banner destacado: próximo serial na fila + instrução do pedal.
 class LaserMarkCallout extends ConsumerWidget {
   const LaserMarkCallout({required this.entry, super.key});
 
@@ -29,14 +30,14 @@ class LaserMarkCallout extends ConsumerWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(Icons.keyboard, color: DipontoColors.primary, size: 30),
+              const Icon(Icons.touch_app, color: DipontoColors.primary, size: 30),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Acione F2 no DiatuCAD',
+                      LaserOperatorCopy.triggerTitle,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.bold,
                             color: DipontoColors.primary,
@@ -68,9 +69,7 @@ void showLaserEnqueuedFeedback(
   required String serial,
   String? modelo,
 }) {
-  final text = modelo != null
-      ? 'Serial $serial ($modelo) na fila — acione F2 no DiatuCAD'
-      : 'Serial $serial na fila — acione F2 no DiatuCAD';
+  final text = LaserOperatorCopy.enqueuedSnack(serial, modelo: modelo);
   ScaffoldMessenger.of(context)
     ..clearSnackBars()
     ..showSnackBar(

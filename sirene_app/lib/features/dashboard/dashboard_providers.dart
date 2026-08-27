@@ -6,7 +6,13 @@ import '../../core/providers/core_providers.dart';
 import 'dashboard_batch_status.dart';
 import 'dashboard_filters.dart';
 
-export 'dashboard_filters.dart' show DashboardFilters, DashboardPeriod, sinceForDashboardPeriod;
+export 'dashboard_filters.dart'
+    show
+        DashboardFilters,
+        DashboardPeriod,
+        sinceForDashboardPeriod,
+        effectiveSinceForPeriod,
+        throughputDaysForPeriod;
 
 class DashboardData {
   const DashboardData({

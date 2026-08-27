@@ -31,7 +31,10 @@ void main() {
       prefs = await SharedPreferences.getInstance();
       await AppConfig.migrateBancadaSetupIfNeeded(prefs);
       db = createMemoryDb();
-      await prefs.setString('marking_mode', 'laser');
+      final probe = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+      final freePort = probe.port;
+      await probe.close();
+      await prefs.setInt('laser_tcp_port', freePort);
       await db.into(db.products).insert(
             ProductsCompanion.insert(
               idProduto: '123',

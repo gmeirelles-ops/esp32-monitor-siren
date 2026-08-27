@@ -35,10 +35,10 @@ void main() {
     proximoSequencial: 1,
   );
 
-  test('REPROVADO MQTT com potência na faixa não gera serial nem etiqueta', () async {
+  test('REPROVADO MQTT com potência na faixa não gera serial nem enfileira laser', () async {
     final db = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(db.close);
-    final prefs = await createTestPrefs(useLaserMarking: false);
+    final prefs = await createTestPrefs();
     final container = ProviderContainer(
       overrides: devicesTestOverrides(db: db, prefs: prefs),
     );
@@ -60,8 +60,8 @@ void main() {
       ),
     );
 
-    final buffer = await db.getLabelBuffer();
-    expect(buffer, isEmpty);
+    final queue = await db.getPendingMarkQueue();
+    expect(queue, isEmpty);
 
     final rows = await db.watchTestsByOp(batch.numeroOp).first;
     expect(rows, hasLength(1));
@@ -72,7 +72,7 @@ void main() {
   test('APROVADO MQTT gera serial mesmo se limites do lote mudaram depois', () async {
     final db = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(db.close);
-    final prefs = await createTestPrefs(useLaserMarking: false);
+    final prefs = await createTestPrefs();
     final container = ProviderContainer(
       overrides: devicesTestOverrides(db: db, prefs: prefs),
     );

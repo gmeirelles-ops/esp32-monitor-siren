@@ -26,11 +26,11 @@ O app SHALL sugerir o `proximo_sequencial` no formulário de lote como `último 
 - **THEN** o campo `proximo_sequencial` é pré-preenchido com `1`
 
 ### Requirement: Trava anti-duplicado na emissão de serial
-O app SHALL verificar a existência de um serial antes de emiti-lo; se o serial já existir localmente, o app SHALL NOT adicioná-lo ao buffer de etiquetas e SHALL sinalizar o conflito ao operador.
+O app SHALL verificar a existência de um serial antes de emiti-lo; se o serial já existir localmente, o app SHALL NOT enfileirar gravação laser e SHALL sinalizar o conflito ao operador.
 
 #### Scenario: Serial inédito
 - **WHEN** um teste aprovado gera um serial que não existe no histórico local
-- **THEN** o serial é adicionado ao buffer de etiquetas normalmente
+- **THEN** o serial é aceito e enfileirado na `mark_queue`
 
 #### Scenario: Serial duplicado
 - **WHEN** um teste aprovado gera um serial que já existe no histórico local

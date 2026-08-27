@@ -88,16 +88,6 @@ class MarkQueueProcessor {
 
   Future<void> ensureRunning() async {
     final config = _readConfig();
-    if (config.markingMode != MarkingMode.laser) {
-      if (_backend != null) {
-        await _backend!.stop();
-        _backend = null;
-        _runningPort = null;
-        _runningCommand = null;
-        _runningModelCommand = null;
-      }
-      return;
-    }
 
     if (_backend != null &&
         _runningPort == config.laserTcpPort &&

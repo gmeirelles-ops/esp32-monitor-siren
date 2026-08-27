@@ -33,3 +33,32 @@ A documentação de produção SHALL descrever como gerar o pacote portátil, co
 - **WHEN** o desenvolvedor lê `sirene_app/README.md`
 - **THEN** encontra link para script de release e limitação de build apenas em Windows/CI
 
+
+
+### Requirement: Versões documentadas batem com o código
+A documentação operacional SHALL citar `FIRMWARE_VERSION` do firmware e a versão do app em `pubspec.yaml`.
+
+#### Scenario: Guia firmware
+- **WHEN** um integrador abre `GUIA_COMPLETO.md` ou `DEPLOY_PRODUCTION.md`
+- **THEN** a versão destacada coincide com `board_config.h`
+
+### Requirement: Marcação física documentada como laser apenas
+`README.md`, `docs/PRODUCAO.md` e `sirene_app/README.md` SHALL descrever somente gravação laser Diatu/DiatuCAD e SHALL incluir (ou apontar para) glossário Diaotu vs DiatuCAD.
+
+#### Scenario: Onboarding posto
+- **WHEN** o operador segue o checklist de produção
+- **THEN** encontra passos laser e glossário Diaotu/DiatuCAD, e não é instruído a instalar driver Zebra como fluxo padrão
+
+### Requirement: Heartbeat documentado em 10 s
+Documentação de telemetria MQTT SHALL indicar intervalo de heartbeat de 10 segundos.
+
+#### Scenario: Tabela de tópicos
+- **WHEN** o guia lista `.../heartbeat`
+- **THEN** o intervalo descrito é 10 s
+
+### Requirement: OTA e USB documentados pelo app
+`docs/PRODUCAO.md` (e referências no guia) SHALL descrever OTA via tela Firmware do app e flash USB pelo app (Windows) como caminhos padrão; `python -m http.server` / `idf.py flash` permanecem como fallback/recovery.
+
+#### Scenario: Checklist produção
+- **WHEN** o supervisor abre a seção OTA/atualização em PRODUCAO
+- **THEN** encontra passos do app antes de comandos manuais de terminal

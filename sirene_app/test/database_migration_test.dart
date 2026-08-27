@@ -42,7 +42,7 @@ void main() {
     expect(operators, isEmpty);
 
     final version = await db.customSelect('PRAGMA user_version').getSingle();
-    expect(version.read<int>('user_version'), 18);
+    expect(version.read<int>('user_version'), 20);
 
     final downtimeTable = await db.customSelect(
       "SELECT name FROM sqlite_master WHERE type='table' AND name='downtime_events'",
@@ -53,5 +53,10 @@ void main() {
       "SELECT name FROM sqlite_master WHERE type='table' AND name='ensaio_records'",
     ).get();
     expect(ensaioTable, isNotEmpty);
+
+    final labelBuffer = await db.customSelect(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name='label_buffer_entries'",
+    ).get();
+    expect(labelBuffer, isEmpty);
   });
 }

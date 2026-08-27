@@ -12,6 +12,7 @@ import '../../shared/widgets/action_section_card.dart';
 import '../../shared/widgets/empty_state_view.dart';
 import '../../shared/widgets/simple_bar_chart.dart';
 import '../labels/laser_mark_callout.dart';
+import '../labels/laser_operator_copy.dart';
 import '../labels/manual_serial_dialog.dart';
 import '../labels/mark_queue_ui.dart';
 import '../labels/marking_providers.dart';
@@ -1422,7 +1423,7 @@ class BatchLiveEngravingPanel extends ConsumerWidget {
             child: queueAsync.when(
               loading: () => const SizedBox.shrink(),
               error: (_, __) => Text(
-                'F2 no DiatuCAD grava serial e modelo do próximo da fila.',
+                LaserOperatorCopy.queueHelp,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: DipontoColors.onSurface.withValues(alpha: 0.65),
                     ),
@@ -1430,7 +1431,7 @@ class BatchLiveEngravingPanel extends ConsumerWidget {
               data: (entries) {
                 if (entries.isEmpty) {
                   return Text(
-                    'F2 no DiatuCAD grava serial e modelo do próximo da fila.',
+                    LaserOperatorCopy.queueHelp,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: DipontoColors.onSurface.withValues(alpha: 0.65),
                         ),

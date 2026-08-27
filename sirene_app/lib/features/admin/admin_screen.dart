@@ -193,7 +193,9 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
                         keyboardType: TextInputType.number,
                         decoration: const InputDecoration(
                           labelText: 'Porta HTTP local',
-                          helperText: 'Feche python no terminal se a porta 8080 estiver ocupada',
+                          helperText:
+                              'App serve com Dart (Python só se a porta falhar). '
+                              'Libere a porta no Firewall (rede privada).',
                         ),
                         onChanged: (v) {
                           final p = int.tryParse(v);

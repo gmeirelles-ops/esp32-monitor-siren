@@ -30,7 +30,7 @@ O app SHALL propagar o estado do checkbox Reteste para o firmware reenviando `SE
 - **THEN** o app publica `SET_BATCH` com `modo_reteste: false`
 
 ### Requirement: Reteste não consome serial nem cota no app
-Com modo reteste ativo, o app SHALL processar resultados de teste (veredito, potência, persistência) mas SHALL NOT gerar serial, incrementar contador de serial, adicionar ao buffer de etiquetas nem avançar `proximo_sequencial` local do lote.
+Com modo reteste ativo, o app SHALL processar resultados de teste (veredito, potência, persistência) mas SHALL NOT gerar serial, incrementar contador de serial, enfileirar `mark_queue` nem avançar `proximo_sequencial` local do lote.
 
 #### Scenario: Aprovação em reteste
 - **WHEN** chega resultado APROVADO com modo reteste ativo

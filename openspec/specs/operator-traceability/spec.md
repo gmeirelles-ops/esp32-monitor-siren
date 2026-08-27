@@ -12,7 +12,7 @@ O app SHALL registrar o identificador do operador ativo do turno (código e nome
 
 #### Scenario: Sem operador local nem Firebase
 - **WHEN** um resultado de teste é recebido sem operador ativo e sem sessão Firebase
-- **THEN** o resultado é persistido com operador ausente, sem bloquear etiquetas
+- **THEN** o resultado é persistido com operador ausente, sem bloquear enfileiramento laser
 
 #### Scenario: Fallback Firebase
 - **WHEN** não há operador local selecionado mas o usuário está autenticado no Firebase

@@ -18,24 +18,39 @@ import '../bancadas/bancadas_provider.dart';
 import '../operators/operators_provider.dart';
 import '../products/products_provider.dart';
 import 'dashboard_batch_status.dart';
-import '../../core/providers/core_providers.dart';
 import '../../shared/reports/report_context.dart';
 import '../../shared/reports/report_export_format.dart';
 import '../../shared/reports/report_pdf_export.dart';
 import '../../shared/reports/report_xml_export.dart';
 import 'dashboard_providers.dart';
+import 'production_report_export.dart';
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
 
   Future<void> _exportReport(BuildContext context, WidgetRef ref, DashboardData data) async {
-    final picked = await pickReportExportOptions(context);
+    final picked = await pickReportExportOptions(context, includeCsv: true);
     if (picked == null || !context.mounted) return;
 
     final filters = ref.read(dashboardFiltersProvider);
-    final ctx = await loadReportContext(ref);
 
     try {
+      if (picked.format.isCsv) {
+        final path = await _exportDashboardCsv(
+          ref: ref,
+          data: data,
+          filters: filters,
+          testsDetail: picked.format == ReportExportFormat.csvTests,
+        );
+        if (!context.mounted) return;
+        if (path == null) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('CSV salvo: $path')),
+        );
+        return;
+      }
+
+      final ctx = await loadReportContext(ref);
       final path = await exportReportFile(
         format: picked.format,
         basename: 'painel',
@@ -63,6 +78,45 @@ class DashboardScreen extends ConsumerWidget {
         SnackBar(content: Text('Erro ao exportar: $e')),
       );
     }
+  }
+
+  Future<String?> _exportDashboardCsv({
+    required WidgetRef ref,
+    required DashboardData data,
+    required DashboardFilters filters,
+    required bool testsDetail,
+  }) async {
+    final String content;
+    if (testsDetail) {
+      final db = ref.read(databaseProvider);
+      final since = effectiveSinceForPeriod(filters.period);
+      final tests = await db.testResultsFiltered(
+        since: since,
+        numeroOp: filters.numeroOp,
+        idProduto: filters.idProduto,
+        deviceId: filters.deviceId,
+      );
+      tests.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+      final products = ref.read(productsProvider);
+      final productsById = {for (final p in products) p.idProduto: p};
+      final bancadas = ref.read(bancadasMapProvider).valueOrNull ?? {};
+      content = formatDashboardTestsCsv(
+        tests,
+        productsById: productsById,
+        bancadaNumeros: bancadas,
+      );
+    } else {
+      content = formatDashboardSummaryCsv(
+        summary: data.summary,
+        throughput: data.throughput,
+        faults: data.faults,
+        filters: filters,
+      );
+    }
+    return saveCsvWithFilePicker(
+      suggestedName: defaultDashboardCsvFileName(testsDetail: testsDetail),
+      content: content,
+    );
   }
 
   @override

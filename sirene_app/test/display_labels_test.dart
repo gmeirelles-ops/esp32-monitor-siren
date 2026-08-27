@@ -19,6 +19,6 @@ void main() {
     expect(PortugueseLabels.rendimento, 'Rendimento');
     expect(PortugueseLabels.conectada, 'Conectada');
     expect(PortugueseLabels.desconectada, 'Desconectada');
-    expect(PortugueseLabels.baixarArquivoZpl, 'Baixar arquivo ZPL');
+    expect(PortugueseLabels.encerrarLote, 'Encerrar lote');
   });
 }

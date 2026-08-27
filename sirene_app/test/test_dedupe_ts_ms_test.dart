@@ -135,10 +135,10 @@ void main() {
     expect(rows.single.firmwareTsMs, 9001);
   });
 
-  test('insert grava veredito antes de etiqueta (aprovado com serial)', () async {
+  test('insert grava veredito antes de enfileirar laser (aprovado com serial)', () async {
     final db = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(db.close);
-    final prefs = await createTestPrefs(useLaserMarking: false);
+    final prefs = await createTestPrefs();
     final container = ProviderContainer(
       overrides: devicesTestOverrides(db: db, prefs: prefs),
     );

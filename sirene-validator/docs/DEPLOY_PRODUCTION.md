@@ -1,6 +1,6 @@
 # Deploy em produção industrial — sirene-validator
 
-Checklist para colocar bancadas em linha de produção com firmware **≥ 1.7.0**.
+Checklist para colocar bancadas em linha de produção com firmware **≥ 1.8.10**.
 
 ## Perfis de build
 
@@ -40,7 +40,7 @@ App administrativo pode usar usuário `devices` com ACL `producao/#` readwrite.
 3. Provisionar Wi-Fi + broker no portal
 4. Calibrar produto e teste de fumaça (1 OK + 1 NOK) no app Flutter
 
-## Segurança e robustez (v1.7.0)
+## Segurança e robustez (v1.8.10)
 
 | Recurso | Comportamento |
 |---------|----------------|

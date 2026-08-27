@@ -7,6 +7,5 @@ abstract final class PortugueseLabels {
   static const conectada = 'Conectada';
   static const desconectada = 'Desconectada';
   static const identificadorTecnico = 'Identificador técnico';
-  static const baixarArquivoZpl = 'Baixar arquivo ZPL';
   static const encerrarLote = 'Encerrar lote';
 }

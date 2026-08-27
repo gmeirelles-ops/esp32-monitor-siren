@@ -77,5 +77,5 @@ A persistência local de resultados de teste SHALL permanecer obrigatória e ind
 
 #### Scenario: Sync desabilitado ou falha de rede
 - **WHEN** o app recebe resultado de teste via MQTT com sync desabilitado ou Firestore indisponível
-- **THEN** o resultado é gravado no SQLite local normalmente, sem bloquear o fluxo de etiquetas
+- **THEN** o resultado é gravado no SQLite local normalmente, sem bloquear o fluxo de gravação laser
 

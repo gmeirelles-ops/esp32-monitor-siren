@@ -2,6 +2,18 @@
 
 Substitui etiquetas Zebra por gravação permanente do serial ITF na carcaça da sirene.
 
+No **posto de produção** o gatilho físico é o **pedal** (não a tecla F2). O software do laser pode mapear o pedal ao mesmo ciclo de gravação; a UI do app orienta o operador a acionar o pedal.
+
+## Glossário
+
+| Nome | Significado |
+|------|-------------|
+| **Diaotu** | Marca/modelo do laser (ex. B3 fibra). Menus do equipamento (“Marca de controlo TCP”) usam este nome. |
+| **DiatuCAD** | Software de job no PC; cliente TCP que pede o serial ao app (no posto o gatilho é o **pedal**). |
+| **Diatu*** (app) | Classes/APIs no `sirene_app` (`DiatuLaserTcpServer`, etc.) e capability OpenSpec `diatu-laser-marking`. |
+
+Não confundir Diaotu (hardware) com Diatu/DiatuCAD (software/API): não é typo.
+
 ## Documentos
 
 | Arquivo | Conteúdo |
@@ -38,11 +50,8 @@ Resumo:
 - Porta em uso → desativar **Marca de controlo TCP** no Diaotu
 - Use o painel **Diagnóstico laser** em Configurações (log + Simular serial / Simular modelo)
 
-## Posto com laser vs etiquetas
+## Posto
 
-| Modo | Quando usar |
-|------|-------------|
-| **Etiquetas (Zebra)** | Postos com ZT230 e rolo adesivo |
-| **Gravação laser (Diatu)** | Posto com laser B3 + DiatuCAD |
+Fluxo padrão: app enfileira serial na `mark_queue` → DiatuCAD solicita via TCP → operador aciona **F2**.
 
-Alternar em **Configurações → Marcação de serial**.
+Referência histórica de etiquetas Zebra (obsoleta): [`docs/label-reference/`](../label-reference/README.md).

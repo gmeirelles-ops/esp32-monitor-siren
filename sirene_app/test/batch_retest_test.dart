@@ -75,7 +75,7 @@ void main() {
       isRetest: true,
     );
 
-    expect(await db.getLabelBuffer(), isEmpty);
+    expect(await db.getPendingMarkQueue(), isEmpty);
     final metrics = await db.getBatchMetrics('OP-RT');
     expect(metrics.aprovados, 0);
     expect(metrics.total, 0);

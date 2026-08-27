@@ -87,7 +87,6 @@ void main() {
         batchLiveMetricsProvider(numeroOp).overrideWith(
           (ref) async => const BatchMetrics(total: 0, aprovados: 0, reprovados: 0),
         ),
-        labelBufferCountProvider.overrideWith((ref) => Stream.value(0)),
         bancadasMapProvider.overrideWith((ref) => Stream.value({deviceId: 1})),
         productsStreamProvider.overrideWith((ref) => Stream.value([])),
         activeOperatorProvider.overrideWith((ref) => Future.value(op)),

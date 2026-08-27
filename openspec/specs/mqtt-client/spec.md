@@ -74,9 +74,16 @@ O app SHALL processar as mensagens MQTT recebidas em ordem de chegada, uma por v
 
 #### Scenario: Aprovações em sequência rápida
 - **WHEN** dois resultados de teste aprovados chegam em sequência imediata
-- **THEN** a verificação de duplicidade, o incremento do contador de serial e o buffer de etiquetas do primeiro concluem antes do processamento do segundo
+- **THEN** a verificação de duplicidade, o incremento do contador de serial e o enfileiramento laser do primeiro concluem antes do processamento do segundo
 
 #### Scenario: Erro em uma mensagem não interrompe o fluxo
 - **WHEN** o processamento de uma mensagem lança exceção
 - **THEN** as mensagens seguintes continuam sendo processadas normalmente
 
+
+### Requirement: Organização modular do estado de dispositivos
+O código que mantém o mapa de dispositivos MQTT SHALL ser organizado em módulos com responsabilidades distintas (inbound/FSM, lote, pipeline de teste/marcação, comandos auxiliares), preservando a API pública (`devicesProvider` e métodos usados pelas telas).
+
+#### Scenario: API pública estável
+- **WHEN** as telas usam `devicesProvider` / métodos de lote e teste
+- **THEN** as assinaturas e efeitos observáveis permanecem equivalentes

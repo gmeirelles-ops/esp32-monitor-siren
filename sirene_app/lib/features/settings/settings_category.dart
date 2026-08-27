@@ -21,7 +21,7 @@ extension SettingsCategoryMeta on SettingsCategory {
 
   String get subtitle => switch (this) {
         SettingsCategory.posto => 'Operador e bancadas',
-        SettingsCategory.manutencao => 'Wi-Fi, série e reset',
+        SettingsCategory.manutencao => 'Backup, Wi-Fi, série e reset',
         SettingsCategory.rede => 'Broker MQTT',
         SettingsCategory.marcacao => 'Gravação laser Diatu',
         SettingsCategory.nuvem => 'Firestore e sync',

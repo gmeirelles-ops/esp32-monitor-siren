@@ -109,7 +109,7 @@ class _FirmwareUpdateScreenState extends ConsumerState<FirmwareUpdateScreen>
 
     setState(() {
       _phase = FirmwareUpdatePhase.preparing;
-      _statusMessage = 'Iniciando servidor HTTP...';
+      _statusMessage = 'Preparando servidor HTTP (Dart)…';
       _otaUrl = null;
     });
 
@@ -119,11 +119,15 @@ class _FirmwareUpdateScreenState extends ConsumerState<FirmwareUpdateScreen>
         port: _otaPort,
         mqttBrokerHost: config.mqttHost,
       );
+      final parts = parseOtaFirmwareUrl(url);
 
       setState(() {
         _otaUrl = url;
         _phase = FirmwareUpdatePhase.active;
-        _statusMessage = 'Enviando OTA para $deviceId...';
+        _statusMessage = parts == null
+            ? 'Servindo (${otaService.activeBackendHint}) — enviando OTA para $deviceId…'
+            : 'Servindo ${parts.host}:${parts.port} (${otaService.activeBackendHint}) — '
+                'enviando OTA para $deviceId…';
       });
 
       final completer = Completer<void>();
@@ -362,6 +366,8 @@ class _OtaTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final urlParts = otaUrl == null ? null : parseOtaFirmwareUrl(otaUrl!);
+
     return ListView(
       children: [
         FormSectionCard(
@@ -370,9 +376,26 @@ class _OtaTab extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const Text(
-                'O app serve o .bin na rede e envia OTA_UPDATE automaticamente — '
-                'sem Python nem MQTT Explorer.',
+                'O app serve o .bin na rede (HttpServer Dart; Python só se necessário) '
+                'e envia OTA_UPDATE — sem MQTT Explorer.',
               ),
+              const SizedBox(height: 12),
+              Text(
+                'Antes de iniciar',
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+              const SizedBox(height: 4),
+              for (final item in otaOperatorChecklist(httpPort: port))
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('• '),
+                      Expanded(child: Text(item, style: const TextStyle(fontSize: 13))),
+                    ],
+                  ),
+                ),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
                 value: validDropdownValue(
@@ -408,7 +431,12 @@ class _OtaTab extends StatelessWidget {
               ),
               if (otaUrl != null) ...[
                 const SizedBox(height: 8),
-                SelectableText('URL: $otaUrl', style: const TextStyle(fontSize: 12)),
+                SelectableText(
+                  urlParts == null
+                      ? 'URL: $otaUrl'
+                      : 'URL: $otaUrl\nIP: ${urlParts.host}  ·  Porta: ${urlParts.port}',
+                  style: const TextStyle(fontSize: 12),
+                ),
               ],
               const SizedBox(height: 12),
               ElevatedButton.icon(

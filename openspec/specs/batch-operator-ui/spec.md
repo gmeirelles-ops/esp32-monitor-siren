@@ -51,3 +51,10 @@ O app SHALL exibir `potencia_min`, `potencia_max` e `tempo_teste` do produto sel
 - **WHEN** o operador seleciona um produto no dropdown do lote
 - **THEN** o app preenche e exibe os limites e tempo de teste cadastrados, sem permitir edição direta na tela de lote
 
+### Requirement: Formulário de lote orientado a leigo
+A tela Lote SHALL minimizar seções/cards, usar rótulos curtos e um único CTA primário “Iniciar lote”.
+
+#### Scenario: Início de turno
+- **WHEN** o operador autenticado abre Lote
+- **THEN** consegue iniciar o lote com poucos campos e um botão principal óbvio
+

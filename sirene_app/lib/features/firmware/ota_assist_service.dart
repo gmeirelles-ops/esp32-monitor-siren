@@ -7,8 +7,9 @@ import 'ota_assist_logic.dart';
 
 /// Serve o `.bin` via HTTP local para OTA MQTT.
 ///
-/// No Windows usa `python -m http.server` (mesmo fluxo que funciona no terminal).
-/// Se já houver um servidor na porta servindo o `.bin`, reutiliza (ex.: python no terminal).
+/// Preferência: **HttpServer Dart** (sem Python). No Windows, Python
+/// (`python -m http.server`) é fallback se o bind Dart falhar.
+/// Se já houver um servidor na porta servindo o `.bin`, reutiliza.
 class OtaAssistService {
   HttpServer? _dartServer;
   Process? _pythonProcess;
@@ -17,6 +18,14 @@ class OtaAssistService {
   bool _reusingExternalServer = false;
 
   bool get isServing => _reusingExternalServer || _dartServer != null || _pythonProcess != null;
+
+  /// Backend ativo após [startServing] (para UI / diagnóstico).
+  String get activeBackendHint {
+    if (_reusingExternalServer) return 'servidor externo';
+    if (_dartServer != null) return 'sirene_app.exe';
+    if (_pythonProcess != null) return 'python.exe';
+    return 'nenhum';
+  }
 
   Future<String> startServing({
     required String sourceBinPath,
@@ -34,7 +43,10 @@ class OtaAssistService {
 
     final lanIp = await detectLanIPv4(mqttBrokerHost: mqttBrokerHost);
     if (lanIp == null) {
-      throw StateError('Não foi possível detectar IP da rede local');
+      throw StateError(
+        'Não foi possível detectar IP da rede local. '
+        'Desative adaptadores virtuais (WSL/Hyper-V) ou confira o cabo/Wi‑Fi do PC.',
+      );
     }
 
     // Servidor já ativo (ex.: python -m http.server no terminal)
@@ -44,8 +56,7 @@ class OtaAssistService {
         return buildOtaFirmwareUrl(lanIp, port);
       }
       throw StateError(
-        'Há um servidor na porta $port em localhost, mas a rede não alcança $lanIp:$port. '
-        'Libere a porta $port no Firewall do Windows (rede privada).',
+        otaLanUnreachableMessage(lanIp, port, processHint: 'o processo que já usa a porta $port'),
       );
     }
 
@@ -55,8 +66,17 @@ class OtaAssistService {
     _servedFilePath = p.join(_serveDir!.path, kOtaServedFileName);
     await source.copy(_servedFilePath!);
 
+    Object? dartError;
+    try {
+      await _startDartServer(port);
+    } on StateError catch (e) {
+      dartError = e;
+      await _dartServer?.close(force: true);
+      _dartServer = null;
+    }
+
     Object? pythonError;
-    if (Platform.isWindows) {
+    if (_dartServer == null && Platform.isWindows) {
       final python = await _resolvePythonExecutable();
       if (python != null) {
         try {
@@ -70,34 +90,27 @@ class OtaAssistService {
       }
     }
 
-    if (_pythonProcess == null) {
-      try {
-        await _startDartServer(port);
-      } on StateError catch (e) {
-        throw StateError(
-          'Porta $port indisponível (${e.message}). '
-          'Feche o servidor HTTP no terminal (Ctrl+C no python) ou use outra porta.',
-        );
-      }
+    if (_dartServer == null && _pythonProcess == null) {
+      await stop();
+      final detail = [
+        if (dartError != null) 'Dart: $dartError',
+        if (pythonError != null) 'Python: $pythonError',
+      ].join(' · ');
+      throw StateError(otaPortUnavailableMessage(port, detail: detail.isEmpty ? null : detail));
     }
 
     if (!await _waitForFirmware('127.0.0.1', port, minBytes: kMinFirmwareBinBytes)) {
       await stop();
-      final extra = pythonError != null ? ' Detalhe Python: $pythonError' : '';
       throw StateError(
-        'Servidor HTTP não respondeu em 127.0.0.1:$port após iniciar.$extra '
-        'Confirme que a porta está livre e que o Python funciona: '
-        'python -m http.server $port',
+        'Servidor HTTP não respondeu em 127.0.0.1:$port após iniciar. '
+        'Confirme que a porta está livre.',
       );
     }
 
     if (!await _waitForFirmware(lanIp, port, minBytes: kMinFirmwareBinBytes, attempts: 8)) {
+      final hint = _pythonProcess != null ? 'python.exe' : 'sirene_app.exe';
       await stop();
-      throw StateError(
-        'Servidor OK em localhost mas não em $lanIp:$port. '
-        'Libere a porta $port no Firewall do Windows para '
-        '${_pythonProcess != null ? 'python.exe' : 'sirene_app.exe'}.',
-      );
+      throw StateError(otaLanUnreachableMessage(lanIp, port, processHint: hint));
     }
 
     return buildOtaFirmwareUrl(lanIp, port);
@@ -191,15 +204,29 @@ class OtaAssistService {
   Future<bool> _probeFirmware(String host, int port, {required int minBytes}) async {
     final client = HttpClient();
     try {
-      final request = await client.get(host, port, '/$kOtaServedFileName');
+      final request = await client.openUrl(
+        'HEAD',
+        Uri(scheme: 'http', host: host, port: port, path: '/$kOtaServedFileName'),
+      );
       final response = await request.close();
-      if (response.statusCode != 200) {
+      if (response.statusCode == 200) {
+        final len = response.contentLength;
         await response.drain();
+        if (len >= 0 && len < minBytes) return false;
+        return true;
+      }
+      await response.drain();
+
+      // Fallback GET (alguns servidores ignoram HEAD)
+      final getReq = await client.get(host, port, '/$kOtaServedFileName');
+      final getRes = await getReq.close();
+      if (getRes.statusCode != 200) {
+        await getRes.drain();
         return false;
       }
-      final len = response.contentLength;
-      await response.drain();
-      if (len >= 0 && len < minBytes) return false;
+      final getLen = getRes.contentLength;
+      await getRes.drain();
+      if (getLen >= 0 && getLen < minBytes) return false;
       return true;
     } catch (_) {
       return false;

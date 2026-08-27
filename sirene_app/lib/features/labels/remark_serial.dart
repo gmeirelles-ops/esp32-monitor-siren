@@ -1,15 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/config/app_config.dart';
 import '../../core/database/database.dart';
-import '../labels/label_print_logic.dart';
-import '../labels/label_printer.dart';
 import '../labels/laser_mark_callout.dart';
+import '../labels/laser_operator_copy.dart';
 import '../labels/mark_queue_ui.dart';
 import '../labels/marking_providers.dart';
 import '../labels/serial_marking_backend.dart';
-import '../labels/zpl_generator.dart';
 import '../mqtt/mqtt_providers.dart';
 import '../operators/operators_provider.dart';
 
@@ -31,40 +28,24 @@ class RemarkUiCopy {
   final String successMessage;
 }
 
-RemarkUiCopy remarkUiCopy(MarkingMode mode, String serial) {
-  if (mode == MarkingMode.laser) {
-    return RemarkUiCopy(
-      actionLabel: 'Regravar',
-      dialogTitle: 'Regravar serial',
-      confirmLabel: 'Regravar',
-      dialogBody:
-          'O serial $serial será colocado na frente da fila de gravação laser. '
-          'Acione F2 no DiatuCAD para gravar na carcaça.',
-      icon: Icons.precision_manufacturing,
-      successMessage: 'Serial $serial na fila — acione F2 no DiatuCAD',
-    );
-  }
+RemarkUiCopy remarkUiCopy(String serial) {
   return RemarkUiCopy(
-    actionLabel: 'Reimprimir',
-    dialogTitle: 'Reimprimir etiqueta',
-    confirmLabel: 'Reimprimir',
-    dialogBody:
-        'A impressora avançará uma linha inteira do rolo (3 posições). '
-        'O serial $serial será impresso na primeira coluna; '
-        'as outras duas saem em branco.',
-    icon: Icons.print,
-    successMessage: 'Etiqueta $serial reenviada à impressora',
+    actionLabel: 'Regravar',
+    dialogTitle: 'Regravar serial',
+    confirmLabel: 'Regravar',
+    dialogBody: LaserOperatorCopy.remarkDialogBody(serial),
+    icon: Icons.precision_manufacturing,
+    successMessage: LaserOperatorCopy.enqueuedSnack(serial),
   );
 }
 
-bool remarkRequiresConfirmation(MarkingMode mode) => mode == MarkingMode.labels;
+bool remarkRequiresConfirmation() => false;
 
 Future<bool> confirmRemark(
   BuildContext context,
-  MarkingMode mode,
   String serial,
 ) async {
-  final copy = remarkUiCopy(mode, serial);
+  final copy = remarkUiCopy(serial);
   final confirmed = await showDialog<bool>(
     context: context,
     builder: (ctx) => AlertDialog(
@@ -87,40 +68,20 @@ Future<String?> executeRemark({
   required String serial,
   required String numeroOp,
 }) async {
-  final config = ref.read(appConfigProvider);
   final db = ref.read(databaseProvider);
   final operatorId = ref.read(sessionOperatorIdProvider);
 
   try {
-    if (config.markingMode == MarkingMode.laser) {
-      await ref.read(markQueueProcessorProvider).enqueueRemark(serial, numeroOp);
-      await db.insertRemarkLog(
-        serial: serial,
-        numeroOp: numeroOp,
-        mode: 'laser',
-        operatorId: operatorId,
-      );
-      return remarkUiCopy(MarkingMode.laser, serial).successMessage;
-    }
-
-    final items = await resolveLabelZplItems(db, [serial]);
-    final item = items.first;
-    final printer = createLabelPrinterTransport(config);
-    await printer.sendZpl(
-      generateZplReprintRow(serial: item.serial, productName: item.productName),
-    );
+    await ref.read(markQueueProcessorProvider).enqueueRemark(serial, numeroOp);
     await db.insertRemarkLog(
       serial: serial,
       numeroOp: numeroOp,
-      mode: 'label',
+      mode: 'laser',
       operatorId: operatorId,
     );
-    return remarkUiCopy(MarkingMode.labels, serial).successMessage;
+    return remarkUiCopy(serial).successMessage;
   } catch (e) {
-    if (config.markingMode == MarkingMode.laser) {
-      return formatMarkingError(e);
-    }
-    return formatPrinterError(e, config.printerMode);
+    return formatMarkingError(e);
   }
 }
 
@@ -130,9 +91,8 @@ Future<void> remarkSerialIfConfirmed({
   required String serial,
   required String numeroOp,
 }) async {
-  final mode = ref.read(appConfigProvider).markingMode;
-  if (remarkRequiresConfirmation(mode)) {
-    if (!await confirmRemark(context, mode, serial)) return;
+  if (remarkRequiresConfirmation()) {
+    if (!await confirmRemark(context, serial)) return;
   }
   if (!context.mounted) return;
 
@@ -145,12 +105,7 @@ Future<void> remarkSerialIfConfirmed({
     return;
   }
 
-  if (mode == MarkingMode.laser) {
-    final modelo = await resolveModelNameFromSerial(ref.read(databaseProvider), serial);
-    if (!context.mounted) return;
-    showLaserEnqueuedFeedback(context, serial: serial, modelo: modelo);
-    return;
-  }
-
-  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  final modelo = await resolveModelNameFromSerial(ref.read(databaseProvider), serial);
+  if (!context.mounted) return;
+  showLaserEnqueuedFeedback(context, serial: serial, modelo: modelo);
 }

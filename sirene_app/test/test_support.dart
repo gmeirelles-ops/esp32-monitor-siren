@@ -6,15 +6,11 @@ import 'package:sirene_app/features/mqtt/models/mqtt_messages.dart';
 import 'package:sirene_app/features/mqtt/mqtt_providers.dart';
 import 'package:sirene_app/features/mqtt/mqtt_service.dart';
 
-/// SharedPreferences de teste. Por padrão usa laser (sem impressora USB).
-/// Para testes do buffer de etiquetas, passe [useLaserMarking]: false.
+/// SharedPreferences de teste (gravação laser).
 Future<SharedPreferences> createTestPrefs({
   Map<String, Object> extra = const {},
-  bool useLaserMarking = true,
 }) async {
   SharedPreferences.setMockInitialValues({
-    if (useLaserMarking) 'marking_mode': 'laser',
-    if (!useLaserMarking) 'printer_mode': 'network',
     ...extra,
   });
   return SharedPreferences.getInstance();

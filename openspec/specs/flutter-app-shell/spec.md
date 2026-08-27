@@ -66,8 +66,8 @@ O app SHALL incluir nas Configurações uma seção "Nuvem" com: toggle de sincr
 O app SHALL manter login Firebase opcional nas Configurações → Nuvem para sincronização, independente do login de operador local obrigatório na entrada.
 
 #### Scenario: Uso local após login de operador
-- **WHEN** o operador autenticado utiliza Lote, Painel e Etiquetas sem sessão Firebase
-- **THEN** todas as funcionalidades locais (MQTT, SQLite, etiquetas) permanecem acessíveis
+- **WHEN** o operador autenticado utiliza Lote, Painel e gravação laser sem sessão Firebase
+- **THEN** todas as funcionalidades locais (MQTT, SQLite, gravação laser) permanecem acessíveis
 
 #### Scenario: Login Firebase para nuvem
 - **WHEN** o operador tenta habilitar sincronização sem sessão Firebase
@@ -118,7 +118,7 @@ O app SHALL inicializar a conexão MQTT e o registro de mensagens na inicializa�
 
 #### Scenario: Resultado de teste com app recém-aberto
 - **WHEN** um dispositivo publica um resultado de teste logo após o app iniciar
-- **THEN** o resultado é persistido e a etiqueta gerada sem exigir visita prévia à tela de Dispositivos ou Lote
+- **THEN** o resultado é persistido e a gravação laser enfileirada sem exigir visita prévia à tela de Dispositivos ou Lote
 
 ### Requirement: Indicador de conexão MQTT global
 O app SHALL exibir o indicador de status da conexão MQTT (`ConnectionStatusBadge`) na AppBar de todas as telas principais, não apenas na tela de Dispositivos.
@@ -178,4 +178,11 @@ O app SHALL usar AppBar consistente em desktop e mobile, exibindo status MQTT e 
 #### Scenario: Desktop com NavigationRail
 - **WHEN** o app roda em layout desktop
 - **THEN** o NavigationRail contém cinco destinos (Lote, Painel, Etiquetas, Cadastros, Configurações) e a AppBar global mostra operador e MQTT
+
+### Requirement: Navegação por papel (operador vs gestor)
+A shell SHALL expor destinos distintos por papel. Operador SHALL ver **somente** `Lote` e `Gravação`. Gestor SHALL manter Painel, Relatório, Consulta, Gravação, Cadastros, Ensaio e Configurações (além de Lote). O app SHALL NOT exibir Consulta no menu do operador.
+
+#### Scenario: Menu operador
+- **WHEN** um operador (não gestor) autentica e entra na shell
+- **THEN** a navegação mostra exatamente dois destinos: Lote e Gravação
 

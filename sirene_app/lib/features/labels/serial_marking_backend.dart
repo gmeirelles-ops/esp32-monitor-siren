@@ -1,7 +1,7 @@
 import '../../core/config/app_config.dart';
 import 'diatu_laser_tcp_server.dart';
 
-/// Backend de marcação física do serial (Zebra ZPL ou laser DiatuCAD).
+/// Backend de marcação física do serial (gravação laser DiatuCAD).
 abstract class SerialMarkingBackend {
   Future<void> start();
   Future<void> stop();

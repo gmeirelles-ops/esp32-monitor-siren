@@ -66,7 +66,7 @@ class _LookupScreenState extends ConsumerState<LookupScreen> {
       body: ScreenPageLayout(
         intro: const SectionIntro(
           title: 'Consulta de rastreabilidade',
-          subtitle: 'Busque por serial ou número da OP para localizar testes e reimprimir etiquetas.',
+          subtitle: 'Busque por serial ou número da OP para localizar testes e regravar no laser.',
           icon: Icons.search,
         ),
         children: [
@@ -150,8 +150,8 @@ class _LookupScreenState extends ConsumerState<LookupScreen> {
                         ),
                         trailing: rows[i].serial != null
                             ? IconButton(
-                                tooltip: 'Reimprimir',
-                                icon: const Icon(Icons.print_outlined),
+                                tooltip: 'Regravar',
+                                icon: const Icon(Icons.precision_manufacturing_outlined),
                                 onPressed: () => remarkSerialIfConfirmed(
                                   context: context,
                                   ref: ref,

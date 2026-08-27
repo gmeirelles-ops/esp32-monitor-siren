@@ -40,7 +40,7 @@ String get firebaseUnavailableMessage {
     if (defaultTargetPlatform == TargetPlatform.linux) {
       return 'No Linux o sync Firestore não está disponível (SDK Firebase '
           'sem plugin nativo). Use o build Windows no posto para nuvem. '
-          'MQTT, lotes, etiquetas e SQLite funcionam normalmente aqui.';
+          'MQTT, lotes, gravação laser e SQLite funcionam normalmente aqui.';
     }
     return 'Firebase não disponível nesta plataforma.';
   }

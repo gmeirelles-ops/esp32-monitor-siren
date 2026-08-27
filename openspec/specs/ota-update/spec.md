@@ -32,3 +32,10 @@ O dispositivo SHALL garantir que o relé esteja desligado durante todo o process
 - **WHEN** uma atualização OTA está em andamento
 - **THEN** o relé permanece desligado e nenhum ciclo de teste é iniciado até a conclusão ou reinício
 
+### Requirement: Assistente OTA no posto
+O fluxo operacional de atualização OTA SHALL poder ser concluído pelo app (seleção do `.bin`, serve HTTP, `OTA_UPDATE`) sem exigir `python -m http.server` digitado no terminal.
+
+#### Scenario: Atualização de bancada online
+- **WHEN** o gestor escolhe `.bin` e inicia OTA na UI
+- **THEN** o dispositivo recebe URL HTTP alcançável na LAN (salvo bloqueio de firewall externo ao app)
+
