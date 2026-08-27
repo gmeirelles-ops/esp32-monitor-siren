@@ -89,6 +89,8 @@ jobs:
 
       - name: Build portable ZIP and installer
         shell: pwsh
+        env:
+          CMAKE_POLICY_VERSION_MINIMUM: "3.5"
         run: ./scripts/build_windows_all.ps1
 
       - name: Upload portable ZIP

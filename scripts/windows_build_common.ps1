@@ -231,7 +231,11 @@ function Invoke-SireneFlutterWindowsBuild {
         Invoke-ExternalBuildStep "flutter pub get" { flutter pub get } "flutter pub get falhou"
         Invoke-ExternalBuildStep "dart run build_runner build" { dart run build_runner build } "build_runner falhou"
         Ensure-FirebaseCppSdkZip -OverridePath $FirebaseSdkZip
-        Invoke-ExternalBuildStep "flutter build windows --release" { flutter build windows --release } "flutter build windows falhou"
+        # CMake 4.x (VS/GitHub runners) rejeita firebase_cpp_sdk com min < 3.5.
+        $env:CMAKE_POLICY_VERSION_MINIMUM = "3.5"
+        Invoke-ExternalBuildStep "flutter build windows --release" {
+            flutter build windows --release
+        } "flutter build windows falhou"
     }
     finally {
         Pop-Location

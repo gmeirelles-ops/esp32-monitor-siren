@@ -1,5 +1,8 @@
 # Project-level configuration.
 cmake_minimum_required(VERSION 3.14)
+# Firebase C++ SDK extraído ainda declara cmake_minimum_required antigo;
+# CMake 4+ no GitHub Actions exige este bypass até subir o FlutterFire.
+set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
 project(sirene_app LANGUAGES CXX)
 
 # The name of the executable created for the application. Change this to change
