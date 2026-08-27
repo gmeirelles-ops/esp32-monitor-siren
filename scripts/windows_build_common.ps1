@@ -354,12 +354,16 @@ function Ensure-SireneEsptoolBundled {
     if (-not (Test-Path $bundleScript)) {
         throw "esptool.exe nao encontrado e bundle script ausente: $bundleScript"
     }
+    # Evita que stderr do pip (WARNING) aborte o job com $ErrorActionPreference=Stop.
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
     & powershell -NoProfile -ExecutionPolicy Bypass -File $bundleScript
-    if (-not (Test-Path $esptool)) {
-        throw "Falha ao gerar esptool.exe em $toolsDir"
+    $bundleExit = $LASTEXITCODE
+    $ErrorActionPreference = $prevEap
+    if ($bundleExit -ne 0 -or -not (Test-Path $esptool)) {
+        throw "Falha ao gerar esptool.exe em $toolsDir (exit=$bundleExit)"
     }
 }
-
 function Compile-SireneWindowsInstaller {
     param([string]$Version)
 
