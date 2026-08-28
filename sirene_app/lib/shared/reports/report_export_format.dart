@@ -35,7 +35,11 @@ enum ReportExportFormat {
 Future<({ReportExportFormat format, bool openPrint})?> pickReportExportOptions(
   BuildContext context, {
   bool includeCsv = false,
+  bool csvSummary = true,
+  bool csvTests = true,
 }) async {
+  final showCsvSummary = includeCsv && csvSummary;
+  final showCsvTests = includeCsv && csvTests;
   return showDialog<({ReportExportFormat format, bool openPrint})>(
     context: context,
     builder: (ctx) => AlertDialog(
@@ -61,20 +65,20 @@ Future<({ReportExportFormat format, bool openPrint})?> pickReportExportOptions(
           icon: const Icon(Icons.code_outlined, size: 18),
           label: const Text('XML'),
         ),
-        if (includeCsv) ...[
+        if (showCsvSummary)
           FilledButton.icon(
             onPressed: () =>
                 Navigator.pop(ctx, (format: ReportExportFormat.csvSummary, openPrint: false)),
             icon: const Icon(Icons.table_chart_outlined, size: 18),
             label: const Text('CSV resumo'),
           ),
+        if (showCsvTests)
           FilledButton.icon(
             onPressed: () =>
                 Navigator.pop(ctx, (format: ReportExportFormat.csvTests, openPrint: false)),
             icon: const Icon(Icons.list_alt_outlined, size: 18),
             label: const Text('CSV testes'),
           ),
-        ],
       ],
     ),
   );

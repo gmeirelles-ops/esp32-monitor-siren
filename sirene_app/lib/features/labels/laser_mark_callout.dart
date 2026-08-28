@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/database/database.dart';
 import '../../core/theme/diponto_theme.dart';
+import '../../shared/widgets/app_message.dart';
 import '../mqtt/mqtt_providers.dart';
 import 'laser_operator_copy.dart';
 import 'mark_queue_ui.dart';
@@ -70,18 +71,5 @@ void showLaserEnqueuedFeedback(
   String? modelo,
 }) {
   final text = LaserOperatorCopy.enqueuedSnack(serial, modelo: modelo);
-  ScaffoldMessenger.of(context)
-    ..clearSnackBars()
-    ..showSnackBar(
-      SnackBar(
-        behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.fromLTRB(24, 24, 24, 0),
-        duration: const Duration(seconds: 10),
-        backgroundColor: DipontoColors.primary,
-        content: Text(
-          text,
-          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-        ),
-      ),
-    );
+  showAppMessage(context, text, kind: AppMessageKind.success);
 }

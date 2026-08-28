@@ -8,13 +8,13 @@ import '../../core/theme/diponto_theme.dart';
 import '../../shared/display_labels.dart';
 import '../../shared/widgets/form_section_card.dart';
 import '../bancadas/bancadas_provider.dart';
-import '../dashboard/dashboard_filters.dart';
 import '../labels/remark_serial.dart';
 import '../mqtt/mqtt_providers.dart';
 import '../../shared/reports/report_context.dart';
 import '../../shared/reports/report_export_format.dart';
 import '../../shared/reports/report_pdf_export.dart';
 import '../../shared/reports/report_xml_export.dart';
+import 'batch_report_export.dart';
 import 'report_filters.dart';
 
 class BatchReportDetailScreen extends ConsumerStatefulWidget {
@@ -73,12 +73,30 @@ class _BatchReportDetailScreenState extends ConsumerState<BatchReportDetailScree
   }
 
   Future<void> _exportDetail(List<TestResult> tests) async {
-    final picked = await pickReportExportOptions(context);
+    final picked = await pickReportExportOptions(context, includeCsv: true, csvSummary: false);
     if (picked == null || !mounted) return;
 
     setState(() => _exporting = true);
     try {
       final bancadaNumeros = await ref.read(databaseProvider).getBancadaNumeros();
+      if (picked.format.isCsv) {
+        final path = await saveReportCsv(
+          'lote_${widget.numeroOp.replaceAll(RegExp(r'[^\w\-]'), '_')}',
+          formatBatchDetailCsv(
+            widget.numeroOp,
+            tests,
+            productsById: _catalog,
+            bancadaNumeros: bancadaNumeros,
+          ),
+        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('CSV salvo: $path')),
+          );
+        }
+        return;
+      }
+
       final ctx = await loadReportContext(ref);
       final meta = ReportPdfMeta(
         title: 'Detalhe do lote',

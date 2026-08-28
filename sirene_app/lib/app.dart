@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'core/config/app_config.dart';
 import 'core/constants/layout.dart';
 import 'core/providers/core_providers.dart';
 import 'core/services/app_log.dart';
@@ -23,6 +22,7 @@ import 'features/mqtt/mqtt_providers.dart';
 import 'features/operators/operator_login_screen.dart';
 import 'features/operators/operators_provider.dart';
 import 'features/provisioning/provisioning_wizard.dart';
+import 'features/settings/settings_navigation.dart';
 import 'features/settings/settings_screen.dart';
 import 'features/setup/cloud_setup_screen.dart';
 import 'features/setup/posto_setup_screen.dart';
@@ -31,6 +31,7 @@ import 'shared/widgets/app_splash_screen.dart';
 import 'shared/widgets/diponto_app_bar.dart';
 import 'shared/widgets/demo_mode_banner.dart';
 import 'shared/widgets/operational_status_shell.dart';
+import 'shared/widgets/operator_switch_button.dart';
 import 'shared/widgets/print_failure_shell.dart';
 
 class SireneApp extends ConsumerWidget {
@@ -84,6 +85,7 @@ class _AppGateState extends ConsumerState<AppGate> with WidgetsBindingObserver {
   }
 
   Future<void> _bootstrap(WidgetRef ref) async {
+    final splashStarted = DateTime.now();
     try {
       await AppLog.write('Bootstrap: início');
       await clearOperatorSessionOnStartup(ref);
@@ -118,6 +120,10 @@ class _AppGateState extends ConsumerState<AppGate> with WidgetsBindingObserver {
         await AppLog.write('Bootstrap: laser TCP indisponível', error: e, stack: st);
       }
       await AppLog.write('Bootstrap: concluído');
+      final elapsed = DateTime.now().difference(splashStarted);
+      if (elapsed < AppSplashScreen.minVisibleDuration) {
+        await Future<void>.delayed(AppSplashScreen.minVisibleDuration - elapsed);
+      }
       if (mounted) {
         setState(() {
           _bootstrapError = null;
@@ -192,8 +198,9 @@ class _AppGateState extends ConsumerState<AppGate> with WidgetsBindingObserver {
       ),
       data: (op) {
         if (op == null) return const OperatorLoginScreen();
-        if (!bancadaReady) return const PostoSetupScreen();
-        if (!cloudReady) return const CloudSetupScreen();
+        final demoMode = ref.watch(demoModeProvider);
+        if (!demoMode && !bancadaReady) return const PostoSetupScreen();
+        if (!demoMode && !cloudReady) return const CloudSetupScreen();
         return const SireneAppShell();
       },
     );
@@ -269,6 +276,15 @@ class _SireneAppShellState extends ConsumerState<SireneAppShell> {
     final navEntries = _navEntries(isGestor);
     final safeIndex = _index >= navEntries.length ? 0 : _index;
 
+    ref.listen<String?>(appShellTabRequestProvider, (prev, next) {
+      if (next == null) return;
+      final idx = navEntries.indexWhere((e) => e.label == next);
+      if (idx >= 0) {
+        setState(() => _index = idx);
+      }
+      ref.read(appShellTabRequestProvider.notifier).state = null;
+    });
+
     return LayoutBuilder(
       builder: (context, constraints) {
         final isDesktop = constraints.maxWidth >= kDesktopBreakpoint;
@@ -278,18 +294,13 @@ class _SireneAppShellState extends ConsumerState<SireneAppShell> {
             appBar: DipontoAppBar(
               title: navEntries[safeIndex].label,
               actions: [
-                if (!isGestor)
-                  IconButton(
-                    tooltip: 'Trocar operador',
-                    onPressed: () => clearOperatorSession(ref),
-                    icon: const Icon(Icons.logout),
-                  ),
                 if (isGestor)
                   IconButton(
                     tooltip: 'Provisionamento Wi-Fi',
                     onPressed: () => _openProvisioning(context),
                     icon: const Icon(Icons.wifi),
                   ),
+                const OperatorSwitchButton(),
               ],
             ),
             body: Column(

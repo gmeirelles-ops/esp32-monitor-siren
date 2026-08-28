@@ -48,11 +48,14 @@
 |------|-----------|-----------------|
 | `teste` | ✅ | Perda de aprovação/serial |
 | `rejeicao` | ✅ | Operador sem feedback |
-| `batch` | ❌ | Depende de heartbeat |
+| `batch` | ✅ | Depende de heartbeat |
 | `ota` | ✅ | OTA screen |
+| heartbeat `batch_nvs_fault` | ✅ | NVS invisível |
+| heartbeat `protocol_version` | ✅ | Sem detecção de mismatch |
 | `pzem` | ❌ | — |
 | `wifi` | ❌ | — |
 | `station` | ❌ | — |
+| `atuador` | ❌ | — |
 
 ## Payload corruption recovery
 

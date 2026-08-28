@@ -769,7 +769,7 @@ class BatchLiveOperatorHero extends StatelessWidget {
             ),
             const SizedBox(height: 20),
             Text(
-              'Aguardando MQTT',
+              PortugueseLabels.aguardandoResultadoBancada,
               style: Theme.of(context).textTheme.displaySmall?.copyWith(
                     fontWeight: FontWeight.bold,
                     color: Colors.orange.shade800,
@@ -822,6 +822,17 @@ class BatchLiveOperatorHero extends StatelessWidget {
                   ),
               textAlign: TextAlign.center,
             ),
+            if (potenciaMin != null && potenciaMax != null && !offline) ...[
+              const SizedBox(height: 10),
+              Text(
+                'Faixa ${potenciaMin!.toStringAsFixed(1)}–${potenciaMax!.toStringAsFixed(1)} W',
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: DipontoColors.primaryLight,
+                    ),
+                textAlign: TextAlign.center,
+              ),
+            ],
             if (proximoSequencial != null && !cooldownBlocked) ...[
               const SizedBox(height: 12),
               Text(
@@ -842,7 +853,7 @@ class BatchLiveOperatorHero extends StatelessWidget {
               const SizedBox(height: 16),
               _OperatorStatusPill(
                 icon: Icons.queue,
-                label: 'Fila offline: $filaOffline',
+                label: '${PortugueseLabels.filaOfflineBancada}: $filaOffline',
                 color: Colors.orange,
               ),
             ],
@@ -1045,20 +1056,20 @@ class BatchLiveOperatorStatusStrip extends StatelessWidget {
       children: [
         _OperatorStatusPill(
           icon: mqttDisconnected ? Icons.wifi_off : Icons.wifi,
-          label: mqttDisconnected ? 'MQTT off' : bancadaLabel,
+          label: mqttDisconnected ? PortugueseLabels.redePostoDesconectada : bancadaLabel,
           color: mqttDisconnected ? DipontoColors.error : DipontoColors.success,
         ),
         _OperatorStatusPill(icon: Icons.memory, label: estado.label),
         if (filaOffline > 0)
           _OperatorStatusPill(
             icon: Icons.queue,
-            label: 'Fila $filaOffline',
+            label: '${PortugueseLabels.filaOfflineBancada}: $filaOffline',
             color: Colors.orange,
           ),
         if (awaitingMqtt)
           const _OperatorStatusPill(
             icon: Icons.sync,
-            label: 'Aguardando MQTT',
+            label: PortugueseLabels.aguardandoResultadoBancada,
             color: Colors.orange,
           ),
       ],
@@ -1122,23 +1133,24 @@ class _OperatorActionHint extends StatelessWidget {
         padding: const EdgeInsets.only(top: 16),
         child: Container(
           width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           decoration: BoxDecoration(
-            color: Colors.orange.withValues(alpha: 0.14),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: Colors.orange.withValues(alpha: 0.45)),
+            color: Colors.orange.withValues(alpha: 0.22),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.orange.shade700, width: 2),
           ),
           child: Row(
             children: [
-              Icon(Icons.pause_circle_outline, color: Colors.orange.shade800, size: 22),
-              const SizedBox(width: 10),
+              Icon(Icons.pause_circle_filled, color: Colors.orange.shade900, size: 32),
+              const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  'Aguarde — peça já aprovada. Libera em alguns segundos.',
+                  'Peça já aprovada — aguarde alguns segundos antes de testar de novo.',
                   style: TextStyle(
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w700,
                     color: Colors.orange.shade900,
-                    fontSize: 14,
+                    fontSize: 16,
+                    height: 1.35,
                   ),
                 ),
               ),
@@ -1367,6 +1379,60 @@ void showBatchHistorySheet(BuildContext context, List<TestResult> tests) {
       ),
     ),
   );
+}
+
+/// Banner de gravação na tela de teste do operador (qualquer largura de tela).
+class BatchLiveOperatorEngravingSection extends ConsumerWidget {
+  const BatchLiveOperatorEngravingSection({required this.numeroOp, super.key});
+
+  final String numeroOp;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final queueAsync = ref.watch(batchLiveMarkQueueProvider(numeroOp));
+    final markFailure = ref.watch(markFailureProvider);
+
+    return queueAsync.when(
+      loading: () => const SizedBox.shrink(),
+      error: (_, __) => const SizedBox.shrink(),
+      data: (entries) {
+        if (entries.isEmpty && markFailure == null) return const SizedBox.shrink();
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (entries.isNotEmpty) LaserMarkCallout(entry: entries.first),
+            if (markFailure != null) ...[
+              if (entries.isNotEmpty) const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: DipontoColors.error.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: DipontoColors.error.withValues(alpha: 0.35)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.error_outline, color: DipontoColors.error, size: 20),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        markFailure,
+                        style: const TextStyle(
+                          color: DipontoColors.error,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        );
+      },
+    );
+  }
 }
 
 /// Painel lateral: seriais aguardando gravação laser (serial + modelo).

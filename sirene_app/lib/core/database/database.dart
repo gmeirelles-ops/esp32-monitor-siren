@@ -1533,12 +1533,62 @@ class AppDatabase extends _$AppDatabase {
     return total;
   }
 
-  Future<List<OperatorProductivity>> operatorProductivity({DateTime? since}) async {
-    final query = select(testResults);
-    if (since != null) {
-      query.where((t) => t.createdAt.isBiggerOrEqualValue(since));
+  Future<List<OperatorProductivity>> operatorProductivity({
+    DateTime? since,
+    String? numeroOp,
+    String? idProduto,
+    String? deviceId,
+  }) async {
+    final rows = await testResultsFiltered(
+      since: since,
+      numeroOp: numeroOp,
+      idProduto: idProduto,
+      deviceId: deviceId,
+    );
+    return _aggregateOperatorProductivity(rows);
+  }
+
+  Future<List<ProductProductivity>> productProductivity({
+    DateTime? since,
+    String? numeroOp,
+    String? idProduto,
+    String? deviceId,
+    Map<String, Product>? catalog,
+  }) async {
+    final rows = await testResultsFiltered(
+      since: since,
+      numeroOp: numeroOp,
+      idProduto: idProduto,
+      deviceId: deviceId,
+    );
+    final byKey = <String, ({String label, int total, int aprovados})>{};
+
+    for (final row in rows) {
+      final id = _productIdFromSerial(row.serial) ?? '—';
+      final product = catalog?[id];
+      final label = product != null ? '${product.idProduto} — ${product.nome}' : id;
+      final current = byKey[id] ?? (label: label, total: 0, aprovados: 0);
+      byKey[id] = (
+        label: label,
+        total: current.total + 1,
+        aprovados: current.aprovados + (isApprovedVeredito(row.veredito) ? 1 : 0),
+      );
     }
-    final rows = await query.get();
+
+    return byKey.entries
+        .map(
+          (e) => ProductProductivity(
+            idProduto: e.key,
+            label: e.value.label,
+            total: e.value.total,
+            aprovados: e.value.aprovados,
+          ),
+        )
+        .toList()
+      ..sort((a, b) => b.total.compareTo(a.total));
+  }
+
+  List<OperatorProductivity> _aggregateOperatorProductivity(List<TestResult> rows) {
     final byKey = <String, ({String label, int total, int aprovados})>{};
 
     for (final row in rows) {
@@ -1562,6 +1612,11 @@ class AppDatabase extends _$AppDatabase {
         )
         .toList()
       ..sort((a, b) => b.total.compareTo(a.total));
+  }
+
+  static String? _productIdFromSerial(String? serial) {
+    if (serial == null || serial.length < 3) return null;
+    return serial.substring(0, 3);
   }
 }
 
@@ -1648,6 +1703,24 @@ class OperatorProductivity {
     required this.aprovados,
   });
 
+  final String label;
+  final int total;
+  final int aprovados;
+
+  int get reprovados => total - aprovados;
+
+  double get yieldPct => total == 0 ? 0 : (aprovados / total) * 100;
+}
+
+class ProductProductivity {
+  const ProductProductivity({
+    required this.idProduto,
+    required this.label,
+    required this.total,
+    required this.aprovados,
+  });
+
+  final String idProduto;
   final String label;
   final int total;
   final int aprovados;

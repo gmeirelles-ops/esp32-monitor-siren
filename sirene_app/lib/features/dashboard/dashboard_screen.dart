@@ -111,6 +111,8 @@ class DashboardScreen extends ConsumerWidget {
         throughput: data.throughput,
         faults: data.faults,
         filters: filters,
+        operatorProductivity: data.operatorProductivity,
+        productProductivity: data.productProductivity,
       );
     }
     return saveCsvWithFilePicker(
@@ -167,7 +169,10 @@ class DashboardScreen extends ConsumerWidget {
                   ),
                   StatusChipData(
                     icon: Icons.trending_up,
-                    label: '${data.summary.yieldPct.toStringAsFixed(1)}% rendimento',
+                    label: data.yieldTrendPct != null
+                        ? '${data.summary.yieldPct.toStringAsFixed(1)}% rendimento '
+                          '(${data.yieldTrendPct! >= 0 ? '+' : ''}${data.yieldTrendPct!.toStringAsFixed(0)}% vs ontem)'
+                        : '${data.summary.yieldPct.toStringAsFixed(1)}% rendimento',
                     color: DipontoColors.success,
                   ),
                   StatusChipData(
@@ -339,16 +344,60 @@ class DashboardScreen extends ConsumerWidget {
                           if (data.operatorProductivity.isNotEmpty)
                             ActionSectionCard(
                               icon: Icons.people_outline,
-                              title: 'Produtividade por operador',
+                              title: 'Rendimento por operador',
+                              subtitle: 'Volume e aprovação no período filtrado',
                               child: Column(
                                 children: [
                                   for (final op in data.operatorProductivity.take(10))
                                     ListTile(
                                       dense: true,
                                       contentPadding: EdgeInsets.zero,
+                                      leading: CircleAvatar(
+                                        radius: 16,
+                                        backgroundColor: DipontoColors.primary.withValues(alpha: 0.15),
+                                        child: Text(
+                                          op.label.isNotEmpty ? op.label[0].toUpperCase() : '?',
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.bold,
+                                            color: DipontoColors.primary,
+                                          ),
+                                        ),
+                                      ),
                                       title: Text(op.label),
+                                      subtitle: Text(
+                                        '${op.aprovados} aprovados · ${op.reprovados} reprovados',
+                                      ),
                                       trailing: Text(
-                                        '${op.total} testes · ${op.yieldPct.toStringAsFixed(0)}%',
+                                        '${op.total} · ${op.yieldPct.toStringAsFixed(0)}%',
+                                        style: const TextStyle(fontWeight: FontWeight.w600),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          if (data.productProductivity.isNotEmpty)
+                            ActionSectionCard(
+                              icon: Icons.inventory_2_outlined,
+                              title: 'Rendimento por produto',
+                              subtitle: 'Identificado pelo prefixo do serial',
+                              child: Column(
+                                children: [
+                                  for (final prod in data.productProductivity.take(10))
+                                    ListTile(
+                                      dense: true,
+                                      contentPadding: EdgeInsets.zero,
+                                      leading: const Icon(
+                                        Icons.category_outlined,
+                                        color: DipontoColors.primary,
+                                      ),
+                                      title: Text(prod.label, overflow: TextOverflow.ellipsis),
+                                      subtitle: Text(
+                                        '${prod.aprovados} aprovados · ${prod.reprovados} reprovados',
+                                      ),
+                                      trailing: Text(
+                                        '${prod.total} · ${prod.yieldPct.toStringAsFixed(0)}%',
+                                        style: const TextStyle(fontWeight: FontWeight.w600),
                                       ),
                                     ),
                                 ],

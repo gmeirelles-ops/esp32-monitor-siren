@@ -94,4 +94,6 @@
 #define MQTT_RECONNECT_MAX_MS       30000
 #define WIFI_STA_VALIDATE_TIMEOUT_MS 15000
 #define OFFLINE_SYNC_INTERVAL_MS    500
-#define FIRMWARE_VERSION            "1.8.10"
+#define FIRMWARE_VERSION            "1.8.11"
+/** Contrato JSON MQTT app ↔ firmware; incrementar se quebrar compatibilidade. */
+#define MQTT_PROTOCOL_VERSION       1

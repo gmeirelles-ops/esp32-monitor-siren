@@ -141,4 +141,72 @@ void main() {
       expect(counts.last.falha, 'rele_travado');
     });
   });
+
+  group('operatorProductivity', () {
+    test('agrupa por operador com filtros', () async {
+      await db.insertTestResult(
+        deviceId: 'dev1',
+        numeroOp: 'OP-A',
+        veredito: 'APROVADO',
+        potenciaMedia: 20,
+        sequencial: 1,
+        aprovadosNoLote: 1,
+        operador: 'João',
+      );
+      await db.insertTestResult(
+        deviceId: 'dev1',
+        numeroOp: 'OP-A',
+        veredito: 'REPROVADO',
+        potenciaMedia: 20,
+        sequencial: 2,
+        aprovadosNoLote: 1,
+        operador: 'João',
+      );
+      await db.insertTestResult(
+        deviceId: 'dev1',
+        numeroOp: 'OP-B',
+        veredito: 'APROVADO',
+        potenciaMedia: 20,
+        sequencial: 1,
+        aprovadosNoLote: 1,
+        operador: 'Maria',
+      );
+
+      final all = await db.operatorProductivity();
+      expect(all.length, 2);
+      final joao = all.firstWhere((o) => o.label == 'João');
+      expect(joao.total, 2);
+      expect(joao.aprovados, 1);
+
+      final byOp = await db.operatorProductivity(numeroOp: 'OP-A');
+      expect(byOp.length, 1);
+      expect(byOp.single.label, 'João');
+    });
+  });
+
+  group('productProductivity', () {
+    test('agrupa por prefixo do serial', () async {
+      await addResult('APROVADO', serial: '1232600011', seq: 1);
+      await addResult('APROVADO', serial: '1232600012', seq: 2);
+      await addResult('REPROVADO', serial: '9992600013', seq: 3);
+
+      final catalog = {
+        '123': Product(
+          idProduto: '123',
+          nome: 'Sirene A',
+          potenciaRef: 20,
+          potenciaMin: 10,
+          potenciaMax: 30,
+          toleranciaPct: 5,
+          tempoTesteSec: 5,
+        ),
+      };
+
+      final result = await db.productProductivity(catalog: catalog);
+      expect(result.length, 2);
+      expect(result.first.idProduto, '123');
+      expect(result.first.total, 2);
+      expect(result.first.label, contains('Sirene A'));
+    });
+  });
 }

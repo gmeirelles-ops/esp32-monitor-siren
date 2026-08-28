@@ -207,6 +207,42 @@ Future<Uint8List> buildDashboardPdf({
             ],
           ),
         ],
+        if (data.operatorProductivity.isNotEmpty) ...[
+          pw.SizedBox(height: 16),
+          pw.Text('Rendimento por operador', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+          pw.SizedBox(height: 6),
+          _table(
+            columns: const ['Operador', 'Testado', 'Aprov.', 'Reprov.', 'Rend.%'],
+            rows: [
+              for (final op in data.operatorProductivity)
+                [
+                  op.label,
+                  '${op.total}',
+                  '${op.aprovados}',
+                  '${op.reprovados}',
+                  '${op.yieldPct.toStringAsFixed(1)}%',
+                ],
+            ],
+          ),
+        ],
+        if (data.productProductivity.isNotEmpty) ...[
+          pw.SizedBox(height: 16),
+          pw.Text('Rendimento por produto', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+          pw.SizedBox(height: 6),
+          _table(
+            columns: const ['Produto', 'Testado', 'Aprov.', 'Reprov.', 'Rend.%'],
+            rows: [
+              for (final prod in data.productProductivity)
+                [
+                  prod.label,
+                  '${prod.total}',
+                  '${prod.aprovados}',
+                  '${prod.reprovados}',
+                  '${prod.yieldPct.toStringAsFixed(1)}%',
+                ],
+            ],
+          ),
+        ],
         pw.SizedBox(height: 20),
         _footer(generatedAt),
       ],

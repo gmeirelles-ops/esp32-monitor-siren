@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 
+import '../../core/constants/mqtt_protocol.dart';
 import 'models/mqtt_messages.dart';
 
 class MqttParseException implements Exception {
@@ -315,8 +316,24 @@ class MqttParser {
       ultimaPotencia: (json['ultima_potencia'] as num?)?.toDouble(),
       ultimoSequencial: (json['ultimo_sequencial'] as num?)?.toInt(),
       ultimoTsMs: (json['ultimo_ts_ms'] as num?)?.toInt(),
+      batchNvsFault: _parseJsonBool(json['batch_nvs_fault']),
+      protocolVersion: (json['protocol_version'] as num?)?.toInt(),
     );
   }
+
+  static bool _parseJsonBool(Object? value) {
+    if (value == true) return true;
+    if (value is num && value != 0) return true;
+    if (value is String) {
+      final v = value.trim().toLowerCase();
+      return v == 'true' || v == '1';
+    }
+    return false;
+  }
+
+  /// True se o firmware reporta versão de protocolo incompatível com o app.
+  static bool isProtocolMismatch(HeartbeatMessage hb) =>
+      !mqttProtocolMatches(hb.protocolVersion);
 
   static TestResultMessage? parseTestResult(Map<String, dynamic> json) {
     if (json['tipo'] != 'teste') return null;

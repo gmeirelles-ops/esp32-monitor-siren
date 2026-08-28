@@ -10,7 +10,6 @@ mixin _DevicesNotifierTestPipeline on _DevicesNotifierBase {
     bool? isRetest,
   }) async {
     final device = _getOrCreate(deviceId);
-    device.lastTestResult = test;
     _clearRejectionAfterTest(deviceId);
 
     final db = _ref.read(databaseProvider);
@@ -82,6 +81,7 @@ mixin _DevicesNotifierTestPipeline on _DevicesNotifierBase {
       serial = candidate;
     }
 
+    device.lastTestResult = test;
     device.awaitingMqttResult = false;
     _cancelVerdictWatchdog(deviceId);
     state = {...state};

@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/diponto_theme.dart';
 import '../../features/operators/operators_provider.dart';
 
-/// Chip compacto na AppBar com o operador da sessão (somente leitura).
+/// Chip compacto na AppBar com o operador da sessão — toque para trocar.
 class ActiveOperatorChip extends ConsumerWidget {
   const ActiveOperatorChip({super.key, this.compact = false});
 
@@ -20,23 +20,30 @@ class ActiveOperatorChip extends ConsumerWidget {
         height: 24,
         child: CircularProgressIndicator(strokeWidth: 2),
       ),
-      error: (_, __) => _chip(label: 'Operador', warning: true),
+      error: (_, __) => _chip(label: 'Operador', warning: true, onTap: null),
       data: (op) {
         if (op == null) {
-          return _chip(label: compact ? 'Turno' : 'Sem operador', warning: true);
+          return _chip(
+            label: compact ? 'Turno' : 'Sem operador',
+            warning: true,
+            onTap: null,
+          );
         }
-        final label = op.nome;
-        final isGestor = ref.watch(activeOperatorIsGestorProvider);
+        final label = op.isGestor ? '${op.nome} · Gestor' : op.nome;
         return _chip(
           label: label,
           warning: false,
-          onTap: isGestor ? null : () => clearOperatorSession(ref),
+          onTap: () => clearOperatorSession(ref),
         );
       },
     );
   }
 
-  Widget _chip({required String label, required bool warning, VoidCallback? onTap}) {
+  Widget _chip({
+    required String label,
+    required bool warning,
+    VoidCallback? onTap,
+  }) {
     final color = warning ? DipontoColors.error : DipontoColors.primary;
     final chip = Chip(
       avatar: Icon(Icons.badge_outlined, size: 18, color: color),

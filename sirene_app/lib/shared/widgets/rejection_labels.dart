@@ -39,7 +39,7 @@ const Map<String, String> rejectionMotivoLabels = {
   'pzem_falha': 'PZEM desconectado — ligue o medidor e aguarde recuperação',
   'lote_inativo': 'Nenhum lote ativo no dispositivo',
   'batch_sem_confirmacao': 'Lote enviado mas sem confirmação do dispositivo',
-  'mqtt_desconectado': 'MQTT desconectado',
+  'mqtt_desconectado': 'Sem conexão com a bancada',
   'desconhecido': 'Motivo desconhecido',
 };
 

@@ -8,4 +8,11 @@ abstract final class PortugueseLabels {
   static const desconectada = 'Desconectada';
   static const identificadorTecnico = 'Identificador técnico';
   static const encerrarLote = 'Encerrar lote';
+
+  // Linguagem de chão de fábrica (evitar MQTT/jargão técnico na UI do operador).
+  static const redePostoDesconectada = 'Sem conexão com a bancada';
+  static const redePostoDesconectadaDetalhe =
+      'Resultados não chegam ao app — verifique a rede do posto.';
+  static const aguardandoResultadoBancada = 'Aguardando resultado';
+  static const filaOfflineBancada = 'Fila na bancada';
 }

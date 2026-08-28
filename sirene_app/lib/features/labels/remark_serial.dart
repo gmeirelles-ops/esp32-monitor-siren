@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/database/database.dart';
+import '../../shared/widgets/app_message.dart';
 import '../labels/laser_mark_callout.dart';
 import '../labels/laser_operator_copy.dart';
 import '../labels/mark_queue_ui.dart';
@@ -101,7 +102,7 @@ Future<void> remarkSerialIfConfirmed({
 
   final isError = message.contains('Erro') || message.contains('erro');
   if (isError) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    showAppMessage(context, message, kind: AppMessageKind.error);
     return;
   }
 

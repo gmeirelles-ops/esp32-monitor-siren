@@ -6,6 +6,7 @@ import '../../core/database/database.dart';
 import '../../core/providers/core_providers.dart';
 import '../../core/theme/diponto_theme.dart';
 import '../../shared/display_labels.dart';
+import '../../shared/widgets/app_message.dart';
 import '../../shared/widgets/action_section_card.dart';
 import '../../shared/widgets/responsive_field_row.dart';
 import '../../shared/widgets/screen_app_bar.dart';
@@ -22,6 +23,7 @@ import '../mqtt/models/mqtt_messages.dart';
 import '../mqtt/mqtt_providers.dart';
 import '../products/power_limits.dart';
 import '../products/products_provider.dart';
+import '../operators/operators_provider.dart';
 import '../setup/posto_setup_screen.dart';
 import 'batch_live_screen.dart';
 import 'batch_serial_logic.dart';
@@ -41,6 +43,17 @@ class _BatchScreenState extends ConsumerState<BatchScreen> {
 
   bool _sending = false;
   String? _selectedProductId;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (ref.read(demoModeProvider) && _numeroOp.text.trim().isEmpty) {
+        setState(() => _numeroOp.text = kDemoDefaultOp);
+      }
+    });
+  }
 
   @override
   void dispose() {
@@ -137,8 +150,8 @@ class _BatchScreenState extends ConsumerState<BatchScreen> {
     }
   }
 
-  void _showSnack(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  void _showSnack(String msg, {AppMessageKind? kind}) {
+    showAppMessage(context, msg, kind: kind);
   }
 
   Widget _buildBottomBar({
@@ -146,6 +159,7 @@ class _BatchScreenState extends ConsumerState<BatchScreen> {
     required bool bancadaReady,
     required String? deviceId,
     required BatchConfig? activeBatch,
+    required bool isGestor,
   }) {
     if (activeBatch != null && deviceId != null) {
       return ScreenBottomBar(
@@ -170,7 +184,7 @@ class _BatchScreenState extends ConsumerState<BatchScreen> {
                 child: CircularProgressIndicator(strokeWidth: 2),
               )
             : const Icon(Icons.play_arrow),
-        label: const Text('Iniciar lote'),
+        label: Text(isGestor ? 'Iniciar lote' : 'Começar testes'),
       ),
     );
   }
@@ -182,6 +196,7 @@ class _BatchScreenState extends ConsumerState<BatchScreen> {
     final productsAsync = ref.watch(productsStreamProvider);
     final bancadaReady = ref.watch(bancadaSetupCompleteProvider);
     final demoMode = ref.watch(demoModeProvider);
+    final isGestor = ref.watch(activeOperatorIsGestorProvider);
     final todayAsync = ref.watch(batchTodaySummaryProvider);
     final deviceId = resolveActiveDeviceId(ref);
     final device = deviceId != null ? devices[deviceId] : null;
@@ -246,9 +261,11 @@ class _BatchScreenState extends ConsumerState<BatchScreen> {
                         ),
                     ],
                   ),
-                  intro: const SectionIntro(
-                    title: 'Iniciar lote',
-                    subtitle: 'Escolha o produto, digite a OP e aperte Iniciar lote.',
+                  intro: SectionIntro(
+                    title: isGestor ? 'Iniciar lote' : 'Próximo lote',
+                    subtitle: isGestor
+                        ? 'Escolha o produto, digite a OP e aperte Iniciar lote.'
+                        : 'Escolha o produto e confirme a OP para começar os testes.',
                     icon: Icons.playlist_add_check,
                   ),
                   children: [
@@ -337,15 +354,17 @@ class _BatchScreenState extends ConsumerState<BatchScreen> {
                                 children: [
                                   TextFormField(
                                     controller: _numeroOp,
-                                    decoration:
-                                        const InputDecoration(labelText: 'Número OP'),
+                                    decoration: InputDecoration(
+                                      labelText: isGestor ? 'Número OP' : 'Ordem de produção (OP)',
+                                    ),
                                     validator: (v) =>
                                         v == null || v.isEmpty ? 'Obrigatório' : null,
                                   ),
                                   TextFormField(
                                     controller: _quantidadeTotal,
-                                    decoration:
-                                        const InputDecoration(labelText: 'Quantidade'),
+                                    decoration: InputDecoration(
+                                      labelText: isGestor ? 'Quantidade' : 'Peças do lote',
+                                    ),
                                     keyboardType: TextInputType.number,
                                     validator: (v) {
                                       if (v == null || v.trim().isEmpty) {
@@ -363,13 +382,14 @@ class _BatchScreenState extends ConsumerState<BatchScreen> {
                                   ),
                                 ],
                               ),
-                              Align(
-                                alignment: Alignment.centerLeft,
-                                child: TextButton(
-                                  onPressed: _openSettings,
-                                  child: const Text('Alterar bancada…'),
+                              if (isGestor)
+                                Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: TextButton(
+                                    onPressed: _openSettings,
+                                    child: const Text('Alterar bancada…'),
+                                  ),
                                 ),
-                              ),
                             ],
                           ),
                         ),
@@ -382,6 +402,7 @@ class _BatchScreenState extends ConsumerState<BatchScreen> {
                 bancadaReady: bancadaReady,
                 deviceId: deviceId,
                 activeBatch: activeBatch,
+                isGestor: isGestor,
               ),
             ],
           );

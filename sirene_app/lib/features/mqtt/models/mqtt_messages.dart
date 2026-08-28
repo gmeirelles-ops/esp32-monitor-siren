@@ -85,6 +85,8 @@ class HeartbeatMessage {
     this.ultimaPotencia,
     this.ultimoSequencial,
     this.ultimoTsMs,
+    this.batchNvsFault = false,
+    this.protocolVersion,
   });
 
   final int uptime;
@@ -102,6 +104,8 @@ class HeartbeatMessage {
   final double? ultimaPotencia;
   final int? ultimoSequencial;
   final int? ultimoTsMs;
+  final bool batchNvsFault;
+  final int? protocolVersion;
 }
 
 class TestResultMessage {
@@ -262,6 +266,8 @@ class DeviceInfo {
   HeartbeatMessage? lastHeartbeat;
   /// Próximo sequencial do firmware (fonte da verdade).
   int? firmwareProximoSequencial;
+  /// Versão do protocolo MQTT reportada no heartbeat (null = firmware antigo).
+  int? firmwareProtocolVersion;
 }
 
 class BatchConfig {

@@ -4,7 +4,7 @@ Guia para verificar que firmware e software estão alinhados antes de liberar pr
 
 ## Pré-requisitos
 
-- Firmware `sirene-validator` v1.7.5+ flashado na bancada
+- Firmware `sirene-validator` v1.8.11+ flashado na bancada
 - App `sirene_app` compilado (com fix de parser MQTT colado)
 - Broker MQTT acessível (padrão: `wss://mqtt.diponto.com:443`)
 - Produto cadastrado com potência de referência e tolerância
@@ -12,19 +12,38 @@ Guia para verificar que firmware e software estão alinhados antes de liberar pr
 
 ## 1. Verificar tópicos
 
+**Linux / WSL:**
 ```bash
-# Substituir site e bancada
 mosquitto_sub -h <broker> -t 'producao/bancada-03/#' -v
 ```
 
+**Windows:** use [MQTT Explorer](https://mqtt-explorer.com/) — assine `producao/bancada-NN/#` ou wildcards em `scripts/E2E_MQTT_EXPLORER.md`.
+
 **Esperado**: mensagens em `presenca`, `heartbeat`, `status`, etc. — **não** em `sirene/<mac>/...`.
+
+**Esperado no heartbeat**: `"protocol_version":1` (fw ≥1.8.11) e `"batch_nvs_fault":false` em operação normal.
 
 ## 2. Testes unitários do parser (app)
 
 ```bash
 cd sirene_app
-flutter test test/mqtt_parser_test.dart test/mqtt_status_parser_test.dart test/mqtt_topics_test.dart
+flutter test test/mqtt_parser_test.dart test/mqtt_status_parser_test.dart test/mqtt_topics_test.dart test/mqtt_protocol_test.dart
 ```
+
+Ou rode o script completo (Flutter + host tests + checklist impresso):
+
+```bash
+bash scripts/e2e_fw_sw_compat.sh
+```
+
+### Windows (PC do posto)
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\e2e_fw_sw_compat.ps1
+```
+
+Depois abra o app (`flutter run -d windows` ou instalador) e siga o checklist impresso.
+Para inspecionar MQTT no Windows, use **MQTT Explorer** — guia em `scripts/E2E_MQTT_EXPLORER.md`.
 
 **Esperado**: todos passam, incluindo teste de payload colado com `ano` recuperado.
 
@@ -85,6 +104,9 @@ cmake -B build && cmake --build build && ctest --test-dir build
 | 6 | `lote_cheio` exibido | |
 | 7 | Reteste sem serial | |
 | 8 | Calibração 5s publica `potencia_media` | |
+| 9 | `batch_nvs_fault` no heartbeat → banner NVS | |
+| 10 | `protocol_version` = 1 no heartbeat | |
+| 11 | App sem banner vermelho de protocolo | |
 
 ## Referências
 

@@ -1,7 +1,7 @@
 name: sirene_app
 description: App Flutter companion para validador de sirenes Diponto (Windows desktop).
 publish_to: 'none'
-version: 1.0.2+3
+version: 1.0.3+4
 
 environment:
   sdk: ^3.12.0
@@ -29,6 +29,7 @@ dependencies:
   pdf: ^3.11.3
   printing: ^5.14.2
   archive: ^4.0.9
+  flutter_svg: ^2.2.0
 
 dev_dependencies:
   flutter_test:
@@ -51,3 +52,5 @@ flutter:
   assets:
     - assets/images/logo.png
     - assets/images/logo_1024.webp
+    - assets/images/icone-diponto-amarelo.svg
+    - assets/images/logo-diponto-amarelo-vetor.svg

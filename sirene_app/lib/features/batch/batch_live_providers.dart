@@ -4,6 +4,8 @@ import '../../core/database/database.dart';
 import '../../core/providers/core_providers.dart';
 import '../dashboard/dashboard_providers.dart';
 import '../../core/database/batch_metrics.dart';
+import '../mqtt/mqtt_parser.dart';
+import '../mqtt/mqtt_providers.dart';
 import '../mqtt/models/mqtt_messages.dart';
 
 export '../../core/database/batch_metrics.dart';
@@ -47,3 +49,10 @@ final batchLiveMarkQueueProvider = StreamProvider.family<List<MarkQueueEntry>, S
         );
   },
 );
+
+/// True quando o firmware reporta `protocol_version` diferente do app.
+final batchDeviceProtocolMismatchProvider = Provider.family<bool, String>((ref, deviceId) {
+  final device = ref.watch(devicesProvider)[deviceId];
+  if (device?.lastHeartbeat == null) return false;
+  return MqttParser.isProtocolMismatch(device!.lastHeartbeat!);
+});

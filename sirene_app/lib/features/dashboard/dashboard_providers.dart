@@ -23,6 +23,7 @@ class DashboardData {
     required this.batchSummaries,
     required this.filterOptions,
     required this.operatorProductivity,
+    required this.productProductivity,
     this.oee,
     this.yieldTrendPct,
     this.reprovadosTrendPct,
@@ -35,6 +36,7 @@ class DashboardData {
   final List<BatchProductionSummary> batchSummaries;
   final DashboardFilterOptions filterOptions;
   final List<OperatorProductivity> operatorProductivity;
+  final List<ProductProductivity> productProductivity;
   final OeeMetrics? oee;
   final double? yieldTrendPct;
   final double? reprovadosTrendPct;
@@ -89,7 +91,21 @@ final dashboardDataProvider = FutureProvider<DashboardData>((ref) async {
   );
   final faults = await db.hardwareFaultCounts(since: since, deviceId: device);
   final recentAlerts = await db.recentHardwareEvents(limit: 10);
-  final operatorProductivity = await db.operatorProductivity(since: since);
+  final catalog = await db.getProducts();
+  final catalogById = {for (final p in catalog) p.idProduto: p};
+  final operatorProductivity = await db.operatorProductivity(
+    since: since,
+    numeroOp: op,
+    idProduto: product,
+    deviceId: device,
+  );
+  final productProductivity = await db.productProductivity(
+    since: since,
+    numeroOp: op,
+    idProduto: product,
+    deviceId: device,
+    catalog: catalogById,
+  );
   final downtime = await db.totalDowntimeDuration(since: since);
   final batchSummaries = (op == null || op.isEmpty)
       ? await db.batchSummaryInPeriod(
@@ -164,6 +180,7 @@ final dashboardDataProvider = FutureProvider<DashboardData>((ref) async {
     batchSummaries: batchSummaries,
     filterOptions: filterOptions,
     operatorProductivity: operatorProductivity,
+    productProductivity: productProductivity,
     oee: oee,
     yieldTrendPct: yieldTrend,
     reprovadosTrendPct: reprovTrend,

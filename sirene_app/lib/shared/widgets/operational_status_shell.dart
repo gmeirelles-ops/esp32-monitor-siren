@@ -50,7 +50,7 @@ class _OperationalStatusShellState extends ConsumerState<OperationalStatusShell>
     final streamState = ref.read(mqttConnectionStateProvider);
     final state = resolveMqttConnectionDisplayState(streamState, mqttService.currentState);
     if (state != AppMqttConnectionState.connected) {
-      _showMqttBanner('MQTT desconectado — verifique a rede do posto.');
+      _showMqttBanner('Sem conexão com a bancada — verifique a rede do posto.');
     }
   }
 
@@ -65,8 +65,8 @@ class _OperationalStatusShellState extends ConsumerState<OperationalStatusShell>
         final err = mqttService.lastConnectError;
         _showMqttBanner(
           err != null && err.isNotEmpty
-              ? 'MQTT desconectado: $err'
-              : 'MQTT desconectado — testes não serão recebidos até reconectar.',
+              ? 'Sem conexão com a bancada: $err'
+              : 'Sem conexão com a bancada — resultados não chegam até reconectar.',
         );
       } else if (state == AppMqttConnectionState.connected) {
         if (_mqttBannerVisible) _hideMqttBanner();

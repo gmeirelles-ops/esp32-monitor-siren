@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sirene_app/core/database/database.dart';
 import 'package:sirene_app/features/demo/demo_constants.dart';
 import 'package:sirene_app/features/demo/demo_providers.dart';
+import 'package:sirene_app/features/demo/demo_seed.dart';
 import 'package:sirene_app/features/mqtt/models/mqtt_messages.dart';
 import 'package:sirene_app/features/mqtt/mqtt_providers.dart';
 import 'package:sirene_app/features/operators/operators_provider.dart';
@@ -98,5 +99,58 @@ void main() {
     expect(rows, hasLength(1));
     expect(rows.single.veredito, 'APROVADO');
     expect(rows.single.operador, 'Apresentador');
+  });
+
+  test('simulateTestResult após seed incrementa aprovados do lote', () async {
+    SharedPreferences.setMockInitialValues({'demo_mode_enabled': true});
+    final prefs = await SharedPreferences.getInstance();
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    await seedDemoEnvironment(db);
+
+    final container = buildContainer(db, prefs);
+    addTearDown(container.dispose);
+    addTearDown(db.close);
+
+    const batch = BatchConfig(
+      numeroOp: 'DEMO-01',
+      idProduto: '071',
+      ano: '26',
+      tempoTeste: 5,
+      potenciaMin: 30,
+      potenciaMax: 40,
+      quantidadeTotal: 5,
+      proximoSequencial: 1,
+    );
+
+    final notifier = container.read(devicesProvider.notifier);
+    await notifier.sendSetBatch(kDemoDeviceId, batch);
+    await notifier.simulateTestResult(kDemoDeviceId, forceApproved: true);
+
+    final metrics = await db.getBatchMetrics('DEMO-01');
+    expect(metrics.aprovados, 1);
+
+    final queue = await db.watchPendingMarkQueue().first;
+    expect(queue, isNotEmpty);
+  });
+
+  test('seedDemoEnvironment cria produtos, operadores e histórico', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+
+    final seed = await seedDemoEnvironment(db);
+
+    final products = await db.watchProducts().first;
+    expect(products, hasLength(2));
+    expect(products.map((p) => p.idProduto), contains('071'));
+
+    final gestor = await db.getOperatorById(seed.gestorId);
+    expect(gestor?.codigo, kDemoGestorPin);
+    expect(gestor?.isGestor, isTrue);
+
+    final history = await db.testResultsFiltered(numeroOp: kDemoHistoryOp);
+    expect(history, hasLength(14));
+
+    final bancada = await db.getBancadaByDevice(kDemoDeviceId);
+    expect(bancada?.numero, kDemoBancadaNum);
   });
 }

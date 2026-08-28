@@ -57,13 +57,40 @@ void main() {
     await tester.pump();
     await tester.enterText(find.byType(TextFormField), '4321');
     await tester.pump();
-    await tester.tap(find.text('Entrar'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump(const Duration(milliseconds: 200));
 
     final config = container.read(appConfigProvider);
     expect(container.read(sessionOperatorIdProvider), isNotNull);
     expect(config.activeOperatorId, isNull);
+  });
+
+  testWidgets('PIN completo via teclado envia automaticamente', (tester) async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    await db.insertOperator(codigo: '1234', nome: 'Ana');
+
+    final container = await buildContainer(db);
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: OperatorLoginScreen()),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    await tester.tap(find.text('Ana'));
+    await tester.pump();
+    await tester.tap(find.text('1'));
+    await tester.tap(find.text('2'));
+    await tester.tap(find.text('3'));
+    await tester.tap(find.text('4'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+
+    expect(container.read(sessionOperatorIdProvider), isNotNull);
   });
 
   testWidgets('PIN incorreto exibe erro', (tester) async {
@@ -87,8 +114,7 @@ void main() {
     await tester.pump();
     await tester.enterText(find.byType(TextFormField), '0000');
     await tester.pump();
-    await tester.tap(find.text('Entrar'));
-    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
 
     expect(find.textContaining('PIN incorreto'), findsOneWidget);
     expect(container.read(sessionOperatorIdProvider), isNull);

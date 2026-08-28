@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/database/database.dart';
 import '../../core/theme/diponto_theme.dart';
+import '../../shared/widgets/app_message.dart';
 import 'laser_mark_callout.dart';
 import '../operators/operators_provider.dart';
 import '../products/products_provider.dart';
@@ -21,8 +22,10 @@ Future<void> showManualSerialDialog(
   final products = ref.read(productsProvider);
   if (products.isEmpty) {
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Cadastre um produto antes de gerar serial')),
+    showAppMessage(
+      context,
+      'Cadastre um produto antes de gerar serial',
+      kind: AppMessageKind.warning,
     );
     return;
   }
@@ -379,9 +382,16 @@ Future<void> showManualSerialDialog(
                         }
                       } catch (e) {
                         setState(() => issuing = false);
-                        if (ctx.mounted) {
-                          ScaffoldMessenger.of(ctx).showSnackBar(
-                            SnackBar(content: Text('Erro: $e')),
+                        if (context.mounted) {
+                          final msg = '$e';
+                          showAppMessage(
+                            context,
+                            msg.contains('Serial já existe')
+                                ? 'Serial já gravado — escolha outro número.'
+                                : 'Erro: $e',
+                            kind: msg.contains('Serial já existe')
+                                ? AppMessageKind.warning
+                                : AppMessageKind.error,
                           );
                         }
                       }

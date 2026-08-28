@@ -4,6 +4,25 @@ import 'package:sirene_app/features/mqtt/models/mqtt_messages.dart';
 
 void main() {
   group('MqttParser', () {
+    test('parseia heartbeat com batch_nvs_fault e protocol_version', () {
+      final hb = MqttParser.parseHeartbeat(
+        '{"uptime":3600,"rssi":-62,"estado":"BATCH_READY","fila":0,'
+        '"firmware_version":"1.8.11","protocol_version":1,"batch_nvs_fault":true}',
+      );
+      expect(hb, isNotNull);
+      expect(hb!.batchNvsFault, isTrue);
+      expect(hb.protocolVersion, 1);
+      expect(MqttParser.isProtocolMismatch(hb), isFalse);
+    });
+
+    test('detecta protocol_version incompatível', () {
+      final hb = MqttParser.parseHeartbeat(
+        '{"estado":"IDLE","firmware_version":"9.9.9","protocol_version":99}',
+      );
+      expect(hb, isNotNull);
+      expect(MqttParser.isProtocolMismatch(hb!), isTrue);
+    });
+
     test('parseia heartbeat', () {
       final hb = MqttParser.parseHeartbeat(
         '{"uptime":3600,"rssi":-62,"estado":"BATCH_READY","fila":0,"firmware_version":"1.1.0"}',

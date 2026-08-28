@@ -84,9 +84,16 @@ ThemeData buildDipontoTheme() {
       ),
       labelStyle: const TextStyle(color: DipontoColors.primaryLight),
     ),
-    snackBarTheme: const SnackBarThemeData(
+    snackBarTheme: SnackBarThemeData(
       backgroundColor: DipontoColors.surfaceVariant,
-      contentTextStyle: TextStyle(color: DipontoColors.onSurface),
+      contentTextStyle: const TextStyle(
+        color: DipontoColors.onSurface,
+        fontSize: 15,
+        fontWeight: FontWeight.w600,
+      ),
+      behavior: SnackBarBehavior.floating,
+      elevation: 8,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
     ),
     navigationBarTheme: NavigationBarThemeData(
       backgroundColor: DipontoColors.surfaceVariant,

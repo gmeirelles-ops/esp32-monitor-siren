@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/constants/mqtt_protocol.dart';
 import '../../core/database/database.dart';
 import '../../core/theme/diponto_theme.dart';
 import '../../shared/display_labels.dart';
 import '../../shared/portuguese_labels.dart';
 import '../../shared/widgets/action_section_card.dart';
+import '../../shared/widgets/app_message.dart';
 import '../../shared/widgets/demo_mode_banner.dart';
 import '../../shared/widgets/rejection_labels.dart';
 import '../../shared/widgets/screen_app_bar.dart';
@@ -97,8 +99,8 @@ class _BatchLiveScreenState extends ConsumerState<BatchLiveScreen> {
     }
   }
 
-  void _showSnack(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  void _showSnack(String msg, {AppMessageKind? kind}) {
+    showAppMessage(context, msg, kind: kind);
   }
 
   Future<void> _toggleRetest(bool value) async {
@@ -143,7 +145,10 @@ class _BatchLiveScreenState extends ConsumerState<BatchLiveScreen> {
 
     ref.listen(duplicateSerialProvider, (prev, next) {
       if (next != null && next.deviceId == widget.deviceId) {
-        _showSnack('Serial duplicado ${next.serial} — gravação não enfileirada');
+        _showSnack(
+          'Serial já gravado: ${next.serial}\nNão entrou na fila de gravação.',
+          kind: AppMessageKind.warning,
+        );
       }
     });
 
@@ -184,6 +189,7 @@ class _BatchLiveScreenState extends ConsumerState<BatchLiveScreen> {
     final markCount = markCountAsync.valueOrNull?.length ?? 0;
     final demoMode = ref.watch(demoModeProvider);
     final isGestor = ref.watch(activeOperatorIsGestorProvider);
+    final protocolMismatch = ref.watch(batchDeviceProtocolMismatchProvider(widget.deviceId));
 
     final chips = isGestor
         ? <StatusChipData>[
@@ -249,6 +255,12 @@ class _BatchLiveScreenState extends ConsumerState<BatchLiveScreen> {
         '${batch.potenciaMin.toStringAsFixed(1)}–${batch.potenciaMax.toStringAsFixed(1)} W',
     ].join(' · ');
 
+    final operatorSubtitle = [
+      if (productName != null) productName,
+      if (batch != null)
+        '${batch.potenciaMin.toStringAsFixed(1)}–${batch.potenciaMax.toStringAsFixed(1)} W',
+    ].join(' · ');
+
     return Scaffold(
       appBar: screenAppBar(context, title: 'OP ${widget.numeroOp}'),
       body: Column(
@@ -268,11 +280,16 @@ class _BatchLiveScreenState extends ConsumerState<BatchLiveScreen> {
                         header: StatusChipHeader(chips: chips),
                         intro: SectionIntro(
                           title: isGestor ? 'Painel ao vivo' : 'Teste',
-                          subtitle: isGestor ? introSubtitle : (productName ?? operador),
+                          subtitle: isGestor ? introSubtitle : operatorSubtitle,
                           icon: isGestor ? Icons.monitor_heart_outlined : Icons.play_circle_outline,
                         ),
                         children: [
                           if (demoMode && isGestor) const DemoModeBanner(compact: true),
+                          if (protocolMismatch)
+                            _ProtocolMismatchBanner(
+                              firmwareVersion: device?.firmwareVersion ?? '—',
+                              firmwareProtocol: device?.firmwareProtocolVersion,
+                            ),
                           if (isGestor) ...[
                             if (device?.lastNvsFault != null)
                               _NvsFaultBanner(alert: device!.lastNvsFault!),
@@ -532,6 +549,8 @@ class _BatchLiveBody extends ConsumerWidget {
                 lastRejectionMotivo: rejectionMotivo,
               ),
               const SizedBox(height: 16),
+              BatchLiveOperatorEngravingSection(numeroOp: numeroOp),
+              const SizedBox(height: 8),
               BatchLiveOperatorProgress(
                 metrics: metrics,
                 meta: batch?.quantidadeTotal ?? 0,
@@ -579,6 +598,43 @@ class _RejectionBanner extends StatelessWidget {
                 const Text('Última rejeição MQTT', style: TextStyle(fontWeight: FontWeight.w600)),
                 Text(formatRejectionMotivo(motivo)),
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProtocolMismatchBanner extends StatelessWidget {
+  const _ProtocolMismatchBanner({
+    required this.firmwareVersion,
+    required this.firmwareProtocol,
+  });
+
+  final String firmwareVersion;
+  final int? firmwareProtocol;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: DipontoColors.error.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: DipontoColors.error.withValues(alpha: 0.45)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.sync_problem_outlined, color: DipontoColors.error),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'Versão incompatível: app protocolo $kMqttProtocolVersion, '
+              'bancada fw $firmwareVersion (protocolo ${firmwareProtocol ?? "?"}). '
+              'Atualize firmware e app juntos antes de produzir.',
             ),
           ),
         ],

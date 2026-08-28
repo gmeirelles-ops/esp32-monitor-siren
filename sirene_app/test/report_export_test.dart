@@ -53,6 +53,7 @@ void main() {
         batchSummaries: [],
         filterOptions: DashboardFilterOptions(ops: [], products: [], devices: []),
         operatorProductivity: [],
+        productProductivity: [],
       ),
       filters: const DashboardFilters(period: DashboardPeriod.week),
       stationId: 'posto-1',

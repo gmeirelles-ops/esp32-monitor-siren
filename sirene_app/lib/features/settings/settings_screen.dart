@@ -41,6 +41,7 @@ import '../provisioning/provisioning_constants.dart';
 import '../provisioning/provisioning_wizard.dart';
 import 'serial_reconciliation_panel.dart';
 import 'settings_category.dart';
+import 'settings_navigation.dart';
 import 'widgets/settings_category_nav.dart';
 import 'widgets/settings_action_card.dart';
 import 'panels/settings_nuvem_panel.dart';
@@ -724,7 +725,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         if (!mounted) return;
         setState(() => _bancadaDeviceId = kDemoDeviceId);
         _showMessage(
-          'Modo demonstração ativo. Use Lote → iniciar OP → Autoplay no painel ao vivo.',
+          'Modo demonstração ativo. Lote → Iniciar → Autoplay no painel ao vivo.',
         );
       } else {
         await disableDemoMode(ref);
@@ -739,6 +740,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<SettingsCategory?>(settingsCategoryRequestProvider, (prev, next) {
+      if (next == null) return;
+      setState(() => _selectedCategory = next);
+      ref.read(settingsCategoryRequestProvider.notifier).state = null;
+    });
+
     final syncStatus = ref.watch(syncStatusProvider);
     final failedItems = ref.watch(failedSyncItemsProvider);
     final authenticated = ref.watch(isAuthenticatedProvider);
@@ -1243,9 +1250,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 onChanged: _toggleDemoMode,
                 title: const Text('Ativar demonstração'),
                 subtitle: const Text(
-                  'Cria bancada virtual ($kDemoDeviceId), inicia lotes localmente '
-                  'e permite simular testes com autoplay no painel ao vivo. '
-                  'Não envia dados à nuvem.',
+                  'Bancada virtual, lotes locais e testes simulados (sem ESP32/MQTT/Firebase). '
+                  'Também disponível na tela de login.',
                 ),
               ),
             ],

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../core/theme/diponto_theme.dart';
 import 'active_operator_chip.dart';
+import 'diponto_brand_mark.dart';
 import 'global_app_bar_actions.dart';
 
 class DipontoAppBar extends StatelessWidget implements PreferredSizeWidget {
@@ -27,24 +27,7 @@ class DipontoAppBar extends StatelessWidget implements PreferredSizeWidget {
     return AppBar(
       title: Row(
         children: [
-          Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              color: DipontoColors.primary,
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: const Center(
-              child: Text(
-                'D',
-                style: TextStyle(
-                  color: DipontoColors.onPrimary,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 18,
-                ),
-              ),
-            ),
-          ),
+          const DipontoBrandMark(size: 32),
           const SizedBox(width: 12),
           Flexible(child: Text(title, overflow: TextOverflow.ellipsis)),
         ],

@@ -10,6 +10,7 @@ import '../../shared/widgets/empty_state_view.dart';
 import '../../shared/widgets/screen_app_bar.dart';
 import '../../shared/widgets/section_intro.dart';
 import '../../shared/widgets/status_chip_header.dart';
+import '../operators/operators_provider.dart';
 import 'laser_mark_callout.dart';
 import 'laser_operator_copy.dart';
 import 'manual_serial_dialog.dart';
@@ -145,44 +146,106 @@ class _LaserMarkQueueScreen extends ConsumerWidget {
 
   final WidgetRef ref;
 
+  List<Widget> _buildAppBarActions(
+    BuildContext context, {
+    required bool isGestor,
+    required AppDatabase db,
+  }) {
+    if (isGestor) {
+      return [
+        IconButton(
+          tooltip: 'Gerar serial para gravação',
+          icon: const Icon(Icons.add_circle_outline),
+          onPressed: () => showManualSerialDialog(context, ref),
+        ),
+        IconButton(
+          tooltip: 'Buscar / regravar serial',
+          icon: const Icon(Icons.search),
+          onPressed: () => showSerialSearchDialog(context, ref),
+        ),
+        StreamBuilder<int>(
+          stream: db.watchPendingMarkQueueCount(),
+          builder: (context, snapshot) {
+            final count = snapshot.data ?? 0;
+            if (count == 0) return const SizedBox.shrink();
+            return Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: Center(
+                child: Badge(
+                  label: Text('$count'),
+                  child: const Icon(Icons.precision_manufacturing, color: DipontoColors.primary),
+                ),
+              ),
+            );
+          },
+        ),
+      ];
+    }
+
+    return [
+      PopupMenuButton<String>(
+        tooltip: 'Mais opções',
+        icon: const Icon(Icons.more_vert),
+        onSelected: (value) {
+          switch (value) {
+            case 'manual':
+              showManualSerialDialog(context, ref);
+            case 'search':
+              showSerialSearchDialog(context, ref);
+          }
+        },
+        itemBuilder: (context) => const [
+          PopupMenuItem(
+            value: 'manual',
+            child: ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(Icons.add_circle_outline),
+              title: Text('Gerar serial'),
+              subtitle: Text('Uso avançado'),
+            ),
+          ),
+          PopupMenuItem(
+            value: 'search',
+            child: ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(Icons.search),
+              title: Text('Buscar serial'),
+              subtitle: Text('Regravar'),
+            ),
+          ),
+        ],
+      ),
+      StreamBuilder<int>(
+        stream: db.watchPendingMarkQueueCount(),
+        builder: (context, snapshot) {
+          final count = snapshot.data ?? 0;
+          if (count == 0) return const SizedBox.shrink();
+          return Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: Center(
+              child: Badge(
+                label: Text('$count'),
+                child: const Icon(Icons.precision_manufacturing, color: DipontoColors.primary),
+              ),
+            ),
+          );
+        },
+      ),
+    ];
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final db = this.ref.watch(databaseProvider);
     final markFailure = this.ref.watch(markFailureProvider);
+    final isGestor = this.ref.watch(activeOperatorIsGestorProvider);
     final dateFmt = DateFormat('dd/MM HH:mm');
 
     return Scaffold(
       appBar: screenAppBar(
         context,
         title: 'Gravação',
-        actions: [
-          IconButton(
-            tooltip: 'Gerar serial para gravação',
-            icon: const Icon(Icons.add_circle_outline),
-            onPressed: () => showManualSerialDialog(context, this.ref),
-          ),
-          IconButton(
-            tooltip: 'Buscar / regravar serial',
-            icon: const Icon(Icons.search),
-            onPressed: () => showSerialSearchDialog(context, this.ref),
-          ),
-          StreamBuilder<int>(
-            stream: db.watchPendingMarkQueueCount(),
-            builder: (context, snapshot) {
-              final count = snapshot.data ?? 0;
-              if (count == 0) return const SizedBox.shrink();
-              return Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: Center(
-                  child: Badge(
-                    label: Text('$count'),
-                    child: const Icon(Icons.precision_manufacturing, color: DipontoColors.primary),
-                  ),
-                ),
-              );
-            },
-          ),
-        ],
+        actions: _buildAppBarActions(context, isGestor: isGestor, db: db),
       ),
       body: StreamBuilder<List<MarkQueueEntry>>(
         stream: db.watchPendingMarkQueue(),
@@ -195,9 +258,10 @@ class _LaserMarkQueueScreen extends ConsumerWidget {
             return EmptyStateView(
               icon: Icons.precision_manufacturing_outlined,
               title: 'Fila de gravação vazia',
-              subtitle:
-                  'Use + no topo para gerar serial, ou aguarde aprovações do lote. '
-                  '${LaserOperatorCopy.queueHelp}',
+              subtitle: isGestor
+                  ? 'Use + no topo para gerar serial, ou aguarde aprovações do lote. '
+                      '${LaserOperatorCopy.queueHelp}'
+                  : 'Aprovações do lote aparecem aqui. ${LaserOperatorCopy.queueHelp}',
             );
           }
 
@@ -233,7 +297,7 @@ class _LaserMarkQueueScreen extends ConsumerWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          const SectionIntro(
+                          SectionIntro(
                             title: 'Fila de gravação',
                             subtitle: LaserOperatorCopy.queueHelp,
                             icon: Icons.precision_manufacturing_outlined,
@@ -251,7 +315,9 @@ class _LaserMarkQueueScreen extends ConsumerWidget {
                           ActionSectionCard(
                             icon: Icons.queue_play_next,
                             title: 'Próximos seriais',
-                            subtitle: 'Serial + modelo via TCP ao DiatuCAD',
+                            subtitle: isGestor
+                                ? 'Serial e modelo enviados à gravadora'
+                                : 'Aguardando gravação na carcaça',
                             child: Column(
                               children: [
                                 for (var i = 0; i < entries.length; i++) ...[
@@ -260,20 +326,22 @@ class _LaserMarkQueueScreen extends ConsumerWidget {
                                     entry: entries[i],
                                     index: i,
                                     dateFmt: dateFmt,
-                                    trailing: IconButton(
-                                      tooltip: entries[i].status == 'in_progress'
-                                          ? 'Aguarde a gravação terminar'
-                                          : 'Remover da fila',
-                                      icon: const Icon(Icons.delete_outline, size: 20),
-                                      color: DipontoColors.error.withValues(alpha: 0.85),
-                                      onPressed: entries[i].status == 'in_progress'
-                                          ? null
-                                          : () => _deleteMarkQueueEntry(
-                                                context,
-                                                this.ref,
-                                                entries[i],
-                                              ),
-                                    ),
+                                    trailing: isGestor
+                                        ? IconButton(
+                                            tooltip: entries[i].status == 'in_progress'
+                                                ? 'Aguarde a gravação terminar'
+                                                : 'Remover da fila',
+                                            icon: const Icon(Icons.delete_outline, size: 20),
+                                            color: DipontoColors.error.withValues(alpha: 0.85),
+                                            onPressed: entries[i].status == 'in_progress'
+                                                ? null
+                                                : () => _deleteMarkQueueEntry(
+                                                      context,
+                                                      this.ref,
+                                                      entries[i],
+                                                    ),
+                                          )
+                                        : null,
                                   ),
                                 ],
                               ],

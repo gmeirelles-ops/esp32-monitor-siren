@@ -63,7 +63,7 @@ static void publish_heartbeat(void)
     snprintf(json, sizeof(json),
              "{\"device_id\":\"%s\",\"site\":\"%s\",\"bancada\":%u,"
              "\"uptime\":%lld,\"ts_ms\":%lld,\"rssi\":%d,\"estado\":\"%s\",\"wifi_ssid\":\"%s\","
-             "\"fila\":%u,\"fila_drops\":%lu,\"firmware_version\":\"%s\",\"numero_op\":\"%s\","
+             "\"fila\":%u,\"fila_drops\":%lu,\"firmware_version\":\"%s\",\"protocol_version\":%u,\"numero_op\":\"%s\","
              "\"proximo_sequencial\":%lu,\"aprovados\":%lu,\"batch_nvs_fault\":%s,"
              "\"pzem_faults\":%lu,\"pzem_addr\":\"0x%02X\",\"reset_reason\":%d,\"time_synced\":%s%s}",
              device_id_get(),
@@ -73,6 +73,7 @@ static void publish_heartbeat(void)
              (long long)(esp_timer_get_time() / 1000LL),
              snap.rssi, snap.estado, snap.wifi_ssid ? snap.wifi_ssid : "",
              (unsigned)snap.fila, (unsigned long)snap.queue_drops, snap.firmware_version,
+             (unsigned)MQTT_PROTOCOL_VERSION,
              snap.batch_active ? snap.numero_op : "",
              (unsigned long)snap.proximo_sequencial, (unsigned long)snap.aprovados,
              snap.batch_nvs_fault ? "true" : "false",

@@ -278,6 +278,16 @@ mixin _DevicesNotifierInbound on _DevicesNotifierBase {
         device.uptime = hb.uptime;
         device.fila = hb.fila;
         device.firmwareVersion = hb.firmwareVersion;
+        device.firmwareProtocolVersion = hb.protocolVersion;
+        if (hb.batchNvsFault) {
+          _emitNvsFault(
+            deviceId,
+            NvsFaultAlertMessage(
+              evento: 'batch_nvs_fault',
+              detalhe: 'Falha ao gravar lote na memória do dispositivo (heartbeat)',
+            ),
+          );
+        }
         device.isOnline = true;
         device.lastSeen = now;
         await _ref.read(databaseProvider).syncBancadaFromFirmware(

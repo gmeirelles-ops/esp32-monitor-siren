@@ -14,6 +14,7 @@ import '../../shared/widgets/section_intro.dart';
 import '../dashboard/dashboard_filters.dart';
 import '../mqtt/mqtt_providers.dart';
 import 'batch_report_detail_screen.dart';
+import 'batch_report_export.dart';
 import '../../shared/reports/report_context.dart';
 import '../../shared/reports/report_export_format.dart';
 import '../../shared/reports/report_pdf_export.dart';
@@ -55,12 +56,22 @@ class _TraceabilityReportScreenState extends ConsumerState<TraceabilityReportScr
   }
 
   Future<void> _exportList(List<BatchReportSummary> batches) async {
-    final picked = await pickReportExportOptions(context);
+    final picked = await pickReportExportOptions(context, includeCsv: true, csvTests: false);
     if (picked == null || !mounted) return;
 
     setState(() => _exporting = true);
     try {
       final filters = ref.read(reportFiltersProvider);
+      if (picked.format.isCsv) {
+        final path = await saveReportCsv('lotes', formatBatchListCsv(batches));
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('CSV salvo: $path')),
+          );
+        }
+        return;
+      }
+
       final ctx = await loadReportContext(ref);
       final meta = ReportPdfMeta(
         title: 'Lista de lotes',
@@ -184,7 +195,7 @@ class _TraceabilityReportScreenState extends ConsumerState<TraceabilityReportScr
                           return ActionSectionCard(
                             icon: Icons.folder_open_outlined,
                             title: 'Lotes (${batches.length})',
-                            subtitle: 'Toque para ver testes e exportar PDF ou XML',
+                            subtitle: 'Toque para ver testes e exportar PDF, XML ou CSV',
                             child: Column(
                               children: [
                                 for (var i = 0; i < batches.length; i++) ...[

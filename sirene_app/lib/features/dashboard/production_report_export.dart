@@ -32,6 +32,8 @@ String formatDashboardSummaryCsv({
   required List<DailyThroughput> throughput,
   required List<FaultCount> faults,
   required DashboardFilters filters,
+  List<OperatorProductivity>? operatorProductivity,
+  List<ProductProductivity>? productProductivity,
   DateTime? generatedAt,
   bool withBom = true,
 }) {
@@ -69,6 +71,34 @@ String formatDashboardSummaryCsv({
     buf.writeln('Falha;Quantidade');
     for (final f in faults) {
       buf.writeln('${csvCell(f.falha)};${f.count}');
+    }
+  }
+  if (operatorProductivity != null && operatorProductivity.isNotEmpty) {
+    buf.writeln();
+    buf.writeln('Rendimento por operador');
+    buf.writeln('Operador;Testado;Aprovados;Reprovados;Rendimento %');
+    for (final op in operatorProductivity) {
+      buf.writeln([
+        csvCell(op.label),
+        op.total,
+        op.aprovados,
+        op.reprovados,
+        csvDecimal(op.yieldPct),
+      ].join(';'));
+    }
+  }
+  if (productProductivity != null && productProductivity.isNotEmpty) {
+    buf.writeln();
+    buf.writeln('Rendimento por produto');
+    buf.writeln('Produto;Testado;Aprovados;Reprovados;Rendimento %');
+    for (final prod in productProductivity) {
+      buf.writeln([
+        csvCell(prod.label),
+        prod.total,
+        prod.aprovados,
+        prod.reprovados,
+        csvDecimal(prod.yieldPct),
+      ].join(';'));
     }
   }
   return buf.toString();
