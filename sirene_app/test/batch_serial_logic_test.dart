@@ -7,6 +7,7 @@ import 'package:sqlite3/open.dart';
 
 import 'package:sirene_app/core/database/database.dart';
 import 'package:sirene_app/features/batch/batch_serial_logic.dart';
+import 'package:sirene_app/features/serial/itf_check_digit.dart';
 
 void main() {
   setUpAll(() {
@@ -77,6 +78,24 @@ void main() {
         await resolveProximoSequencial(db, '123', '26', sequencialInicial: 450),
         501,
       );
+    });
+
+    test('respeita histórico MANUAL mesmo com contador zerado', () async {
+      final serial = generateFullSerial(
+        idProduto: '123',
+        ano: '26',
+        sequencial: 42,
+      );
+      await db.insertTestResult(
+        deviceId: 'manual',
+        numeroOp: 'MANUAL',
+        veredito: 'MANUAL',
+        potenciaMedia: 0,
+        sequencial: 42,
+        aprovadosNoLote: 0,
+        serial: serial,
+      );
+      expect(await resolveProximoSequencial(db, '123', '26'), 43);
     });
   });
 }

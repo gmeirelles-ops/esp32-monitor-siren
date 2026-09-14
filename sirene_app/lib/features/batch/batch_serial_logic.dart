@@ -7,10 +7,10 @@ String resolveBatchYear([DateTime? now]) {
   return y.toString().padLeft(2, '0');
 }
 
-/// Próximo sequencial para um **novo** cadastro de lote (006 FR-006).
+/// Próximo sequencial só a partir do [sequencialInicial] do produto (sem histórico).
 ///
-/// Não usa histórico global — firmware zera contadores; serial de produção
-/// começa no inicial do produto ou em 1.
+/// Preferir [resolveProximoSequencial] no fluxo de produção — mantém manual + lote
+/// na mesma sequência.
 int resolveNewBatchSequencial({int? sequencialInicial}) {
   if (sequencialInicial == null || sequencialInicial < 1) {
     return 1;
@@ -18,19 +18,23 @@ int resolveNewBatchSequencial({int? sequencialInicial}) {
   return sequencialInicial;
 }
 
-/// Próximo sequencial para `SET_BATCH`, a partir do contador local e do
-/// [sequencialInicial] do produto (quando os seriais não começam em 0001).
+/// Próximo sequencial conjunto para `SET_BATCH` e emissão manual.
 ///
-/// O firmware, ao receber `SET_BATCH`, aplica o sequencial do payload
-/// com reset de contadores (006) — ver `batch_cmd.c` em sirene-validator.
+/// Usa o máximo entre:
+/// - contador local `serial_counters`
+/// - maior sequencial já visto no histórico local (APROVADO + MANUAL)
+/// - [sequencialInicial] do produto (quando os seriais não começam em 0001)
 Future<int> resolveProximoSequencial(
   AppDatabase db,
   String idProduto,
   String ano, {
   int? sequencialInicial,
 }) async {
-  final last = await db.getLastSequencial(idProduto, ano);
-  final counterNext = (last ?? 0) + 1;
+  final lastCounter = await db.getLastSequencial(idProduto, ano) ?? 0;
+  final lastHistory = await db.maxSequencialInHistory(idProduto, ano) ?? 0;
+  final effectiveLast =
+      lastCounter > lastHistory ? lastCounter : lastHistory;
+  final counterNext = effectiveLast + 1;
   if (sequencialInicial == null || sequencialInicial < 1) {
     return counterNext;
   }

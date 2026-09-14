@@ -1183,7 +1183,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ActionSectionCard(
           icon: Icons.qr_code_scanner,
           title: 'Reconciliação de série',
-          subtitle: 'Corrigir divergências entre app e bancada',
+          subtitle: 'Contador conjunto (manual + lote) e alinhamento',
           accentColor: DipontoColors.primaryLight,
           child: const SerialReconciliationPanel(),
         ),

@@ -112,7 +112,10 @@ class _BatchScreenState extends ConsumerState<BatchScreen> {
 
     final ano = resolveBatchYear();
     final db = ref.read(databaseProvider);
-    final proximoSequencial = resolveNewBatchSequencial(
+    final proximoSequencial = await resolveProximoSequencial(
+      db,
+      product.idProduto,
+      ano,
       sequencialInicial: product.sequencialInicial,
     );
 

@@ -1462,14 +1462,59 @@ class AppDatabase extends _$AppDatabase {
     return markQueueContainsSerial(serial);
   }
 
-  /// Reconciliação dos sequenciais aprovados de um produto/ano.
+  /// Maior sequencial já emitido no histórico local (APROVADO ou MANUAL).
+  Future<int?> maxSequencialInHistory(String idProduto, String ano) async {
+    final prefix = '${idProduto.padLeft(3, '0').substring(0, 3)}${ano.padLeft(2, '0').substring(0, 2)}';
+    final rows =
+        await (select(testResults)..where((t) => t.serial.like('$prefix%'))).get();
+    int? maxSeq;
+    for (final row in rows) {
+      if (!countsForSerialRegistry(row.veredito)) continue;
+      final serial = row.serial;
+      if (serial == null || serial.length < 9) continue;
+      final seq = int.tryParse(serial.substring(5, 9));
+      if (seq == null) continue;
+      if (maxSeq == null || seq > maxSeq) maxSeq = seq;
+    }
+    return maxSeq;
+  }
+
+  /// Alinha `serial_counters` para pelo menos [sequencial] (não regride).
+  Future<int> alignSerialCounter({
+    required String idProduto,
+    required String ano,
+    required int sequencial,
+  }) async {
+    if (sequencial < 1) {
+      throw ArgumentError('Sequencial deve ser >= 1');
+    }
+    await bumpSerialCounter(
+      idProduto: idProduto,
+      ano: ano,
+      sequencial: sequencial,
+    );
+    return (await getLastSequencial(idProduto, ano)) ?? sequencial;
+  }
+
+  /// Alinha o contador ao maior sequencial do histórico local (se houver).
+  Future<int?> alignSerialCounterFromHistory(String idProduto, String ano) async {
+    final maxSeq = await maxSequencialInHistory(idProduto, ano);
+    if (maxSeq == null) return null;
+    return alignSerialCounter(
+      idProduto: idProduto,
+      ano: ano,
+      sequencial: maxSeq,
+    );
+  }
+
+  /// Reconciliação dos sequenciais emitidos de um produto/ano (APROVADO + MANUAL).
   Future<SerialReconciliation> reconcileSerials(String idProduto, String ano) async {
-    final prefix = '$idProduto$ano';
+    final prefix = '${idProduto.padLeft(3, '0').substring(0, 3)}${ano.padLeft(2, '0').substring(0, 2)}';
     final rows = await (select(testResults)..where((t) => t.serial.like('$prefix%'))).get();
 
     final seqCount = <int, int>{};
     for (final row in rows) {
-      if (!isApprovedVeredito(row.veredito)) continue;
+      if (!countsForSerialRegistry(row.veredito)) continue;
       final serial = row.serial;
       if (serial == null || serial.length < 9) continue;
       final seq = int.tryParse(serial.substring(5, 9));

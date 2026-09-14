@@ -116,5 +116,23 @@ void main() {
       expect(r.found, [1, 2]);
       expect(r.isIntact, true);
     });
+
+    test('reconcileSerials e align contam MANUAL', () async {
+      await approve('1232600011', seq: 1);
+      await db.insertTestResult(
+        deviceId: 'manual',
+        numeroOp: 'MANUAL',
+        veredito: 'MANUAL',
+        potenciaMedia: 0,
+        sequencial: 2,
+        aprovadosNoLote: 0,
+        serial: '1232600029',
+      );
+      final r = await db.reconcileSerials('123', '26');
+      expect(r.found, [1, 2]);
+      expect(await db.maxSequencialInHistory('123', '26'), 2);
+      expect(await db.alignSerialCounterFromHistory('123', '26'), 2);
+      expect(await db.getLastSequencial('123', '26'), 2);
+    });
   });
 }
