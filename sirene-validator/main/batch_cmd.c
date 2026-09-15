@@ -53,54 +53,32 @@ static const char *TAG = "batch_cmd";
 
 
 
-static void publish_test_result(bool approved, float potencia_media, uint32_t sequencial_usado)
-
+static bool publish_test_result(bool approved, float potencia_media, uint32_t sequencial_usado,
+                                uint32_t aprovados_no_lote)
 {
-
     batch_context_t *batch = app_batch();
-
     char numero_op[16];
-
     char id_produto[4];
-
     char ano[3];
-
-    uint32_t aprovados;
-
     app_batch_lock();
-
     strncpy(numero_op, batch->numero_op, sizeof(numero_op) - 1);
-
+    numero_op[sizeof(numero_op) - 1] = '\0';
     strncpy(id_produto, batch->id_produto, sizeof(id_produto) - 1);
-
+    id_produto[sizeof(id_produto) - 1] = '\0';
     strncpy(ano, batch->ano, sizeof(ano) - 1);
-
-    aprovados = batch->aprovados;
-
+    ano[sizeof(ano) - 1] = '\0';
     app_batch_unlock();
 
-
-
     char json[448];
-
     snprintf(json, sizeof(json),
-
              "{\"tipo\":\"teste\",\"ts_ms\":%lld,\"ts_unix\":%lld,"
-
              "\"numero_op\":\"%s\",\"id_produto\":\"%s\",\"ano\":\"%s\","
-
              "\"veredito\":\"%s\",\"potencia_media\":%.2f,\"sequencial\":%lu,\"aprovados_no_lote\":%lu}",
-
              (long long)app_now_ts_ms(), (long long)time_sync_unix(),
-
              numero_op, id_produto, ano,
-
              approved ? "APROVADO" : "REPROVADO", potencia_media,
-
-             (unsigned long)sequencial_usado, (unsigned long)aprovados);
-
-    app_publish_or_queue("status", json);
-
+             (unsigned long)sequencial_usado, (unsigned long)aprovados_no_lote);
+    return app_publish_or_queue("status", json);
 }
 
 
@@ -166,70 +144,63 @@ typedef struct {
 
 
 /**
-
- * Contract 004: NVS → MQTT/estado → GPIO/LED → OLED.
-
- * On NVS failure after approval counter update, MUST NOT pulse GPIO/actuator.
-
+ * Contract 004: publicar resultado → avançar contadores (se durável) → GPIO/LED → OLED.
+ * APROVADO só incrementa sequencial/aprovados se MQTT ou fila offline aceitou o tipo:teste,
+ * evitando pular serial sem o app poder gravar a peça.
  */
-
 static void batch_cmd_apply_verdict(batch_verdict_ctx_t *ctx)
-
 {
-
     batch_context_t *batch = app_batch();
-
     bool *nvs_fault = app_batch_nvs_fault();
 
-
+    bool will_update = pure_batch_approval_updates_counters(ctx->modo_reteste, ctx->approved);
 
     app_batch_lock();
-
-    if (ctx->approved) {
-
-        if (pure_batch_approval_updates_counters(ctx->modo_reteste, ctx->approved)) {
-
-            uint32_t prev_aprovados = batch->aprovados;
-
-            uint32_t prev_sequencial = batch->proximo_sequencial;
-
-            batch->aprovados++;
-
-            batch->proximo_sequencial++;
-
-            if (!batch_storage_save(batch)) {
-
-                batch->aprovados = prev_aprovados;
-
-                batch->proximo_sequencial = prev_sequencial;
-
-                *nvs_fault = true;
-
-                app_batch_unlock();
-
-                batch_cmd_publish_nvs_fault();
-
-                return;
-
-            }
-
-            *nvs_fault = false;
-
-        }
-
+    uint32_t aprovados_report = batch->aprovados;
+    if (will_update) {
+        aprovados_report = batch->aprovados + 1;
     }
-
-    uint32_t aprovados_now = batch->aprovados;
-
     app_batch_unlock();
 
-    /* MQTT + estado antes de GPIO/OLED (I2C lento) — app vê APROVADO sem esperar 30s. */
     app_last_test_set(ctx->approved, ctx->potencia_media, ctx->sequencial_usado, app_now_ts_ms());
-    publish_test_result(ctx->approved, ctx->potencia_media, ctx->sequencial_usado);
+    bool durable = publish_test_result(ctx->approved, ctx->potencia_media, ctx->sequencial_usado,
+                                       aprovados_report);
     offline_queue_sync_now();
     telemetry_publish_now();
 
-    bool quota_done = ctx->approved && !ctx->modo_reteste &&
+    uint32_t aprovados_now = 0;
+    bool counters_advanced = false;
+
+    app_batch_lock();
+    if (will_update) {
+        if (!durable) {
+            aprovados_now = batch->aprovados;
+            ESP_LOGW(TAG,
+                     "APROVADO seq=%lu sem MQTT/fila — contadores NÃO avançaram (evita pular serial)",
+                     (unsigned long)ctx->sequencial_usado);
+        } else {
+            batch->aprovados++;
+            batch->proximo_sequencial++;
+            if (!batch_storage_save(batch)) {
+                /* Já publicamos: mantém RAM para não reutilizar o sequencial. */
+                *nvs_fault = true;
+                counters_advanced = true;
+                aprovados_now = batch->aprovados;
+                app_batch_unlock();
+                batch_cmd_publish_nvs_fault();
+                goto after_counters;
+            }
+            *nvs_fault = false;
+            counters_advanced = true;
+            aprovados_now = batch->aprovados;
+        }
+    } else {
+        aprovados_now = batch->aprovados;
+    }
+    app_batch_unlock();
+
+after_counters:
+    bool quota_done = counters_advanced &&
                       pure_batch_quota_reached(aprovados_now, ctx->quantidade_total);
     if (quota_done) {
         state_machine_set(STATE_BATCH_READY);
@@ -240,46 +211,25 @@ static void batch_cmd_apply_verdict(batch_verdict_ctx_t *ctx)
 
     if (ctx->measure_end_us > 0) {
         if (ctx->approved) {
-
             led_feedback_signal(FEEDBACK_APPROVED);
-
             line_actuator_on_approved(!ctx->modo_reteste);
-
         } else {
-
             led_feedback_signal(FEEDBACK_REJECTED);
-
             line_actuator_on_rejected();
-
         }
-
         int64_t gpio_done_us = esp_timer_get_time();
-
         int64_t latency_us = gpio_done_us - ctx->measure_end_us;
-
         ESP_LOGI(TAG, "verdict_gpio_latency_us=%lld", (long long)latency_us);
-
         if (latency_us > 50000LL) {
-
             ESP_LOGW(TAG, "verdict_gpio_latency above 50ms target");
-
         }
-
     } else if (ctx->approved) {
-
         led_feedback_signal(FEEDBACK_APPROVED);
-
         line_actuator_on_approved(!ctx->modo_reteste);
-
     } else {
-
         led_feedback_signal(FEEDBACK_REJECTED);
-
         line_actuator_on_rejected();
-
     }
-
-
 
     if (ctx->approved) {
 #if CONFIG_LINE_ACTUATOR_ENABLE
@@ -289,26 +239,15 @@ static void batch_cmd_apply_verdict(batch_verdict_ctx_t *ctx)
         publish_actuator_event("aprovacao_pulso", -1, 0);
 #endif
     } else {
-
         publish_actuator_event("rejeicao_pulso", line_actuator_reject_gpio(),
-
                                line_actuator_reject_pulse_ms());
-
     }
 
-
-
     oled_display_on_test_result(ctx->approved, ctx->potencia_media);
-
     app_batch_lock();
-
     oled_display_set_batch(batch->numero_op, batch->aprovados, batch->proximo_sequencial);
-
     app_batch_unlock();
-
-
 }
-
 
 
 void batch_cmd_publish_ack(void)

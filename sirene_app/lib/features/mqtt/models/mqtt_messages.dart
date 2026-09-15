@@ -68,6 +68,12 @@ enum DeviceFsmState {
 
 enum AppMqttConnectionState { disconnected, connecting, connected, reconnecting }
 
+/// Veredito sticky no lote quando o resultado não chega ou a bancada falha.
+enum StickyVerdictIssue {
+  resultPending,
+  hardwareFault,
+}
+
 class HeartbeatMessage {
   const HeartbeatMessage({
     required this.uptime,
@@ -262,6 +268,10 @@ class DeviceInfo {
   DateTime? batchStartedAt;
   /// True após TESTING→BATCH_READY até `tipo:teste` ser processado.
   bool awaitingMqttResult = false;
+  /// Veredito que não chegou / falha de hardware — permanece até novo teste ou resultado.
+  StickyVerdictIssue? stickyVerdictIssue;
+  /// Detalhe opcional (ex.: falha PZEM do alerta MQTT).
+  String? stickyVerdictDetail;
   /// Último heartbeat (reconciliação 006).
   HeartbeatMessage? lastHeartbeat;
   /// Próximo sequencial do firmware (fonte da verdade).

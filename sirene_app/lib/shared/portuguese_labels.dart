@@ -15,4 +15,6 @@ abstract final class PortugueseLabels {
       'Resultados não chegam ao app — verifique a rede do posto.';
   static const aguardandoResultadoBancada = 'Aguardando resultado';
   static const filaOfflineBancada = 'Fila na bancada';
+  static const resultadoPendente = 'Resultado pendente';
+  static const falhaBancada = 'Falha na bancada';
 }

@@ -1,0 +1,11 @@
+Firmware sirene-validator 1.8.12 — veredito sticky + não pular sequencial
+
+Mudanças:
+- APROVADO só avança aprovados/proximo_sequencial se MQTT ou fila offline aceitou tipo:teste
+- App 1.0.5: Resultado pendente / falha sticky; alerta de gap se bancada avançou sem serial
+
+Uso:
+1. App Admin → Atualizar firmware → Pela rede (OTA) → este sirene-validator.bin
+2. Ou: OTA-ATUALIZAR.bat (edite BANCADA)
+
+Heartbeat: firmware_version "1.8.12"

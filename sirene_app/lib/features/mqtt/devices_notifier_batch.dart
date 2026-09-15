@@ -58,6 +58,8 @@ mixin _DevicesNotifierBatch on _DevicesNotifierBase {
     device.firmwareProximoSequencial = batch.proximoSequencial;
     device.lastTestResult = null;
     device.awaitingMqttResult = false;
+    device.stickyVerdictIssue = null;
+    device.stickyVerdictDetail = null;
     device.lastRejection = null;
     _cancelVerdictWatchdog(deviceId);
     _batchStartedAt[deviceId] = device.batchStartedAt!;
@@ -73,6 +75,8 @@ mixin _DevicesNotifierBatch on _DevicesNotifierBase {
       device.firmwareAprovadosOp = null;
       device.firmwareProximoSequencial = null;
       device.awaitingMqttResult = false;
+      device.stickyVerdictIssue = null;
+      device.stickyVerdictDetail = null;
       device.lastHeartbeat = null;
       _cancelVerdictWatchdog(deviceId);
       state = {...state};

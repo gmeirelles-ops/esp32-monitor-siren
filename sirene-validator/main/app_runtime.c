@@ -115,18 +115,20 @@ int64_t app_now_ts_ms(void)
     return esp_timer_get_time() / 1000;
 }
 
-void app_publish_or_queue(const char *topic_suffix, const char *json)
+bool app_publish_or_queue(const char *topic_suffix, const char *json)
 {
     if (mqtt_bridge_is_connected() && mqtt_bridge_publish(topic_suffix, json)) {
-        return;
+        return true;
     }
     if (offline_queue_is_full()) {
         led_feedback_signal(FEEDBACK_QUEUE_FULL);
-        return;
+        return false;
     }
     if (!offline_queue_push(topic_suffix, json)) {
         led_feedback_signal(FEEDBACK_QUEUE_FULL);
+        return false;
     }
+    return true;
 }
 
 bool app_enqueue_pzem_work(pzem_work_type_t type, uint32_t duration_sec, const ensaio_params_t *ensaio)

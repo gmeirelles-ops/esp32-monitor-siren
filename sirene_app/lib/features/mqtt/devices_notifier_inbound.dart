@@ -28,8 +28,12 @@ mixin _DevicesNotifierInbound on _DevicesNotifierBase {
     if (after != null &&
         (after.estado == DeviceFsmState.testing || after.awaitingMqttResult)) {
       after.awaitingMqttResult = false;
+      after.stickyVerdictIssue = StickyVerdictIssue.resultPending;
+      after.stickyVerdictDetail = null;
       state = {...state};
-      unawaited(AppLog.write('MQTT: watchdog 15s — saiu de Testando/Aguardando ($deviceId)'));
+      unawaited(AppLog.write(
+        'MQTT: watchdog 15s — resultado pendente ($deviceId)',
+      ));
     }
   }
 
@@ -51,8 +55,8 @@ mixin _DevicesNotifierInbound on _DevicesNotifierBase {
 
     final db = _ref.read(databaseProvider);
     final since = device.batchStartedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-    final sessionTests = await db.getTestsByOpSince(batch.numeroOp, since);
-    final sessionMetrics = computeSessionBatchMetrics(sessionTests);
+    var sessionTests = await db.getTestsByOpSince(batch.numeroOp, since);
+    var sessionMetrics = computeSessionBatchMetrics(sessionTests);
 
     final hbAprovados = hb.aprovados ?? 0;
     if (hb.ultimoVeredito != null &&
@@ -60,13 +64,42 @@ mixin _DevicesNotifierInbound on _DevicesNotifierBase {
         (hbAprovados > sessionMetrics.aprovados ||
             (hb.ultimoVeredito == 'REPROVADO' && device.awaitingMqttResult))) {
       await _tryProcessHeartbeatLastTest(deviceId, hb);
+      sessionTests = await db.getTestsByOpSince(batch.numeroOp, since);
+      sessionMetrics = computeSessionBatchMetrics(sessionTests);
     }
 
-    if (hbAprovados > sessionMetrics.aprovados) {
+    final localMaxApprovedSeq = sessionTests
+        .where((t) => isApprovedVeredito(t.veredito) && !t.isRetest)
+        .fold<int>(0, (m, t) => t.sequencial > m ? t.sequencial : m);
+    final approvalGap = hasBatchApprovalGap(
+      firmwareAprovados: hbAprovados,
+      localAprovados: sessionMetrics.aprovados,
+    );
+    final sequencialGap = hasBatchSequencialGap(
+      firmwareProximoSequencial: hb.proximoSequencial,
+      localMaxApprovedSequencial: localMaxApprovedSeq,
+    );
+
+    if (approvalGap || sequencialGap) {
+      // Não sincroniza marcação “como se estivesse ok” — falta serial/teste local.
+      device.awaitingMqttResult = false;
+      device.stickyVerdictIssue = StickyVerdictIssue.resultPending;
+      device.stickyVerdictDetail = batchSerialGapDetail(
+        firmwareAprovados: hbAprovados,
+        localAprovados: sessionMetrics.aprovados,
+        firmwareProximo: hb.proximoSequencial,
+      );
+      _cancelVerdictWatchdog(deviceId);
+      unawaited(AppLog.write(
+        'MQTT: gap sequencial/aprovados OP=${batch.numeroOp} '
+        'FW aprovados=$hbAprovados app=${sessionMetrics.aprovados} '
+        'prox=${hb.proximoSequencial} maxLocal=$localMaxApprovedSeq',
+      ));
+    } else if (sessionMetrics.aprovados > 0) {
       await _syncMarkingForOp(db, batch.numeroOp, since: device.batchStartedAt);
     }
 
-    device.awaitingMqttResult = false;
+    // Não limpa awaitingMqttResult aqui — só resultado processado ou watchdog.
     state = {...state};
   }
 
@@ -261,6 +294,8 @@ mixin _DevicesNotifierInbound on _DevicesNotifierBase {
         }
         if (prevEstado != DeviceFsmState.testing && hb.estado == DeviceFsmState.testing) {
           _clearTransientRejection(deviceId);
+          device.stickyVerdictIssue = null;
+          device.stickyVerdictDetail = null;
           _scheduleVerdictWatchdog(deviceId);
         }
         await _reconcileFromHeartbeat(deviceId, hb);
@@ -296,6 +331,13 @@ mixin _DevicesNotifierInbound on _DevicesNotifierBase {
         );
         if (hb.estado != DeviceFsmState.hardwareFault) {
           device.lastHardwareAlert = null;
+          if (device.stickyVerdictIssue == StickyVerdictIssue.hardwareFault) {
+            device.stickyVerdictIssue = null;
+            device.stickyVerdictDetail = null;
+          }
+        } else {
+          device.stickyVerdictIssue = StickyVerdictIssue.hardwareFault;
+          device.stickyVerdictDetail = device.lastHardwareAlert;
         }
         await _ref.read(firestoreSyncServiceProvider).enqueueDeviceUpdate(
           deviceId: deviceId,
@@ -316,8 +358,14 @@ mixin _DevicesNotifierInbound on _DevicesNotifierBase {
       if (alert != null) {
         if (alert.isRecovery) {
           device.lastHardwareAlert = null;
+          if (device.stickyVerdictIssue == StickyVerdictIssue.hardwareFault) {
+            device.stickyVerdictIssue = null;
+            device.stickyVerdictDetail = null;
+          }
         } else if (alert.falha != null) {
           device.lastHardwareAlert = alert.falha;
+          device.stickyVerdictIssue = StickyVerdictIssue.hardwareFault;
+          device.stickyVerdictDetail = alert.falha;
           await _ref.read(databaseProvider).insertHardwareEvent(
                 deviceId: deviceId,
                 falha: alert.falha!,
@@ -428,6 +476,8 @@ mixin _DevicesNotifierInbound on _DevicesNotifierBase {
         await db.testExistsByOpAndTsMs(numeroOp, test.tsMs!)) {
       device!.lastTestResult = test;
       device.awaitingMqttResult = false;
+      device.stickyVerdictIssue = null;
+      device.stickyVerdictDetail = null;
       _cancelVerdictWatchdog(deviceId);
       state = {...state};
       await _ensureMarkingForTest(db, test);

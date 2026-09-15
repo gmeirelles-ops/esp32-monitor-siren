@@ -73,6 +73,12 @@ mixin _DevicesNotifierTestPipeline on _DevicesNotifierBase {
           deviceId: deviceId,
           serial: candidate,
         );
+        device.awaitingMqttResult = false;
+        device.stickyVerdictIssue = StickyVerdictIssue.resultPending;
+        device.stickyVerdictDetail =
+            'Serial já existia para este sequencial — peça não registrada no app.';
+        _cancelVerdictWatchdog(deviceId);
+        state = {...state};
         unawaited(AppLog.write(
           'MQTT: serial duplicado bloqueado OP=${test.numeroOp} seq=${test.sequencial} serial=$candidate',
         ));
@@ -83,6 +89,8 @@ mixin _DevicesNotifierTestPipeline on _DevicesNotifierBase {
 
     device.lastTestResult = test;
     device.awaitingMqttResult = false;
+    device.stickyVerdictIssue = null;
+    device.stickyVerdictDetail = null;
     _cancelVerdictWatchdog(deviceId);
     state = {...state};
 

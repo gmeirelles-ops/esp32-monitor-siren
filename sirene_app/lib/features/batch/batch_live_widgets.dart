@@ -18,6 +18,7 @@ import '../labels/mark_queue_ui.dart';
 import '../labels/marking_providers.dart';
 import '../mqtt/models/mqtt_messages.dart';
 import 'batch_live_providers.dart';
+import 'batch_verdict_ui.dart';
 
 /// Cartão hero: estado FSM + último resultado do teste.
 class BatchLiveLastTestHero extends StatelessWidget {
@@ -649,6 +650,9 @@ class BatchLiveOperatorHero extends StatelessWidget {
     this.proximoSequencial,
     this.deviceOffline = false,
     this.lastRejectionMotivo,
+    this.stickyVerdictIssue,
+    this.stickyVerdictDetail,
+    this.lastHardwareAlert,
   });
 
   final DeviceFsmState estado;
@@ -666,13 +670,73 @@ class BatchLiveOperatorHero extends StatelessWidget {
   /// Bancada sem heartbeat recente mas lote ativo.
   final bool deviceOffline;
   final String? lastRejectionMotivo;
+  final StickyVerdictIssue? stickyVerdictIssue;
+  final String? stickyVerdictDetail;
+  final String? lastHardwareAlert;
+
+  TestResult? _resolveLatest() {
+    if (tests.isEmpty) return null;
+    return tests.reduce((a, b) => a.createdAt.isAfter(b.createdAt) ? a : b);
+  }
+
+  Widget _issueHero(
+    BuildContext context, {
+    required Color accent,
+    required IconData icon,
+    required String title,
+    required String detail,
+  }) {
+    return _OperatorHeroCard(
+      accent: accent,
+      child: Column(
+        children: [
+          Icon(icon, size: 56, color: accent),
+          const SizedBox(height: 16),
+          Text(
+            title,
+            style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  color: accent,
+                ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 10),
+          Text(
+            detail,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: DipontoColors.onSurface.withValues(alpha: 0.8),
+                ),
+            textAlign: TextAlign.center,
+          ),
+          if (proximoSequencial != null) ...[
+            const SizedBox(height: 14),
+            Text(
+              'Sequencial na bancada: $proximoSequencial',
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final cooldownBlocked = isCooldownRejection(lastRejectionMotivo);
     final batchReady = estado == DeviceFsmState.batchReady;
+    final phase = resolveBatchOperatorHeroPhase(
+      hasLiveResultForOp:
+          liveResult != null && liveResult!.numeroOp == numeroOp,
+      estado: estado,
+      awaitingMqtt: awaitingMqtt,
+      stickyIssue: stickyVerdictIssue,
+      hasHardwareAlert: lastHardwareAlert != null && lastHardwareAlert!.isNotEmpty,
+    );
 
-    if (liveResult != null && liveResult!.numeroOp == numeroOp) {
+    if (phase == BatchOperatorHeroPhase.liveResult) {
       final approved = liveResult!.isApproved;
       final accent = approved ? DipontoColors.success : DipontoColors.error;
       return _OperatorHeroCard(
@@ -721,7 +785,7 @@ class BatchLiveOperatorHero extends StatelessWidget {
       );
     }
 
-    if (estado == DeviceFsmState.testing) {
+    if (phase == BatchOperatorHeroPhase.testing) {
       return _OperatorHeroCard(
         accent: DipontoColors.primary,
         child: Column(
@@ -757,7 +821,7 @@ class BatchLiveOperatorHero extends StatelessWidget {
       );
     }
 
-    if (awaitingMqtt) {
+    if (phase == BatchOperatorHeroPhase.awaitingMqtt) {
       return _OperatorHeroCard(
         accent: Colors.orange,
         child: Column(
@@ -787,6 +851,30 @@ class BatchLiveOperatorHero extends StatelessWidget {
             ),
           ],
         ),
+      );
+    }
+
+    if (phase == BatchOperatorHeroPhase.hardwareFault) {
+      return _issueHero(
+        context,
+        accent: DipontoColors.error,
+        icon: Icons.electrical_services,
+        title: PortugueseLabels.falhaBancada,
+        detail: stickyVerdictMessage(
+              StickyVerdictIssue.hardwareFault,
+              hardwareAlert: stickyVerdictDetail ?? lastHardwareAlert,
+            ),
+      );
+    }
+
+    if (phase == BatchOperatorHeroPhase.resultPending) {
+      return _issueHero(
+        context,
+        accent: Colors.deepOrange,
+        icon: Icons.help_outline,
+        title: PortugueseLabels.resultadoPendente,
+        detail: stickyVerdictDetail ??
+            stickyVerdictMessage(StickyVerdictIssue.resultPending),
       );
     }
 
@@ -928,25 +1016,6 @@ class BatchLiveOperatorHero extends StatelessWidget {
       ),
     );
   }
-
-  _LatestDisplay? _resolveLatest() {
-    if (liveResult != null) {
-      return _LatestDisplay(
-        veredito: liveResult!.veredito,
-        potenciaMedia: liveResult!.potenciaMedia,
-        sequencial: liveResult!.sequencial,
-      );
-    }
-    if (tests.isEmpty) return null;
-    final t = tests.first;
-    return _LatestDisplay(
-      veredito: t.veredito,
-      potenciaMedia: t.potenciaMedia,
-      sequencial: t.sequencial,
-      serial: t.serial,
-      timestamp: t.createdAt,
-    );
-  }
 }
 
 /// Barra de progresso enxuta para operador.
@@ -1040,6 +1109,7 @@ class BatchLiveOperatorStatusStrip extends StatelessWidget {
     required this.mqttDisconnected,
     this.filaOffline = 0,
     this.awaitingMqtt = false,
+    this.stickyVerdictIssue,
   });
 
   final String bancadaLabel;
@@ -1047,6 +1117,7 @@ class BatchLiveOperatorStatusStrip extends StatelessWidget {
   final bool mqttDisconnected;
   final int filaOffline;
   final bool awaitingMqtt;
+  final StickyVerdictIssue? stickyVerdictIssue;
 
   @override
   Widget build(BuildContext context) {
@@ -1071,6 +1142,19 @@ class BatchLiveOperatorStatusStrip extends StatelessWidget {
             icon: Icons.sync,
             label: PortugueseLabels.aguardandoResultadoBancada,
             color: Colors.orange,
+          ),
+        if (stickyVerdictIssue == StickyVerdictIssue.resultPending)
+          const _OperatorStatusPill(
+            icon: Icons.help_outline,
+            label: PortugueseLabels.resultadoPendente,
+            color: Colors.deepOrange,
+          ),
+        if (stickyVerdictIssue == StickyVerdictIssue.hardwareFault ||
+            estado == DeviceFsmState.hardwareFault)
+          const _OperatorStatusPill(
+            icon: Icons.electrical_services,
+            label: PortugueseLabels.falhaBancada,
+            color: DipontoColors.error,
           ),
       ],
     );

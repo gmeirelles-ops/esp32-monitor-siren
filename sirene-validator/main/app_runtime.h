@@ -39,7 +39,8 @@ typedef struct {
 } work_item_t;
 
 void app_runtime_init(SemaphoreHandle_t batch_mu, QueueHandle_t work_q, QueueHandle_t pzem_q);
-void app_publish_or_queue(const char *topic_suffix, const char *json);
+/** Publica MQTT ou enfileira offline. Retorna true se a mensagem ficou durável (MQTT ou fila). */
+bool app_publish_or_queue(const char *topic_suffix, const char *json);
 void app_batch_lock(void);
 void app_batch_unlock(void);
 batch_context_t *app_batch(void);
