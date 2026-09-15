@@ -1,0 +1,4 @@
+# Placeholders — o .bin real é copiado no deploy (não versionar binários grandes).
+*
+!.gitignore
+!version.json

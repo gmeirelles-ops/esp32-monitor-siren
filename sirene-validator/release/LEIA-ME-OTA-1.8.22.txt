@@ -1,0 +1,7 @@
+Firmware sirene-validator 1.8.22 — veredito sticky + serial sem pular + OTA Firebase
+
+- APROVADO só avança contadores se MQTT/fila aceitou tipo:teste
+- Host OTA: monitor-sirenv2-6d201.web.app
+- App 1.0.5: Resultado pendente / gap sticky
+
+URL: https://monitor-sirenv2-6d201.web.app/firmware/sirene-validator.bin

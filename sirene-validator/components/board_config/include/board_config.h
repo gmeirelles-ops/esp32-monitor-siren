@@ -60,7 +60,7 @@
 #define STATION_DEFAULT_BANCADA  1
 
 /* Host OTA adicional além de IPs RFC1918 e *.local (ex.: "ota.diponto.internal") */
-#define OTA_ALLOWED_EXTRA_HOST  ""
+#define OTA_ALLOWED_EXTRA_HOST  "monitor-sirenv2-6d201.web.app"
 
 /* Timing */
 #define INRUSH_DISCARD_MS         500
@@ -94,6 +94,6 @@
 #define MQTT_RECONNECT_MAX_MS       30000
 #define WIFI_STA_VALIDATE_TIMEOUT_MS 15000
 #define OFFLINE_SYNC_INTERVAL_MS    500
-#define FIRMWARE_VERSION            "1.8.12"
+#define FIRMWARE_VERSION            "1.8.22"
 /** Contrato JSON MQTT app ↔ firmware; incrementar se quebrar compatibilidade. */
 #define MQTT_PROTOCOL_VERSION       1
